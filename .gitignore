@@ -18,3 +18,6 @@ coverage/
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/Pods/
 **/windows/flutter/ephemeral/
+# Model is fetched from the official open-source Tesseract repository before
+# local builds and in CI. Never check in binary models from third parties.
+assets/tessdata/*.traineddata

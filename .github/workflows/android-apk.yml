@@ -27,6 +27,8 @@ jobs:
           cache: true
       - name: Generate Android host project
         run: bash tool/setup_android.sh
+      - name: Bundle offline Bengali OCR model
+        run: bash tool/download_ocr_models.sh
       - name: Install dependencies
         run: flutter pub get
       - name: Static analysis

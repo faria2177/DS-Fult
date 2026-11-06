@@ -96,10 +96,14 @@ class DocumentStore extends ChangeNotifier {
     String pageId,
     Uint8List jpegBytes, {
     String filter = 'Original',
+    String extension = '.jpg',
   }) async {
     final doc = byId(documentId);
     if (doc == null) return;
-    final imagePath = p.join(_images.path, '${_uuid.v4()}.jpg');
+    if (extension != '.jpg' && extension != '.png') {
+      throw ArgumentError.value(extension, 'extension', 'Unsupported image format');
+    }
+    final imagePath = p.join(_images.path, '${_uuid.v4()}$extension');
     await File(imagePath).writeAsBytes(jpegBytes, flush: true);
     final pages = doc.pages.map((page) {
       if (page.id != pageId) return page;
@@ -115,6 +119,52 @@ class DocumentStore extends ChangeNotifier {
         ? page.copyWith(recognizedText: text)
         : page).toList(growable: false);
     await _replace(doc.copyWith(pages: pages));
+  }
+
+  /// Reorder source pages without modifying any saved image data.
+  Future<void> reorderPages(String documentId, int oldIndex, int newIndex) async {
+    final doc = byId(documentId);
+    if (doc == null) return;
+    if (oldIndex < 0 || oldIndex >= doc.pages.length ||
+        newIndex < 0 || newIndex > doc.pages.length) {
+      throw RangeError('Invalid page index');
+    }
+    final pages = [...doc.pages];
+    final removed = pages.removeAt(oldIndex);
+    if (newIndex > oldIndex) newIndex--;
+    pages.insert(newIndex, removed);
+    await _replace(doc.copyWith(pages: pages));
+  }
+
+  /// Create a separate editable image-based document from selected local pages.
+  Future<ScanDocument> duplicatePages(
+      String documentId, List<int> pageIndices, String name) async {
+    final document = byId(documentId);
+    if (document == null || pageIndices.isEmpty) {
+      throw ArgumentError('Select at least one page');
+    }
+    final paths = <String>[];
+    for (final index in pageIndices) {
+      if (index < 0 || index >= document.pages.length) {
+        throw RangeError.index(index, document.pages);
+      }
+      paths.add(document.pages[index].path);
+    }
+    return createFromPaths(paths, name: name);
+  }
+
+  /// Merge image pages from local documents; source documents remain unchanged.
+  Future<ScanDocument> mergeDocuments(List<String> ids, String name) async {
+    if (ids.length < 2 || ids.toSet().length != ids.length) {
+      throw ArgumentError('Select two or more different documents');
+    }
+    final paths = <String>[];
+    for (final id in ids) {
+      final document = byId(id);
+      if (document == null) throw ArgumentError('Document not found: $id');
+      paths.addAll(document.pages.map((page) => page.path));
+    }
+    return createFromPaths(paths, name: name);
   }
 
   Future<void> renameDocument(String id, String name) async {

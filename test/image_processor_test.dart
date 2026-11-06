@@ -41,4 +41,22 @@ void main() {
     expect(result!.width, greaterThan(50));
     expect(result.height, greaterThan(30));
   });
+
+  test('Shadow Free reduces a paper illumination gradient', () async {
+    final input = img.Image(width: 144, height: 96);
+    for (var y = 0; y < input.height; y++) {
+      for (var x = 0; x < input.width; x++) {
+        final paper = 115 + (x * 120 ~/ input.width);
+        final value = y >= 40 && y < 47 ? paper ~/ 5 : paper;
+        input.setPixelRgb(x, y, value, value, value);
+      }
+    }
+    final jpeg = Uint8List.fromList(img.encodeJpg(input, quality: 100));
+    final result = img.decodeImage(await ImageProcessor.process(
+      jpeg, filter: ScanFilter.shadowFree,
+    ));
+    expect(result, isNotNull);
+    expect(result!.getPixel(8, 75).r, greaterThan(145));
+    expect(result.getPixel(8, 43).r, lessThan(result.getPixel(8, 75).r));
+  });
 }

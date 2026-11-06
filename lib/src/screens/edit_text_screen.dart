@@ -1,10 +1,16 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:tesseract_ocr/ocr_engine_config.dart';
+import 'package:tesseract_ocr/tesseract_ocr.dart';
 
 import '../services/document_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
+import 'image_text_editor_screen.dart';
 
 class EditTextScreen extends StatefulWidget {
   const EditTextScreen({
@@ -29,6 +35,8 @@ class _EditTextScreenState extends State<EditTextScreen>
   bool _processing = false;
   String? _error;
   int _blocks = 0;
+  bool _bengali = false;
+  List<DetectedTextRegion> _regions = [];
 
   @override
   void initState() {
@@ -64,18 +72,56 @@ class _EditTextScreenState extends State<EditTextScreen>
       _error = null;
       _processing = true;
     });
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
-      final recognized = await recognizer.processImage(InputImage.fromFilePath(page.path));
-      if (!mounted) return;
-      setState(() {
-        _text.text = recognized.text.isNotEmpty ? recognized.text : _text.text;
-        _blocks = recognized.blocks.length;
-      });
+      if (_bengali) {
+        // Tesseract + bundled ben.traineddata: works offline without ML Kit
+        // downloads. Word boxes are not provided by this plugin.
+        final recognized = await TesseractOcr.extractText(
+          page.path,
+          config: OCRConfig(language: 'ben', engine: OCREngine.tesseract),
+        );
+        if (!mounted) return;
+        setState(() {
+          _text.text = recognized.trim().isNotEmpty ? recognized.trim() : _text.text;
+          _blocks = recognized.trim().isEmpty ? 0 : recognized.split('\n').length;
+          _regions = [];
+        });
+      } else {
+        final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+        try {
+          final recognized = await recognizer.processImage(InputImage.fromFilePath(page.path));
+          final data = await File(page.path).readAsBytes();
+          final codec = await ui.instantiateImageCodec(data);
+          final frame = await codec.getNextFrame();
+          final width = frame.image.width.toDouble();
+          final height = frame.image.height.toDouble();
+          frame.image.dispose();
+          codec.dispose();
+          if (!mounted) return;
+          setState(() {
+            _text.text = recognized.text.isNotEmpty ? recognized.text : _text.text;
+            _blocks = recognized.blocks.length;
+            _regions = [
+              for (final block in recognized.blocks)
+                for (final line in block.lines)
+                  DetectedTextRegion(
+                    Rect.fromLTRB(
+                      (line.boundingBox.left / width).clamp(0.0, 1.0),
+                      (line.boundingBox.top / height).clamp(0.0, 1.0),
+                      (line.boundingBox.right / width).clamp(0.0, 1.0),
+                      (line.boundingBox.bottom / height).clamp(0.0, 1.0),
+                    ),
+                    line.text,
+                  ),
+            ];
+          });
+        } finally {
+          await recognizer.close();
+        }
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
-      await recognizer.close();
       if (mounted) setState(() => _processing = false);
     }
   }
@@ -83,6 +129,17 @@ class _EditTextScreenState extends State<EditTextScreen>
   Future<void> _save() async {
     await widget.store.updatePageText(widget.documentId, widget.pageId, _text.text);
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _editImage() async {
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ImageTextEditorScreen(
+        store: widget.store,
+        documentId: widget.documentId,
+        pageId: widget.pageId,
+        regions: _regions,
+      ),
+    ));
   }
 
   @override
@@ -123,13 +180,38 @@ class _EditTextScreenState extends State<EditTextScreen>
               ],
             ))
           : Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                child: Row(children: [
+                  Expanded(child: SegmentedButton<bool>(
+                    showSelectedIcon: false,
+                    selected: {_bengali},
+                    onSelectionChanged: (selection) {
+                      setState(() => _bengali = selection.first);
+                      _recognize();
+                    },
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('English')),
+                      ButtonSegment(value: true, label: Text('বাংলা')),
+                    ],
+                  )),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _editImage,
+                    icon: const Icon(Icons.image_search_outlined),
+                    label: const Text('On Image'),
+                  ),
+                ]),
+              ),
               Container(
                 width: double.infinity,
                 color: dsTeal.withValues(alpha: .08),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Text(
                   _error != null ? 'Recognition unavailable: $_error'
-                      : '$_blocks text blocks detected • Text can be edited below',
+                      : _bengali
+                          ? 'বাংলা OCR: $_blocks lines • Add text on image manually'
+                          : '$_blocks text blocks detected • Tap On Image to edit on the page',
                   style: const TextStyle(fontSize: 12),
                 ),
               ),

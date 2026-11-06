@@ -12,6 +12,7 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'crop_screen.dart';
 import 'edit_text_screen.dart';
+import 'pdf_tools_screen.dart';
 
 class DocumentScreen extends StatefulWidget {
   const DocumentScreen({super.key, required this.store, required this.documentId});
@@ -86,6 +87,19 @@ class _DocumentScreenState extends State<DocumentScreen> {
         pageId: doc.pages[_index].id,
       ),
     ));
+  }
+
+  Future<void> _pdfTools() async {
+    final doc = _document;
+    if (doc == null) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => PdfToolsScreen(
+        store: widget.store,
+        documentId: doc.id,
+      ),
+    ));
+    if (mounted) setState(() => _index = 0);
+    if (_pages.hasClients) _pages.jumpToPage(0);
   }
 
   Future<void> _addImages({required bool fromCamera}) async {
@@ -241,6 +255,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
             _action(Icons.rotate_right, 'Rotate', () => _process(ScanFilter.original, rotation: 90)),
             _action(Icons.text_fields, 'Edit Text', _ocr),
             _action(Icons.add_photo_alternate_outlined, 'Add Page', () => _addImages(fromCamera: false)),
+            _action(Icons.picture_as_pdf_outlined, 'PDF Tools', _pdfTools),
             _action(Icons.ios_share, 'Share', _exportSheet),
           ])),
         ])),

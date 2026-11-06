@@ -9,6 +9,7 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'document_screen.dart';
 import 'id_card_screen.dart';
+import 'pdf_tools_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -224,11 +225,12 @@ class _HomeShellState extends State<HomeShell> {
       ],
       'Edit & Organize': [
         _Tool('Edit Text', Icons.edit_note_outlined, _startOcr),
-        _Tool('Merge Files', Icons.merge_type, () => _notReady('Merge Files')),
-        _Tool('Add Watermark', Icons.branding_watermark_outlined, () => _notReady('Add Watermark')),
-        _Tool('Smart Erase', Icons.auto_fix_high_outlined, () => _notReady('Smart Erase')),
-        _Tool('Compress PDF', Icons.compress, () => _notReady('Compress PDF')),
-        _Tool('Reorder Pages', Icons.swap_vert, () => _notReady('Reorder Pages')),
+        _Tool('Merge Files', Icons.merge_type, _mergeDocuments),
+        _Tool('Add Watermark', Icons.branding_watermark_outlined, () => _openExisting('pdf')),
+        _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startOcr),
+        _Tool('Compress PDF', Icons.compress, () => _openExisting('pdf')),
+        _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('pdf')),
+        _Tool('Extract PDF Pages', Icons.content_copy_outlined, () => _openExisting('pdf')),
         _Tool('Lock PDF', Icons.lock_outline, () => _notReady('Lock PDF')),
       ],
     };
@@ -355,7 +357,21 @@ class _HomeShellState extends State<HomeShell> {
       _message('Import a document first.');
       return;
     }
-    await _open(widget.store.documents.first.id);
+    final id = widget.store.documents.first.id;
+    if (action == 'pdf') {
+      await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => PdfToolsScreen(store: widget.store, documentId: id),
+      ));
+    } else {
+      await _open(id);
+    }
+  }
+
+  Future<void> _mergeDocuments() async {
+    final id = await Navigator.push<String>(context, MaterialPageRoute(
+      builder: (_) => MergeDocumentsScreen(store: widget.store),
+    ));
+    if (id != null && mounted) await _open(id);
   }
 
   void _notReady(String feature) => _message('$feature is planned; this tool is not yet implemented.');

@@ -4,13 +4,14 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
-enum ScanFilter { original, auto, enhance, magicColor, grayscale, blackWhite }
+enum ScanFilter { original, auto, enhance, shadowFree, magicColor, grayscale, blackWhite }
 
 extension ScanFilterName on ScanFilter {
   String get label => switch (this) {
         ScanFilter.original => 'Original',
         ScanFilter.auto => 'Auto',
         ScanFilter.enhance => 'Enhance',
+        ScanFilter.shadowFree => 'Shadow Free',
         ScanFilter.magicColor => 'Magic Color',
         ScanFilter.grayscale => 'Grayscale',
         ScanFilter.blackWhite => 'B&W',
@@ -84,6 +85,9 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
   final gain = (245.0 / math.max(bright, 95)).clamp(1.0, 1.65);
   final backgroundLift = (244.0 - bright * gain).clamp(0.0, 65.0);
   final otsu = _otsu(histogram);
+  // Estimate illumination over regions instead of assuming the whole page is
+  // lit uniformly. This avoids dark corners when a phone shadows the paper.
+  final background = _illuminationGrid(image);
 
   for (var y = 0; y < image.height; y++) {
     for (var x = 0; x < image.width; x++) {
@@ -92,22 +96,31 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
       final g = pixel.g.toDouble();
       final b = pixel.b.toDouble();
       final lum = _luma(r, g, b);
+      final localPaper = background.at(x, y).clamp(85.0, 255.0);
+      final flattenGain = (248.0 / localPaper).clamp(.90, 2.20);
       switch (filter) {
         case ScanFilter.original:
           break;
         case ScanFilter.auto:
         case ScanFilter.enhance:
-          final blend = filter == ScanFilter.auto ? .75 : 1.0;
-          final relativePaper = (lum / math.max(1, bright)).clamp(0.0, 1.0);
-          final lift = backgroundLift * relativePaper * relativePaper;
-          final darkenText = lum < shadow + 32 ? (shadow + 32 - lum) * .06 : 0.0;
-          // Bright paper without flattening coloured seals, photos, or small text.
+          final blend = filter == ScanFilter.auto ? .72 : 1.0;
+          final relativePaper = (lum / math.max(1, localPaper)).clamp(0.0, 1.0);
+          final lift = backgroundLift * relativePaper * relativePaper * .25;
+          final scale = 1 + (flattenGain - 1) * blend;
+          // Local illumination division maintains ink and stamp contrast.
           image.setPixelRgb(
             x,
             y,
-            _byte(r * (1 + (gain - 1) * blend) + lift - darkenText),
-            _byte(g * (1 + (gain - 1) * blend) + lift - darkenText),
-            _byte(b * (1 + (gain - 1) * blend) + lift - darkenText),
+            _byte(r * scale + lift),
+            _byte(g * scale + lift),
+            _byte(b * scale + lift),
+          );
+        case ScanFilter.shadowFree:
+          image.setPixelRgb(
+            x, y,
+            _byte(r * flattenGain),
+            _byte(g * flattenGain),
+            _byte(b * flattenGain),
           );
         case ScanFilter.magicColor:
           final boostedLum = (lum * gain).clamp(0.0, 255.0);
@@ -122,12 +135,74 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
           final gray = _byte(lum * gain);
           image.setPixelRgb(x, y, gray, gray, gray);
         case ScanFilter.blackWhite:
-          final value = lum >= otsu ? 255 : 0;
+          final threshold = math.max(otsu * .75, localPaper - 24);
+          final value = lum >= threshold ? 255 : 0;
           image.setPixelRgb(x, y, value, value, value);
       }
     }
   }
   return image;
+}
+
+class _IlluminationGrid {
+  _IlluminationGrid(this.values, this.columns, this.rows, this.cell);
+  final List<double> values;
+  final int columns;
+  final int rows;
+  final int cell;
+
+  double at(int x, int y) {
+    final gx = (x / cell - .5).clamp(0.0, (columns - 1).toDouble());
+    final gy = (y / cell - .5).clamp(0.0, (rows - 1).toDouble());
+    final x0 = gx.floor();
+    final y0 = gy.floor();
+    final x1 = math.min(columns - 1, x0 + 1);
+    final y1 = math.min(rows - 1, y0 + 1);
+    final fx = gx - x0;
+    final fy = gy - y0;
+    final top = values[y0 * columns + x0] * (1 - fx) +
+        values[y0 * columns + x1] * fx;
+    final bottom = values[y1 * columns + x0] * (1 - fx) +
+        values[y1 * columns + x1] * fx;
+    return top * (1 - fy) + bottom * fy;
+  }
+}
+
+_IlluminationGrid _illuminationGrid(img.Image image) {
+  final cell = math.max(24, math.min(image.width, image.height) ~/ 16);
+  final columns = (image.width / cell).ceil();
+  final rows = (image.height / cell).ceil();
+  final sums = List<double>.filled(columns * rows, 0);
+  final counts = List<int>.filled(columns * rows, 0);
+  for (var y = 0; y < image.height; y += 3) {
+    for (var x = 0; x < image.width; x += 3) {
+      final pixel = image.getPixel(x, y);
+      final index = (y ~/ cell) * columns + x ~/ cell;
+      sums[index] += _luma(pixel.r.toDouble(), pixel.g.toDouble(), pixel.b.toDouble());
+      counts[index]++;
+    }
+  }
+  final means = List<double>.generate(sums.length,
+      (i) => counts[i] == 0 ? 240 : sums[i] / counts[i]);
+  final smoothed = List<double>.filled(sums.length, 0);
+  for (var y = 0; y < rows; y++) {
+    for (var x = 0; x < columns; x++) {
+      var sum = 0.0;
+      var weight = 0.0;
+      for (var dy = -2; dy <= 2; dy++) {
+        for (var dx = -2; dx <= 2; dx++) {
+          final yy = y + dy;
+          final xx = x + dx;
+          if (xx < 0 || yy < 0 || xx >= columns || yy >= rows) continue;
+          final w = 1.0 / (1 + dx * dx + dy * dy);
+          sum += means[yy * columns + xx] * w;
+          weight += w;
+        }
+      }
+      smoothed[y * columns + x] = sum / weight;
+    }
+  }
+  return _IlluminationGrid(smoothed, columns, rows, cell);
 }
 
 int _byte(num value) => value.round().clamp(0, 255).toInt();
