@@ -14,6 +14,7 @@ import 'camera_screen.dart';
 import 'document_screen.dart';
 import 'id_card_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'qr_code_screen.dart';
 import 'text_to_pdf_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -303,8 +304,7 @@ class _HomeShellState extends State<HomeShell> {
       'Utilities': [
         _Tool('AI Chat', Icons.smart_toy_outlined, () => _notReady('AI Chat')),
         _Tool('Print', Icons.print_outlined, () => _openExisting('print')),
-        _Tool('Create QR Code', Icons.qr_code_2_outlined,
-            () => _notReady('Create QR Code')),
+        _Tool('Create QR Code', Icons.qr_code_2_outlined, _createQrCode),
       ],
     };
     return ListView(padding: const EdgeInsets.fromLTRB(16, 18, 16, 25), children: [
@@ -464,6 +464,12 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _textToPdf() async {
     await Navigator.push<void>(context, MaterialPageRoute(
       builder: (_) => const TextToPdfScreen(),
+    ));
+  }
+
+  Future<void> _createQrCode() async {
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => const QrCodeScreen(),
     ));
   }
 

@@ -18,6 +18,7 @@ The following algorithm files are portable Kotlin and were reused under
 | `ContourDetector.kt` | Geometry, convex quadrilateral extraction and rejection of implausible contours |
 | `CornerRefiner.kt` | Precision adjustment of the four detected corners |
 | `DocumentDetectionResult.kt` | Boundary coordinates, confidence and detection metadata |
+| `ScannerTuning.kt` (detector-only subset) | Paper aspect-ratio priors and boundary contrast scoring; Compose-only tracking utilities intentionally omitted |
 
 `OpenCvBoundaryAdapter.kt` bridges the above into Doclens's normalized `Quad`:
 
@@ -49,9 +50,9 @@ Bank Card, Edit Text, Smart Erase, Erase Marks, Restore Photo and To PPT.
 | Status | Tools |
 | --- | --- |
 | Existing functional workflows | Scan (manual shutter), Mega Scan, Long Document, ID Cards/Driver License/Bank Card, Import Images, Extract Text/Edit Text via document toolbar, Merge PDF, Image to PDF through import/export, Edit PDF (page tools), Add Watermark, Extract PDF Pages, Reorder Pages, Rotate PDF via document toolbar, Compress PDF, Print |
-| Added functional workflows | Text to PDF (Latin-script text, share PDF), PDF to Images (export stored scanned page images), PDF to Long Image (join image-backed pages vertically, memory bounded), Image Resizer (select/import and share size-limited JPEG) |
+| Added functional workflows | Text to PDF (Latin-script text, share PDF), PDF to Images (export stored scanned page images), PDF to Long Image (join image-backed pages vertically, memory bounded), Image Resizer (select/import and share size-limited JPEG), Create QR Code (generate and share PNG on-device) |
 | Currently routed to PDF page tools | Split PDF (extract selected page subset, not an arbitrary imported-PDF splitter) |
-| Exposed clearly as not yet implemented | Import File (external PDF), Passport Photo Maker, Photo Translation, Scan Code, To Word, To Excel, To PPT, BG Remover, Sign, Smart Erase, Erase Marks, Restore Photo, Lock PDF, AI Chat, Create QR Code |
+| Exposed clearly as not yet implemented | Import File (external PDF), Passport Photo Maker, Photo Translation, Scan Code, To Word, To Excel, To PPT, BG Remover, Sign, Smart Erase, Erase Marks, Restore Photo, Lock PDF, AI Chat |
 
 **Scope distinction**: reference screens are **not automatically executable**
 inside Flutter. Some need their own Dart UI/processing engine, on-device AI
