@@ -74,7 +74,9 @@ Uint8List _joinVertical(List<Uint8List> bytes) {
     final decoded = img.decodeImage(data);
     if (decoded == null) throw const FormatException('Unsupported page image');
     final upright = img.bakeOrientation(decoded);
-    final height = (upright.height * width / upright.width).round().clamp(1, 10000).toInt();
+    // Never clamp a single page's height: that distorts its aspect ratio and
+    // can turn a very tall receipt into an unreadable, compressed image.
+    final height = math.max(1, (upright.height * width / upright.width).round());
     totalHeight += height;
     // Avoid an OOM on long multi-page scans; the user can split the document.
     if (totalHeight > 15500 || totalHeight * width > 18 * 1000 * 1000) {
