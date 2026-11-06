@@ -30,13 +30,18 @@ class _CropScreenState extends State<CropScreen> {
 
   Future<void> _load() async {
     final bytes = await File(widget.imagePath).readAsBytes();
-    final image = await ui.decodeImageFromList(bytes);
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
     final ratio = image.width / image.height;
     image.dispose();
-    if (mounted) setState(() {
-      _imageBytes = bytes;
-      _ratio = ratio;
-    });
+    codec.dispose();
+    if (mounted) {
+      setState(() {
+        _imageBytes = bytes;
+        _ratio = ratio;
+      });
+    }
   }
 
   Future<void> _apply() async {
@@ -46,8 +51,10 @@ class _CropScreenState extends State<CropScreen> {
       final image = await ImageProcessor.process(_imageBytes!, crop: CropQuad(_corners));
       if (mounted) Navigator.pop(context, image);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Crop failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Crop failed: $error')));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

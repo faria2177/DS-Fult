@@ -165,8 +165,10 @@ class _EditTextScreenState extends State<EditTextScreen>
                     tooltip: 'Copy text', icon: const Icon(Icons.copy_outlined),
                     onPressed: () async {
                       await Clipboard.setData(ClipboardData(text: _text.text));
-                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Copied to clipboard')));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Copied to clipboard')));
+                      }
                     },
                   ),
                   IconButton(

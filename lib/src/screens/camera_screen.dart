@@ -82,9 +82,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       final picture = await controller.takePicture();
       if (mounted) Navigator.pop(context, [picture.path]);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not capture image: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not capture image: $error')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -97,8 +99,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       await controller.setFlashMode(_flash ? FlashMode.off : FlashMode.auto);
       setState(() => _flash = !_flash);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Flash unavailable: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Flash unavailable: $error')));
+      }
     }
   }
 
@@ -112,8 +116,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         Navigator.pop(context, photos.map((photo) => photo.path).toList());
       }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gallery import failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gallery import failed: $error')));
+      }
     }
   }
 

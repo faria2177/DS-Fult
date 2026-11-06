@@ -458,6 +458,6 @@ class _DsMark extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Text('DS', style: TextStyle(
-          color: Colors.white, fontSize: big ? 30 : 15, fontWeight: FontWeight.black)),
+          color: Colors.white, fontSize: big ? 30 : 15, fontWeight: FontWeight.w900)),
       );
 }
