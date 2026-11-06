@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:docscanner/src/services/image_processor.dart';
 import 'package:flutter_test/flutter_test.dart';
