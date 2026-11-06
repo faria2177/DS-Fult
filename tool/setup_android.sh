@@ -6,6 +6,10 @@ set -euo pipefail
 # not ship an unverified hand-written Android template.
 flutter create --platforms=android --project-name=docscanner --org=com.docscan .
 
+# Several Flutter Android plugins still use the pre-AGP-9 DSL. Keep the
+# compatibility switches until those plugins migrate to the new DSL.
+printf '\nandroid.newDsl=false\nandroid.builtInKotlin=false\n' >> android/gradle.properties
+
 manifest='android/app/src/main/AndroidManifest.xml'
 if [ -f "$manifest" ]; then
   sed -i 's/android:label="docscanner"/android:label="DocScanner"/' "$manifest"

@@ -31,6 +31,8 @@ jobs:
         run: bash tool/download_ocr_models.sh
       - name: Install dependencies
         run: flutter pub get
+      - name: Repair legacy Tesseract Android build script
+        run: bash tool/patch_tesseract_gradle.sh
       - name: Static analysis
         run: flutter analyze
       - name: Unit tests
