@@ -61,10 +61,12 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
     await _run(() async {
       final extracted = await widget.store.duplicatePages(widget.documentId,
           indices, '${doc.name} - Extracted');
-      if (mounted) await Navigator.push<void>(context, MaterialPageRoute(
-        builder: (_) => DocumentScreen(
-          store: widget.store, documentId: extracted.id),
-      ));
+      if (mounted) {
+        await Navigator.push<void>(context, MaterialPageRoute(
+          builder: (_) => DocumentScreen(
+            store: widget.store, documentId: extracted.id),
+        ));
+      }
     });
   }
 
@@ -103,8 +105,10 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
     try {
       await action();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF operation failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('PDF operation failed: $error')));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -115,8 +119,9 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
     animation: widget.store,
     builder: (context, _) {
       final doc = widget.store.byId(widget.documentId);
-      if (doc == null) return const Scaffold(
-          body: Center(child: Text('Document not found')));
+      if (doc == null) {
+        return const Scaffold(body: Center(child: Text('Document not found')));
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('PDF Tools')),
         body: SafeArea(child: Column(children: [
@@ -138,7 +143,7 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
                 trailing: const Icon(Icons.drag_handle),
               ),
             ),
-            onReorder: _busy ? (_, _) {} : (oldIndex, newIndex) =>
+            onReorderItem: _busy ? (_, _) {} : (oldIndex, newIndex) =>
                 widget.store.reorderPages(widget.documentId, oldIndex, newIndex),
           )),
           const Divider(height: 1),
@@ -187,8 +192,10 @@ class _MergeDocumentsScreenState extends State<MergeDocumentsScreen> {
       if (!mounted) return;
       Navigator.pop(context, merged.id);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$error')));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

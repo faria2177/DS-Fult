@@ -126,12 +126,11 @@ class DocumentStore extends ChangeNotifier {
     final doc = byId(documentId);
     if (doc == null) return;
     if (oldIndex < 0 || oldIndex >= doc.pages.length ||
-        newIndex < 0 || newIndex > doc.pages.length) {
+        newIndex < 0 || newIndex >= doc.pages.length) {
       throw RangeError('Invalid page index');
     }
     final pages = [...doc.pages];
     final removed = pages.removeAt(oldIndex);
-    if (newIndex > oldIndex) newIndex--;
     pages.insert(newIndex, removed);
     await _replace(doc.copyWith(pages: pages));
   }

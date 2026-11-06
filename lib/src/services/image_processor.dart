@@ -81,7 +81,6 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
     }
   }
   final bright = _percentile(histogram, 0.90);
-  final shadow = _percentile(histogram, 0.10);
   final gain = (245.0 / math.max(bright, 95)).clamp(1.0, 1.65);
   final backgroundLift = (244.0 - bright * gain).clamp(0.0, 65.0);
   final otsu = _otsu(histogram);

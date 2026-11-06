@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -82,8 +81,9 @@ Uint8List _eraseInIsolate(Map<String, Object> options) {
   final y1 = (coords[3] * image.height).ceil().clamp(y0 + 1, image.height);
 
   final xSamples = <int>[x0, (x0 + x1) ~/ 2, x1 - 1];
-  final topY = math.max(0, y0 - math.max(3, (y1 - y0) ~/ 3));
-  final bottomY = math.min(image.height - 1, y1 + math.max(3, (y1 - y0) ~/ 3));
+  final topY = math.max(0, y0 - math.max(3, (y1 - y0) ~/ 3)).toInt();
+  final bottomY = math.min(image.height - 1,
+      y1 + math.max(3, (y1 - y0) ~/ 3)).toInt();
   List<double> sample(int y) {
     var r = 0.0;
     var g = 0.0;

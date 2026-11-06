@@ -137,8 +137,10 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
       if (_undo.length > 3) _undo.removeAt(0);
       await _loadPage();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Image edit failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Image edit failed: $error')));
+      }
     } finally {
       if (mounted) setState(() { _busy = false; _drag = null; });
     }
