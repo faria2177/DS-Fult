@@ -3,7 +3,7 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
-## Implemented in v0.3 (work in progress)
+## Implemented in v0.3.1 (work in progress)
 
 - Flutter Material 3 UI: Home, Files, Scan, Tools, Me; light and dark modes.
 - Native live document corner tracking, auto-capture after a stability/sharpness check,
@@ -12,6 +12,10 @@ The app does **not** include CamScanner's proprietary code, artwork, cloud servi
 - Auto edge detection uses four-corner smoothing, low-light and focus checks,
   a stability/confirmation window, and high-resolution capture. Light and dark
   documents can be scanned against contrasting backgrounds.
+- The live preview now draws a **complete green four-sided border** along the
+  detected document (rather than disconnected corner brackets), with nine-frame
+  corner smoothing and a longer stability window. Camera **Single / Batch**
+  selection is on the scanner itself; switching modes releases CameraX first.
 - Gallery imports use the same native four-corner detector and automatically
   crop/straighten reliable detections. When no reliable boundary is found the
   original image is preserved for manual cropping; no guessed crop is applied.

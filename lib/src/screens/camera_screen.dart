@@ -22,6 +22,9 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   bool _finished = false;
   bool _processingGallery = false;
+  bool _cameraSuspended = false;
+  bool _batchMode = false;
+  static const _outlineColor = Color(0xFF28C78A);
   final _picker = ImagePicker();
 
   void _finish(List<String> paths) {
@@ -30,9 +33,33 @@ class _CameraScreenState extends State<CameraScreen> {
     Navigator.of(context).pop(paths);
   }
 
+  /// Allow CameraX to release its camera session before a different scanner,
+  /// manual camera, or the system image picker opens. This avoids racing two
+  /// camera owners when switching Single / Batch.
+  Future<void> _suspendCamera() async {
+    if (!mounted) return;
+    setState(() => _cameraSuspended = true);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+  }
+
+  Future<void> _switchMode(bool batchMode) async {
+    if (_finished || _cameraSuspended || _batchMode == batchMode ||
+        _processingGallery || widget.cardMode) {
+      return;
+    }
+    await _suspendCamera();
+    if (!mounted || _finished) return;
+    setState(() {
+      _batchMode = batchMode;
+      _cameraSuspended = false;
+    });
+  }
+
   Future<void> _gallery() async {
-    if (_processingGallery) return;
+    if (_processingGallery || _cameraSuspended || _finished) return;
     try {
+      await _suspendCamera();
+      if (!mounted) return;
       final files = await _picker.pickMultiImage(
         limit: widget.cardMode ? 2 : null,
         requestFullMetadata: false,
@@ -50,20 +77,34 @@ class _CameraScreenState extends State<CameraScreen> {
         SnackBar(content: Text('Gallery import failed: $error')),
       );
     } finally {
-      if (mounted) setState(() => _processingGallery = false);
+      if (mounted && !_finished) {
+        setState(() {
+          _processingGallery = false;
+          _cameraSuspended = false;
+        });
+      }
     }
   }
 
   Future<void> _manual() async {
-    final files = await Navigator.of(context).push<List<String>>(
-      MaterialPageRoute(
-        builder: (_) => ManualCameraScreen(
-          cardMode: widget.cardMode,
-          side: widget.side,
+    if (_cameraSuspended || _finished) return;
+    await _suspendCamera();
+    if (!mounted) return;
+    try {
+      final files = await Navigator.of(context).push<List<String>>(
+        MaterialPageRoute(
+          builder: (_) => ManualCameraScreen(
+            cardMode: widget.cardMode,
+            side: widget.side,
+          ),
         ),
-      ),
-    );
-    if (files != null && files.isNotEmpty) _finish(files);
+      );
+      if (files != null && files.isNotEmpty) _finish(files);
+    } finally {
+      if (mounted && !_finished) {
+        setState(() => _cameraSuspended = false);
+      }
+    }
   }
 
   @override
@@ -71,40 +112,90 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: Colors.black,
         body: Stack(children: [
           Positioned.fill(
-            child: DoclensScreen(
-              appBarTitle: widget.side ?? 'DocScanner',
-              captureHintText: widget.side ?? 'Hold steady • Auto capture',
-              useLabel: 'Use scan',
-              editCornersLabel: 'Adjust edges',
-              retakeLabel: 'Retake',
-              accentColor: dsTeal,
-              overlayStyle: QuadOverlayStyle.cornersFilled,
-              enableAutoCapture: true,
-              enableEditCorners: true,
-              autoCaptureStabilityDuration: const Duration(milliseconds: 900),
-              autoCaptureConfirmationDelay: const Duration(milliseconds: 350),
-              imageEnhancement: ImageEnhancement.enhanced,
-              jpegQuality: 95,
-              config: DocumentEdges.scannerConfig,
-              onCapture: (result) {
-                final path = result.croppedImagePath ?? result.rawImagePath;
-                if (path.isNotEmpty) _finish([path]);
-              },
-            ),
+            child: _cameraSuspended
+                ? const ColoredBox(color: Colors.black)
+                : _batchMode
+                    ? DoclensMultiScreen(
+                        appBarTitle: 'Batch Scan',
+                        captureHintText: 'Follow the green outline • Hold steady',
+                        addPageLabel: 'Add page',
+                        doneLabel: 'Done',
+                        editCornersLabel: 'Adjust corners',
+                        accentColor: _outlineColor,
+                        overlayStyle: QuadOverlayStyle.outline,
+                        enableAutoCapture: true,
+                        enableEditCorners: true,
+                        imageEnhancement: ImageEnhancement.enhanced,
+                        jpegQuality: 95,
+                        config: DocumentEdges.scannerConfig,
+                        onComplete: (results) {
+                          if (_cameraSuspended) return;
+                          final paths = results
+                              .map((result) => result.croppedImagePath ?? result.rawImagePath)
+                              .where((path) => path.isNotEmpty)
+                              .toList();
+                          if (paths.isNotEmpty) _finish(paths);
+                        },
+                      )
+                    : DoclensScreen(
+                        appBarTitle: widget.side ?? 'DocScanner',
+                        captureHintText: widget.side ??
+                            'Follow the green outline • Hold steady',
+                        useLabel: 'Use scan',
+                        editCornersLabel: 'Adjust edges',
+                        retakeLabel: 'Retake',
+                        accentColor: _outlineColor,
+                        overlayStyle: QuadOverlayStyle.outline,
+                        enableAutoCapture: true,
+                        enableEditCorners: true,
+                        autoCaptureStabilityDuration:
+                            const Duration(milliseconds: 1100),
+                        autoCaptureConfirmationDelay:
+                            const Duration(milliseconds: 400),
+                        imageEnhancement: ImageEnhancement.enhanced,
+                        jpegQuality: 95,
+                        config: DocumentEdges.scannerConfig,
+                        onCapture: (result) {
+                          if (_cameraSuspended) return;
+                          final path = result.croppedImagePath ??
+                              result.rawImagePath;
+                          if (path.isNotEmpty) _finish([path]);
+                        },
+                      ),
           ),
-          Positioned(
-            bottom: 112,
-            left: 12,
-            right: 12,
-            child: SafeArea(
-              top: false,
-              child: Row(children: [
-                _shortcut(Icons.photo_library_outlined, 'Gallery', _gallery),
-                const Spacer(),
-                _shortcut(Icons.camera_outlined, 'Manual', _manual),
-              ]),
+          if (!widget.cardMode && !_cameraSuspended)
+            Positioned(
+              bottom: 174,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Material(
+                  color: const Color(0xDF182329),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Padding(
+                    padding: const EdgeInsets.all(3),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      _modeButton('Single', false),
+                      _modeButton('Batch', true),
+                    ]),
+                  ),
+                ),
+              ),
             ),
-          ),
+          if (!_cameraSuspended)
+            Positioned(
+              bottom: 112,
+              left: 12,
+              right: 12,
+              child: SafeArea(
+                top: false,
+                child: Row(children: [
+                  _shortcut(Icons.photo_library_outlined, 'Gallery', _gallery),
+                  const Spacer(),
+                  _shortcut(Icons.camera_outlined, 'Manual', _manual),
+                ]),
+              ),
+            ),
           if (_processingGallery)
             const Positioned.fill(
               child: ColoredBox(
@@ -139,4 +230,26 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         ),
       );
+
+  Widget _modeButton(String label, bool batch) {
+    final selected = _batchMode == batch;
+    return InkWell(
+      borderRadius: BorderRadius.circular(28),
+      onTap: () => _switchMode(batch),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 91,
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF697176) : Colors.transparent,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Text(label, textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            )),
+      ),
+    );
+  }
 }
