@@ -6,12 +6,15 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
 import '../services/document_edges.dart';
+import '../services/document_export.dart';
+import '../services/image_tool_operations.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
 import 'document_screen.dart';
 import 'id_card_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'text_to_pdf_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -32,6 +35,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   String _query = '';
+  String _toolQuery = '';
   final _picker = ImagePicker();
 
   void _message(String message) {
@@ -255,45 +259,85 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Scan', Icons.document_scanner_outlined, _capture),
         _Tool('Mega Scan', Icons.auto_awesome_motion_outlined, _megaScan),
         _Tool('Long Document', Icons.view_agenda_outlined, _longScan),
-        _Tool('ID Card', Icons.badge_outlined, () => _openCard(DocumentKind.idCard)),
+        _Tool('ID Cards', Icons.badge_outlined, () => _openCard(DocumentKind.idCard)),
         _Tool('Driver License', Icons.airport_shuttle_outlined, () => _openCard(DocumentKind.driverLicense)),
         _Tool('Bank Card', Icons.credit_card, () => _openCard(DocumentKind.bankCard)),
         _Tool('Import Images', Icons.photo_library_outlined, _import),
+        _Tool('Import File', Icons.upload_file_outlined, () => _notReady('Import File')),
         _Tool('Extract Text', Icons.text_fields, _startOcr),
+        _Tool('Passport Photo Maker', Icons.portrait_outlined,
+            () => _notReady('Passport Photo Maker')),
+        _Tool('Photo Translation', Icons.translate_outlined,
+            () => _notReady('Photo Translation')),
+        _Tool('Scan Code', Icons.qr_code_scanner_outlined,
+            () => _notReady('Scan Code')),
       ],
-      'PDF & Export': [
-        _Tool('To PDF', Icons.picture_as_pdf_outlined, _import),
-        _Tool('Print', Icons.print_outlined, () => _openExisting('print')),
-        _Tool('Sign', Icons.draw_outlined, () => _notReady('Sign')),
+      'Convert': [
+        _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
+        _Tool('Image to PDF', Icons.picture_as_pdf_outlined, _import),
+        _Tool('Text to PDF', Icons.text_snippet_outlined, _textToPdf),
         _Tool('To Word', Icons.description_outlined, () => _notReady('To Word')),
         _Tool('To Excel', Icons.table_chart_outlined, () => _notReady('To Excel')),
         _Tool('To PPT', Icons.slideshow_outlined, () => _notReady('To PPT')),
+        _Tool('PDF to Images', Icons.collections_outlined, _shareDocumentImages),
+        _Tool('PDF to Long Image', Icons.panorama_vertical_outlined, _shareLongImage),
       ],
-      'Edit & Organize': [
+      'Edit': [
+        _Tool('Edit PDF', Icons.edit_document, () => _openExisting('pdf')),
         _Tool('Edit Text', Icons.edit_note_outlined, _startOcr),
-        _Tool('Merge Files', Icons.merge_type, _mergeDocuments),
+        _Tool('BG Remover', Icons.wallpaper_outlined, () => _notReady('BG Remover')),
+        _Tool('Image Resizer', Icons.photo_size_select_large_outlined, _resizeImage),
+        _Tool('Split PDF', Icons.call_split_outlined, () => _openExisting('pdf')),
+        _Tool('Sign', Icons.draw_outlined, () => _notReady('Sign')),
         _Tool('Add Watermark', Icons.branding_watermark_outlined, () => _openExisting('pdf')),
-        _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startOcr),
-        _Tool('Compress PDF', Icons.compress, () => _openExisting('pdf')),
+        _Tool('Smart Erase', Icons.auto_fix_high_outlined, () => _notReady('Smart Erase')),
+        _Tool('Erase Marks', Icons.auto_fix_normal_outlined, () => _notReady('Erase Marks')),
+        _Tool('Restore Photo', Icons.restore_outlined, () => _notReady('Restore Photo')),
         _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('pdf')),
         _Tool('Extract PDF Pages', Icons.content_copy_outlined, () => _openExisting('pdf')),
+        _Tool('Rotate PDF', Icons.rotate_90_degrees_ccw_outlined,
+            () => _openExisting('document')),
         _Tool('Lock PDF', Icons.lock_outline, () => _notReady('Lock PDF')),
+        _Tool('Compress PDF', Icons.compress, () => _openExisting('pdf')),
+      ],
+      'Utilities': [
+        _Tool('AI Chat', Icons.smart_toy_outlined, () => _notReady('AI Chat')),
+        _Tool('Print', Icons.print_outlined, () => _openExisting('print')),
+        _Tool('Create QR Code', Icons.qr_code_2_outlined,
+            () => _notReady('Create QR Code')),
       ],
     };
     return ListView(padding: const EdgeInsets.fromLTRB(16, 18, 16, 25), children: [
       const Text('Tools', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 29)),
-      const SizedBox(height: 15),
+      const SizedBox(height: 6),
+      const Text('Scan • Convert • Edit • Utilities', style: TextStyle(color: dsMuted)),
+      const SizedBox(height: 18),
+      TextField(
+        onChanged: (value) => setState(() => _toolQuery = value.trim().toLowerCase()),
+        decoration: InputDecoration(
+          hintText: 'Search all tools',
+          prefixIcon: const Icon(Icons.search),
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surface,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide.none),
+        ),
+      ),
       for (final group in groups.entries) ...[
-        Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: _sectionTitle(group.key)),
+        if (group.value.any((tool) => tool.title.toLowerCase().contains(_toolQuery)))
+          Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: _sectionTitle(group.key)),
+        if (group.value.any((tool) => tool.title.toLowerCase().contains(_toolQuery)))
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: group.value.length,
+          itemCount: group.value.where((tool) => tool.title.toLowerCase()
+              .contains(_toolQuery)).length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: .81,
           ),
           itemBuilder: (_, i) {
-            final tool = group.value[i];
+            final tool = group.value.where((item) => item.title.toLowerCase()
+                .contains(_toolQuery)).elementAt(i);
             return InkWell(
               onTap: tool.onTap,
               borderRadius: BorderRadius.circular(14),
@@ -390,24 +434,96 @@ class _HomeShellState extends State<HomeShell> {
       );
 
   Future<void> _startOcr() async {
-    if (widget.store.documents.isEmpty) {
-      _message('Scan or import a document first.');
-      return;
-    }
-    await _open(widget.store.documents.first.id);
+    final doc = await _chooseDocument();
+    if (doc == null || !mounted) return;
+    await _open(doc.id);
     if (mounted) _message('Tap Edit Text in the document toolbar.');
   }
 
-  Future<void> _openExisting(String action) async {
+  Future<ScanDocument?> _chooseDocument() async {
     if (widget.store.documents.isEmpty) {
-      _message('Import a document first.');
-      return;
+      _message('Scan or import a document first.');
+      return null;
     }
-    final id = widget.store.documents.first.id;
+    return showDialog<ScanDocument>(context: context, builder: (dialog) =>
+      SimpleDialog(
+        title: const Text('Choose a document'),
+        children: [
+          for (final doc in widget.store.documents)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialog, doc),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text('${doc.name}  ·  ${doc.pages.length} page(s)'),
+              ),
+            ),
+        ],
+      ));
+  }
+
+  Future<void> _textToPdf() async {
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => const TextToPdfScreen(),
+    ));
+  }
+
+  Future<void> _shareDocumentImages() async {
+    final doc = await _chooseDocument();
+    if (doc == null) return;
+    try {
+      await DocumentExport.shareImages(doc);
+    } catch (error) {
+      _message('Could not export images: $error');
+    }
+  }
+
+  Future<void> _shareLongImage() async {
+    final doc = await _chooseDocument();
+    if (doc == null) return;
+    try {
+      await ImageToolOperations.shareLongImage(doc);
+    } catch (error) {
+      _message('Could not create long image: $error');
+    }
+  }
+
+  Future<void> _resizeImage() async {
+    try {
+      final image = await _picker.pickImage(source: ImageSource.gallery,
+          requestFullMetadata: false);
+      if (!mounted || image == null) return;
+      final size = await showDialog<int>(context: context,
+        builder: (dialog) => SimpleDialog(
+          title: const Text('Maximum image dimension'),
+          children: [
+            for (final dimension in [640, 1024, 1600, 2048])
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialog, dimension),
+                child: Text('$dimension pixels'),
+              ),
+          ],
+        ));
+      if (size == null) return;
+      await ImageToolOperations.shareResizedImage(image.path, size);
+    } catch (error) {
+      _message('Could not resize image: $error');
+    }
+  }
+
+  Future<void> _openExisting(String action) async {
+    final doc = await _chooseDocument();
+    if (doc == null || !mounted) return;
+    final id = doc.id;
     if (action == 'pdf') {
       await Navigator.push<void>(context, MaterialPageRoute(
         builder: (_) => PdfToolsScreen(store: widget.store, documentId: id),
       ));
+    } else if (action == 'print') {
+      try {
+        await DocumentExport.printPdf(doc);
+      } catch (error) {
+        _message('Could not print PDF: $error');
+      }
     } else {
       await _open(id);
     }

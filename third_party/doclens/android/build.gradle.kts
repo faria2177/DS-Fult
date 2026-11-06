@@ -53,6 +53,9 @@ kotlin {
 
 dependencies {
     val cameraxVersion = "1.3.4"
+    // Offline, on-device document boundary detection. This is the same
+    // OpenCV version used by the working Kotlin scanner reference project.
+    implementation("org.opencv:opencv:4.10.0")
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")

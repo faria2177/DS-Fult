@@ -35,6 +35,7 @@ class ScannerSession(
 ) {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val captureExecutor = Executors.newSingleThreadExecutor()
+    private val openCvDetector = OpenCvBoundaryAdapter()
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var preview: Preview? = null
@@ -182,10 +183,13 @@ class ScannerSession(
 
             val image = proxy.image ?: return
             val rotation = proxy.imageInfo.rotationDegrees
-            val (luma, width, height) = YuvUtils.extractLuma(image, downscaleTo = 256)
+            // The reference detector needs enough pixels to resolve the page
+            // outline, particularly for ID cards and textured backgrounds.
+            val (luma, width, height) = YuvUtils.extractLuma(image, downscaleTo = 384)
             lastFrameWidth = width
             lastFrameHeight = height
-            val quad = QuadDetector.detect(
+            val quad = openCvDetector.detectLuma(luma, width, height)
+                ?: QuadDetector.detect(
                 luma, width, height,
                 config.detectionPolarity, config.detectionThresholdOffset,
             )
@@ -403,6 +407,8 @@ class ScannerSession(
     fun dispose() {
         cameraProvider?.unbindAll()
         cameraProvider = null
+        // Analyzer and native mats must not be released while a frame runs.
+        analysisExecutor.execute { openCvDetector.release() }
         analysisExecutor.shutdown()
         captureExecutor.shutdown()
         textureEntry.release()

@@ -24,7 +24,8 @@ import kotlin.math.min
  * → bottomLeft` order on the input buffer's frame (orientation handled by
  * caller).
  *
- * v0.1 deliberately avoids OpenCV and ML Kit (see docs/decisions.md).
+ * Luma-only fallback when the OpenCV reference boundary detector does not
+ * find a credible quadrilateral (or OpenCV cannot load on the device).
  */
 object QuadDetector {
     /**
@@ -222,6 +223,10 @@ object QuadDetector {
         polarity: DetectionPolarity = DetectionPolarity.BRIGHTER,
         thresholdOffset: Int = DEFAULT_THRESHOLD_OFFSET,
     ): Quad? {
+        // Use the working reference pipeline for full-colour still images,
+        // including gallery imports. Retain this inexpensive segmenter as a
+        // fallback for poorly lit or otherwise unsupported images.
+        OpenCvBoundaryAdapter.detectStill(bitmap)?.let { return it }
         val w = bitmap.width
         val h = bitmap.height
         val scale = min(1.0, 512.0 / max(w, h))
