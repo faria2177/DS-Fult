@@ -1,4 +1,4 @@
-# DocScanner — Flutter (DS-Fult)
+# DC — Flutter (DS-Fult)
 
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
@@ -66,7 +66,7 @@ physical Android device testing. No document images are sent to cloud AI.
 
 ## APK downloads
 
-Open the repository's **Actions → Android APK → latest successful run → Artifacts → DocScanner-Android-APKs**. Release APK files will be in that ZIP after the workflow has succeeded.
+Open the repository's **Actions → Android APK → latest successful run → Artifacts → DC-Android-APKs**. Release APK files will be in that ZIP after the workflow has succeeded.
 
 ## Architecture
 
@@ -90,4 +90,4 @@ lib/main.dart
 
 The full-resolution original image is kept separate from processed copies; the OCR text is stored in the local document index. The first release keeps deleted image files for potential recovery, so future storage cleanup must be implemented separately.
 
-Developed for **DocScanner / DS** by Md Jahidul Islam.
+Developed for **DC / DS** by Md Jahidul Islam.
