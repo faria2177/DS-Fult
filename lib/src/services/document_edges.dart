@@ -16,9 +16,9 @@ class DocumentEdges {
     detectionThresholdOffset: 12,
     detectionThrottleHz: 12,
     enableQuadSmoothing: true,
-    // Use a longer rolling history so the green four-sided outline tracks
-    // steady document edges without jumping between individual frames.
-    quadSmoothingWindow: 9,
+    // Identity-aware tracking rejects stray rectangles before smoothing;
+    // seven frames keep edges steady without the lag of a nine-frame median.
+    quadSmoothingWindow: 7,
     enablePerspectiveWarp: true,
     enableSharpnessGate: true,
     sharpnessFloor: 8.5,

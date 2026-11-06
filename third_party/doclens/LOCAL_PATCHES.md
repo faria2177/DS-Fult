@@ -14,6 +14,10 @@ The original license is preserved in `LICENSE`.
   smaller than bright clothing, dark desks, and other surrounding clutter.
 - `android/src/test/kotlin/dev/doclens/doclens/QuadDetectorTest.kt`:
   synthetic bright/dark foreground and border-clutter regression tests.
+- `lib/src/quad_smoother.dart`:
+  reject brief competing document quads and require consecutive candidate
+  matches before changing the green outline. Hide a stale outline if the
+  detector continues to disagree. Tested in host `test/quad_smoother_test.dart`.
 
 The host app disables auto capture explicitly in its `ScannerConfig` and in
 both single-page and batch scanner widgets. Edge detection, corner adjustment,

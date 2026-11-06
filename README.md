@@ -3,7 +3,15 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
-## Implemented in v0.3.3 (work in progress)
+## Implemented in v0.3.4 (work in progress)
+
+- **Green edge stability (v0.3.4):** the live quad tracker now compares the
+  size and position of consecutive candidate documents before moving its
+  outline. A stray background shape must be detected consistently in three
+  frames before the box switches; stale boxes disappear after sustained
+  mismatches or missed frames. The median window is now seven frames to
+  reduce motion lag. Added Flutter tests for jitter, outliers, movement,
+  document switches and loss/recovery. The shutter stays **manual**.
 
 - **Camera four-corner alignment fix (v0.3.3):** CameraX Preview,
   ImageAnalysis and ImageCapture now request the same 4:3 field of view.
@@ -28,7 +36,7 @@ The app does **not** include CamScanner's proprietary code, artwork, cloud servi
   multiple quad candidates rather than the largest image blob, and high-resolution capture. Light and dark
   documents can be scanned against contrasting backgrounds.
 - The live preview now draws a **complete green four-sided border** along the
-  detected document (rather than disconnected corner brackets), with nine-frame
+  detected document (rather than disconnected corner brackets), with seven-frame
   corner smoothing. Camera **Single / Batch**
   selection is on the scanner itself; switching modes releases CameraX first.
 - Gallery imports use the same native four-corner detector and automatically
