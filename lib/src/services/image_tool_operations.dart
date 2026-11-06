@@ -12,6 +12,10 @@ import '../models.dart';
 
 /// On-device image utilities for the image-backed document library.
 class ImageToolOperations {
+  @visibleForTesting
+  static Uint8List buildLongImageBytes(List<Uint8List> pages) =>
+      _joinVertical(pages);
+
   static Future<void> shareLongImage(ScanDocument document) async {
     if (document.pages.isEmpty) {
       throw const FormatException('This document has no images.');
