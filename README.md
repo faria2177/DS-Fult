@@ -17,8 +17,9 @@ The app does **not** include CamScanner's proprietary code, artwork, cloud servi
 - ID Card / Driver License / Bank Card front-and-back workflows with a **hard two-image maximum**, including the gallery picker limit.
 - Single A4 PDF with both sides of a card; standard multi-page PDF for documents.
 - Share PDF/images, print via Android system print service.
-- On-device **English/Latin OCR** plus **offline Bengali OCR** using the BSD-licensed
-  Tesseract plugin and `tessdata_fast` Bengali language model (bundled in APK).
+- On-device **English/Latin OCR** plus **offline Bengali OCR** using the
+  BSD-licensed `flutter_tesseract_ocr` plugin and `tessdata_fast` Bengali model
+  bundled in the APK.
 - Image text editor: tap an English OCR line to replace/erase it directly on the
   scanned image, tap to add text in English/Bengali, drag to erase a mark, undo
   recent edits. The original capture is retained.

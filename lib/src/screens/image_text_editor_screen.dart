@@ -151,8 +151,12 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
     final previous = _undo.removeLast();
     setState(() => _busy = true);
     try {
+      final extension = previous.length > 3 && previous[0] == 0x89 &&
+              previous[1] == 0x50
+          ? '.png'
+          : '.jpg';
       await widget.store.replacePageBytes(widget.documentId, widget.pageId,
-          previous, extension: '.png');
+          previous, extension: extension);
       await _loadPage();
     } finally {
       if (mounted) setState(() => _busy = false);

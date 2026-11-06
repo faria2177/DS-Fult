@@ -3,9 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:tesseract_ocr/ocr_engine_config.dart';
-import 'package:tesseract_ocr/tesseract_ocr.dart';
 
 import '../services/document_export.dart';
 import '../storage/document_store.dart';
@@ -76,9 +75,10 @@ class _EditTextScreenState extends State<EditTextScreen>
       if (_bengali) {
         // Tesseract + bundled ben.traineddata: works offline without ML Kit
         // downloads. Word boxes are not provided by this plugin.
-        final recognized = await TesseractOcr.extractText(
+        final recognized = await FlutterTesseractOcr.extractText(
           page.path,
-          config: OCRConfig(language: 'ben', engine: OCREngine.tesseract),
+          language: 'ben',
+          args: const {'psm': '3', 'preserve_interword_spaces': '1'},
         );
         if (!mounted) return;
         setState(() {
