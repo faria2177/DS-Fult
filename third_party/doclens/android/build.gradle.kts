@@ -27,6 +27,13 @@ android {
     sourceSets {
         getByName("main") {
             java.srcDirs("src/main/kotlin")
+            // The user-supplied CamScanner JNI archive is retained in
+            // src/main/jniLibs for analysis, but none of its proprietary
+            // binaries are referenced by Doclens. Packaging them causes
+            // duplicate native libs (e.g. datastore_shared_counter.so) and
+            // may override Flutter's own libflutter.so. The OpenCV AAR below
+            // independently packages its supported JNI library.
+            jniLibs.setSrcDirs(listOf("src/main/managedJniLibs"))
         }
         getByName("test") {
             java.srcDirs("src/test/kotlin")

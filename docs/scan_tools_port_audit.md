@@ -24,6 +24,7 @@ The following algorithm files are portable Kotlin and were reused under
 - Camera preview: CameraX Y plane -> grayscale RGBA OpenCV Mat -> four normalized corners -> existing overlay/temporal smoother. No automatic shutter.
 - Captured stills and gallery images: full-color bitmap -> OpenCV -> detected crop polygon -> existing perspective warp; the original bitmap-backed detector remains fallback.
 - Native library loading: the OpenCV Maven Android AAR (`org.opencv:opencv:4.10.0`) provides its own JNI binaries. No private CamScanner `.so` is required for this pipeline.
+- Historical `src/main/jniLibs/arm64-v8a/` CamScanner binaries are retained in Git but intentionally excluded from the Doclens Gradle source set. The immediately preceding GitHub build failed at `:app:mergeReleaseNativeLibs` with a duplicate `libdatastore_shared_counter.so`; a copied `libflutter.so` could also collide with the genuine Flutter engine. Only supported dependencies should be shipped.
 - If OpenCV cannot initialize or does not find a reliable page, Doclens retains its previous luma-based detection. Both detection and processing run offline.
 
 **Known limitation**: the CameraX preview currently supplies its Y plane, so
