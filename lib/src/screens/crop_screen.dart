@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../services/document_edges.dart';
 import '../services/image_processor.dart';
 import '../theme.dart';
 
@@ -21,6 +22,8 @@ class _CropScreenState extends State<CropScreen> {
   Uint8List? _imageBytes;
   double _ratio = .7;
   bool _busy = false;
+  bool _detecting = false;
+  String _hint = 'Drag the four handles to adjust the document.';
 
   @override
   void initState() {
@@ -29,23 +32,68 @@ class _CropScreenState extends State<CropScreen> {
   }
 
   Future<void> _load() async {
-    final bytes = await File(widget.imagePath).readAsBytes();
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    final image = frame.image;
-    final ratio = image.width / image.height;
-    image.dispose();
-    codec.dispose();
-    if (mounted) {
+    try {
+      final bytes = await File(widget.imagePath).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final ratio = image.width / image.height;
+      image.dispose();
+      codec.dispose();
+      if (!mounted) return;
       setState(() {
         _imageBytes = bytes;
         _ratio = ratio;
       });
+      await _autoDetect();
+    } catch (error) {
+      if (mounted) setState(() => _hint = 'Could not load image: $error');
     }
   }
 
+  Future<void> _autoDetect() async {
+    if (_detecting || _busy || _imageBytes == null) return;
+    setState(() => _detecting = true);
+    try {
+      final detected = await DocumentEdges.detect(widget.imagePath);
+      if (!mounted) return;
+      final points = detected?.quad?.points;
+      setState(() {
+        if (points == null) {
+          _hint = 'No reliable outline found. Adjust all four corners manually.';
+        } else {
+          _corners
+            ..clear()
+            ..addAll(points);
+          _hint = 'Four corners detected. Review edges before saving.';
+        }
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _hint = 'Automatic detection unavailable. Drag corners manually.');
+      }
+    } finally {
+      if (mounted) setState(() => _detecting = false);
+    }
+  }
+
+  void _resetCorners() {
+    setState(() {
+      _corners
+        ..clear()
+        ..addAll(CropQuad.inset().corners);
+      _hint = 'Full-page rectangle selected. Drag to refine.';
+    });
+  }
+
   Future<void> _apply() async {
-    if (_imageBytes == null || _busy) return;
+    if (_imageBytes == null || _busy || _detecting) return;
+    if (!CropQuad(_corners).isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('The four corners must form a valid document shape.'),
+      ));
+      return;
+    }
     setState(() => _busy = true);
     try {
       final image = await ImageProcessor.process(_imageBytes!, crop: CropQuad(_corners));
@@ -68,7 +116,7 @@ class _CropScreenState extends State<CropScreen> {
           foregroundColor: Colors.white,
           title: const Text('Adjust corners'),
           actions: [
-            TextButton(onPressed: _busy ? null : _apply, child: const Text('Done',
+            TextButton(onPressed: _busy || _detecting ? null : _apply, child: const Text('Done',
                 style: TextStyle(color: dsTeal, fontWeight: FontWeight.bold))),
           ],
         ),
@@ -92,12 +140,16 @@ class _CropScreenState extends State<CropScreen> {
                           top: _corners[i].dy * height - 23,
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
-                            onPanUpdate: (details) => setState(() {
-                              _corners[i] = Offset(
+                            onPanUpdate: (details) {
+                              final candidate = [..._corners];
+                              candidate[i] = Offset(
                                 (_corners[i].dx + details.delta.dx / width).clamp(.0, 1.0),
                                 (_corners[i].dy + details.delta.dy / height).clamp(.0, 1.0),
                               );
-                            }),
+                              if (CropQuad(candidate).isValid) {
+                                setState(() => _corners[i] = candidate[i]);
+                              }
+                            },
                             child: Container(
                               width: 46, height: 46,
                               alignment: Alignment.center,
@@ -115,11 +167,27 @@ class _CropScreenState extends State<CropScreen> {
                     ]),
             );
           }))),
-          if (_busy) const LinearProgressIndicator(color: dsTeal),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(30, 18, 30, 28),
-            child: Text('Drag all four corners to the document edges.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+          if (_busy || _detecting) const LinearProgressIndicator(color: dsTeal),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+            child: Column(children: [
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                OutlinedButton.icon(
+                  onPressed: _busy || _detecting || _imageBytes == null ? null : _autoDetect,
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: const Text('Auto Detect'),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy || _detecting ? null : _resetCorners,
+                  icon: const Icon(Icons.crop_free_outlined),
+                  label: const Text('Reset'),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Text(_hint, textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70)),
+            ]),
           ),
         ])),
       );

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
+import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/image_processor.dart';
 import '../storage/document_store.dart';
@@ -131,10 +132,20 @@ class _DocumentScreenState extends State<DocumentScreen> {
         _message('Only $remaining more image(s) allowed.');
         return;
       }
+      if (!fromCamera) {
+        if (mounted) setState(() => _busy = true);
+        final cropped = await DocumentEdges.autoCropFiles(paths);
+        paths = cropped.paths;
+        if (cropped.needsReview > 0) {
+          _message('${cropped.needsReview} image(s) need manual corner review.');
+        }
+      }
       await widget.store.appendPaths(doc.id, paths);
       if (mounted) setState(() {});
     } catch (error) {
       _message(error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

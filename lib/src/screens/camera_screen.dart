@@ -2,6 +2,7 @@ import 'package:doclens/doclens.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../services/document_edges.dart';
 import '../theme.dart';
 import 'manual_camera_screen.dart';
 
@@ -20,6 +21,7 @@ class CameraScreen extends StatefulWidget {
 
 class _CameraScreenState extends State<CameraScreen> {
   bool _finished = false;
+  bool _processingGallery = false;
   final _picker = ImagePicker();
 
   void _finish(List<String> paths) {
@@ -29,17 +31,26 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _gallery() async {
+    if (_processingGallery) return;
     try {
       final files = await _picker.pickMultiImage(
         limit: widget.cardMode ? 2 : null,
         requestFullMetadata: false,
       );
-      if (files.isNotEmpty) _finish(files.map((file) => file.path).toList());
+      if (files.isEmpty || !mounted) return;
+      setState(() => _processingGallery = true);
+      final cropped = await DocumentEdges.autoCropFiles(
+        files.map((file) => file.path).toList(),
+      );
+      if (!mounted) return;
+      _finish(cropped.paths);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gallery import failed: $error')),
       );
+    } finally {
+      if (mounted) setState(() => _processingGallery = false);
     }
   }
 
@@ -70,15 +81,11 @@ class _CameraScreenState extends State<CameraScreen> {
               overlayStyle: QuadOverlayStyle.cornersFilled,
               enableAutoCapture: true,
               enableEditCorners: true,
-              autoCaptureStabilityDuration: const Duration(milliseconds: 850),
+              autoCaptureStabilityDuration: const Duration(milliseconds: 900),
               autoCaptureConfirmationDelay: const Duration(milliseconds: 350),
               imageEnhancement: ImageEnhancement.enhanced,
               jpegQuality: 95,
-              config: const ScannerConfig(
-                detectionPolarity: DetectionPolarity.auto,
-                enableSharpnessGate: true,
-                detectionThrottleHz: 12,
-              ),
+              config: DocumentEdges.scannerConfig,
               onCapture: (result) {
                 final path = result.croppedImagePath ?? result.rawImagePath;
                 if (path.isNotEmpty) _finish([path]);
@@ -98,6 +105,20 @@ class _CameraScreenState extends State<CameraScreen> {
               ]),
             ),
           ),
+          if (_processingGallery)
+            const Positioned.fill(
+              child: ColoredBox(
+                color: Color(0xBB000000),
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    CircularProgressIndicator(color: dsTeal),
+                    SizedBox(height: 16),
+                    Text('Detecting document edges & auto-cropping…',
+                        style: TextStyle(color: Colors.white)),
+                  ]),
+                ),
+              ),
+            ),
         ]),
       );
 

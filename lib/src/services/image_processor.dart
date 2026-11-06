@@ -24,6 +24,37 @@ class CropQuad {
 
   final List<Offset> corners;
 
+  /// Prevent collapsed, crossed or self-intersecting handles from producing
+  /// inverted or severely distorted perspective crops. Coordinates are
+  /// normalized and ordered TL, TR, BR, BL.
+  bool get isValid {
+    if (corners.length != 4) return false;
+    for (final point in corners) {
+      if (!point.dx.isFinite || !point.dy.isFinite ||
+          point.dx < 0 || point.dx > 1 ||
+          point.dy < 0 || point.dy > 1) {
+        return false;
+      }
+    }
+    var areaTwice = 0.0;
+    double? sign;
+    for (var i = 0; i < 4; i++) {
+      final a = corners[i];
+      final b = corners[(i + 1) % 4];
+      final c = corners[(i + 2) % 4];
+      if ((a - b).distance < .025) return false;
+      areaTwice += a.dx * b.dy - b.dx * a.dy;
+      final ab = b - a;
+      final bc = c - b;
+      final cross = ab.dx * bc.dy - ab.dy * bc.dx;
+      if (cross.abs() < 1e-5) return false;
+      final nextSign = cross.sign;
+      if (sign != null && nextSign != sign) return false;
+      sign = nextSign;
+    }
+    return areaTwice.abs() / 2 >= .015;
+  }
+
   factory CropQuad.inset() => CropQuad(const [
         Offset(.05, .05),
         Offset(.95, .05),
@@ -60,7 +91,13 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
   if (decoded == null) throw const FormatException('Unsupported image');
   var image = img.bakeOrientation(decoded);
   final crop = options['crop'] as List<List<double>>?;
-  if (crop != null) image = _perspectiveCrop(image, crop);
+  if (crop != null) {
+    final quad = CropQuad(crop.map((p) => Offset(p[0], p[1])).toList());
+    if (!quad.isValid) {
+      throw const FormatException('Invalid document corners. Adjust all four corners.');
+    }
+    image = _perspectiveCrop(image, crop);
+  }
   final rotation = options['rotate'] as int;
   if (rotation % 360 != 0) {
     image = img.copyRotate(image, angle: rotation.toDouble());

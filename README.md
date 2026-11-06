@@ -3,18 +3,29 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
-## Implemented in v0.2 (work in progress)
+## Implemented in v0.3 (work in progress)
 
 - Flutter Material 3 UI: Home, Files, Scan, Tools, Me; light and dark modes.
 - Native live document corner tracking, auto-capture after a stability/sharpness check,
   dewarp and adjustable review using the MIT-licensed `doclens` engine; manual
   camera remains available for devices where the detector is unsuccessful.
+- Auto edge detection uses four-corner smoothing, low-light and focus checks,
+  a stability/confirmation window, and high-resolution capture. Light and dark
+  documents can be scanned against contrasting backgrounds.
+- Gallery imports use the same native four-corner detector and automatically
+  crop/straighten reliable detections. When no reliable boundary is found the
+  original image is preserved for manual cropping; no guessed crop is applied.
+- Crop editor automatically proposes detected corners, lets the user redetect
+  or reset them, and rejects crossed/degenerate quadrilaterals before warping.
+- **Mega Scan** batch mode with on-device auto-capture, thumbnail review,
+  page sorting/deletion; **Long Document** mode for guided multi-shot stitching.
 - HD camera capture, flash, gallery import and multi-page documents.
 - Local document library, persistent folders, rename/move/delete and image previews.
 - Manual four-corner perspective crop with a homography transform.
 - Original, Auto, Enhance, **Shadow Free**, Magic Color, Grayscale, B&W filters.
   Auto/Enhance/Shadow Free now estimate local illumination to lift dark paper areas.
 - ID Card / Driver License / Bank Card front-and-back workflows with a **hard two-image maximum**, including the gallery picker limit.
+- Each captured/imported ID-card side can be tapped to adjust all four corners.
 - Single A4 PDF with both sides of a card; standard multi-page PDF for documents.
 - Share PDF/images, print via Android system print service.
 - On-device **English/Latin OCR** plus **offline Bengali OCR** using the
@@ -52,6 +63,7 @@ cd DS-Fult
 bash tool/setup_android.sh
 bash tool/download_ocr_models.sh
 flutter pub get
+bash tool/patch_tesseract_gradle.sh
 flutter analyze
 flutter test
 flutter run
@@ -63,10 +75,13 @@ traineddata into Flutter assets **before** building. It is packaged in the
 APK and does not download again during normal app use. The traineddata binary
 is not committed to Git. Camera/ML Kit/Tesseract functionality requires
 physical Android device testing. No document images are sent to cloud AI.
+`tool/patch_tesseract_gradle.sh` removes a legacy Gradle repository block
+from the locally downloaded OCR plugin because the published plugin still
+references `jcenter()`; CI runs this automatically.
 
 ## APK downloads
 
-Open the repository's **Actions → Android APK → latest successful run → Artifacts → DC-Android-APKs**. Release APK files will be in that ZIP after the workflow has succeeded.
+Open the repository's **Actions → Android APK → latest successful run → Artifacts → DocScanner-Android-APKs**. Release APK files will be in that ZIP after the workflow has succeeded.
 
 ## Architecture
 
@@ -83,6 +98,7 @@ lib/main.dart
   src/screens/image_text_editor_screen.dart Direct visual text edit / erase
   src/screens/pdf_tools_screen.dart Page organizer / merge / PDF tools
   src/services/image_processor.dart Image filters / perspective
+  src/services/document_edges.dart Native contour detection / gallery auto-crop
   src/services/image_text_processor.dart Pixel-level text replacement
   src/services/document_export.dart PDF/print/share
   src/storage/document_store.dart Local image+JSON library

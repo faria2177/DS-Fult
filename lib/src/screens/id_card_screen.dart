@@ -1,12 +1,16 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
+import '../services/document_edges.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
+import 'crop_screen.dart';
 import 'document_screen.dart';
 
 class IdCardScreen extends StatefulWidget {
@@ -23,12 +27,14 @@ class _IdCardScreenState extends State<IdCardScreen> {
   final List<String> _selected = [];
   final _picker = ImagePicker();
   bool _saving = false;
+  bool _importing = false;
 
   void _warn(String message) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _import() async {
+    if (_importing) return;
     final remaining = 2 - _selected.length;
     if (remaining <= 0) {
       _warn('Only 2 images are allowed: front and back.');
@@ -51,9 +57,17 @@ class _IdCardScreenState extends State<IdCardScreen> {
         _warn('Please select a maximum of $remaining image(s).');
         return;
       }
-      setState(() => _selected.addAll(paths));
+      setState(() => _importing = true);
+      final cropped = await DocumentEdges.autoCropFiles(paths);
+      if (!mounted) return;
+      if (cropped.needsReview > 0) {
+        _warn('Please check corners for ${cropped.needsReview} card image(s).');
+      }
+      setState(() => _selected.addAll(cropped.paths));
     } catch (error) {
       _warn('Import failed: $error');
+    } finally {
+      if (mounted) setState(() => _importing = false);
     }
   }
 
@@ -75,6 +89,23 @@ class _IdCardScreenState extends State<IdCardScreen> {
       return;
     }
     setState(() => _selected.addAll(paths));
+  }
+
+  Future<void> _adjustSide(int index) async {
+    if (_saving || _importing || index >= _selected.length) return;
+    final result = await Navigator.push<Uint8List>(context, MaterialPageRoute(
+      builder: (_) => CropScreen(imagePath: _selected[index]),
+    ));
+    if (!mounted || result == null) return;
+    try {
+      final temporaryDirectory = await getTemporaryDirectory();
+      final file = File('${temporaryDirectory.path}/ds_card_'
+          '${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
+      await file.writeAsBytes(result, flush: true);
+      if (mounted) setState(() => _selected[index] = file.path);
+    } catch (error) {
+      _warn('Could not save adjusted card: $error');
+    }
   }
 
   Future<void> _finish() async {
@@ -124,7 +155,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
               ]),
             ],
           )),
-          if (_saving) const LinearProgressIndicator(color: dsTeal),
+          if (_saving || _importing) const LinearProgressIndicator(color: dsTeal),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
             child: Row(children: [
@@ -145,7 +176,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
   Widget _side(int index) {
     final filled = index < _selected.length;
     return InkWell(
-      onTap: filled ? null : _capture,
+      onTap: filled ? () => _adjustSide(index) : _capture,
       borderRadius: BorderRadius.circular(18),
       child: Container(
         height: 185,
@@ -177,6 +208,14 @@ class _IdCardScreenState extends State<IdCardScreen> {
             Positioned(right: 4, top: 4, child: IconButton(
               tooltip: 'Remove image', icon: const Icon(Icons.cancel, color: Colors.redAccent),
               onPressed: () => setState(() => _selected.removeAt(index)),
+            )),
+          if (filled)
+            Positioned(bottom: 10, right: 12, child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Text('Tap to adjust corners',
+                  style: TextStyle(color: Colors.white, fontSize: 11)),
             )),
         ]),
       ),

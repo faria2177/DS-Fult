@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:doclens/doclens.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
+import '../services/document_edges.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
@@ -43,11 +45,53 @@ class _HomeShellState extends State<HomeShell> {
     await _create(paths);
   }
 
+  Future<void> _megaScan() async {
+    try {
+      final pages = await DoclensMultiScreen.scan(
+        context,
+        appBarTitle: 'Mega Scan',
+        captureHintText: 'Align all four corners • Hold steady',
+        accentColor: dsTeal,
+        overlayStyle: QuadOverlayStyle.cornersFilled,
+        enableAutoCapture: true,
+        imageEnhancement: ImageEnhancement.enhanced,
+        config: DocumentEdges.scannerConfig,
+      );
+      if (!mounted || pages == null || pages.isEmpty) return;
+      await _create(pages
+          .map((page) => page.croppedImagePath ?? page.rawImagePath)
+          .where((path) => path.isNotEmpty)
+          .toList());
+    } catch (error) {
+      _message('Batch scan failed: $error');
+    }
+  }
+
+  Future<void> _longScan() async {
+    try {
+      final path = await DoclensLargeDocScreen.scan(
+        context,
+        accentColor: dsTeal,
+      );
+      if (path != null && path.isNotEmpty && mounted) await _create([path]);
+    } catch (error) {
+      _message('Long document scan failed: $error');
+    }
+  }
+
   Future<void> _import() async {
     try {
       final files = await _picker.pickMultiImage(requestFullMetadata: false);
       if (files.isEmpty || !mounted) return;
-      await _create(files.map((file) => file.path).toList());
+      final autoCrop = await DocumentEdges.autoCropFiles(
+        files.map((file) => file.path).toList(),
+      );
+      if (!mounted) return;
+      if (autoCrop.needsReview > 0) {
+        _message('${autoCrop.needsReview} photo(s) had no reliable edges. '
+            'Use Crop to adjust them manually.');
+      }
+      await _create(autoCrop.paths);
     } catch (error) {
       _message('Could not import photos: $error');
     }
@@ -209,6 +253,8 @@ class _HomeShellState extends State<HomeShell> {
     final groups = <String, List<_Tool>>{
       'Scan': [
         _Tool('Scan', Icons.document_scanner_outlined, _capture),
+        _Tool('Mega Scan', Icons.auto_awesome_motion_outlined, _megaScan),
+        _Tool('Long Document', Icons.view_agenda_outlined, _longScan),
         _Tool('ID Card', Icons.badge_outlined, () => _openCard(DocumentKind.idCard)),
         _Tool('Driver License', Icons.airport_shuttle_outlined, () => _openCard(DocumentKind.driverLicense)),
         _Tool('Bank Card', Icons.credit_card, () => _openCard(DocumentKind.bankCard)),

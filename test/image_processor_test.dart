@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:docscanner/src/services/image_processor.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,47 @@ void main() {
     expect(result, isNotNull);
     expect(result!.width, greaterThan(50));
     expect(result.height, greaterThan(30));
+  });
+
+  test('Convex skewed document corners are accepted', () {
+    final quad = CropQuad(const [
+      Offset(.08, .18), Offset(.88, .06),
+      Offset(.96, .94), Offset(.03, .82),
+    ]);
+    expect(quad.isValid, isTrue);
+  });
+
+  test('Crossed, collapsed and out-of-frame corners are rejected', () {
+    final invalid = [
+      CropQuad(const [
+        Offset(.05, .05), Offset(.95, .95),
+        Offset(.95, .05), Offset(.05, .95),
+      ]),
+      CropQuad(const [
+        Offset(.1, .1), Offset(.1, .1),
+        Offset(.9, .9), Offset(.1, .9),
+      ]),
+      CropQuad(const [
+        Offset(-.1, .1), Offset(.9, .1),
+        Offset(.9, .9), Offset(.1, .9),
+      ]),
+    ];
+    for (final quad in invalid) {
+      expect(quad.isValid, isFalse);
+    }
+  });
+
+  test('Perspective transform refuses a self-intersecting crop', () async {
+    final input = img.Image(width: 120, height: 90);
+    img.fill(input, color: img.ColorRgb8(255, 255, 255));
+    final bytes = Uint8List.fromList(img.encodeJpg(input));
+    await expectLater(
+      ImageProcessor.process(bytes, crop: CropQuad(const [
+        Offset(.05, .05), Offset(.95, .95),
+        Offset(.95, .05), Offset(.05, .95),
+      ])),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('Shadow Free reduces a paper illumination gradient', () async {
