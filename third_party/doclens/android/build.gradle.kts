@@ -40,6 +40,10 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Plain JVM tests cannot call the android.jar stubs. The bundled
+            // plugin-version smoke test reads Build.VERSION.RELEASE; returning
+            // a default value avoids a false failure in headless CI.
+            isReturnDefaultValues = true
         }
     }
 
