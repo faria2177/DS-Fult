@@ -3,25 +3,26 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
-## Implemented in v0.3.1 (work in progress)
+## Implemented in v0.3.2 (work in progress)
 
 - Flutter Material 3 UI: Home, Files, Scan, Tools, Me; light and dark modes.
-- Native live document corner tracking, auto-capture after a stability/sharpness check,
-  dewarp and adjustable review using the MIT-licensed `doclens` engine; manual
+- Native live document corner tracking with **manual shutter only** (auto
+  capture disabled in Single and Batch), perspective dewarp and adjustable
+  review using a locally patched MIT-licensed `doclens` engine; manual
   camera remains available for devices where the detector is unsuccessful.
 - Auto edge detection uses four-corner smoothing, low-light and focus checks,
-  a stability/confirmation window, and high-resolution capture. Light and dark
+  multiple quad candidates rather than the largest image blob, and high-resolution capture. Light and dark
   documents can be scanned against contrasting backgrounds.
 - The live preview now draws a **complete green four-sided border** along the
   detected document (rather than disconnected corner brackets), with nine-frame
-  corner smoothing and a longer stability window. Camera **Single / Batch**
+  corner smoothing. Camera **Single / Batch**
   selection is on the scanner itself; switching modes releases CameraX first.
 - Gallery imports use the same native four-corner detector and automatically
   crop/straighten reliable detections. When no reliable boundary is found the
   original image is preserved for manual cropping; no guessed crop is applied.
 - Crop editor automatically proposes detected corners, lets the user redetect
   or reset them, and rejects crossed/degenerate quadrilaterals before warping.
-- **Mega Scan** batch mode with on-device auto-capture, thumbnail review,
+- **Mega Scan** batch mode with manual shutter, thumbnail review,
   page sorting/deletion; **Long Document** mode for guided multi-shot stitching.
 - HD camera capture, flash, gallery import and multi-page documents.
 - Local document library, persistent folders, rename/move/delete and image previews.

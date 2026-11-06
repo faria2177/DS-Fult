@@ -7,8 +7,13 @@ import 'image_processor.dart';
 /// gallery auto-crop and the manual corner editor.
 class DocumentEdges {
   static const scannerConfig = ScannerConfig(
+    // Never fire the camera automatically. Edge detection and auto-crop still
+    // run; the user chooses when to take the picture.
+    enableAutoCapture: false,
+    enableAutoCaptureConfirmation: false,
     detectionPolarity: DetectionPolarity.auto,
-    detectionThresholdOffset: 17,
+    // A smaller offset helps in dim scenes and on lightly coloured ID cards.
+    detectionThresholdOffset: 12,
     detectionThrottleHz: 12,
     enableQuadSmoothing: true,
     // Use a longer rolling history so the green four-sided outline tracks
@@ -17,7 +22,6 @@ class DocumentEdges {
     enablePerspectiveWarp: true,
     enableSharpnessGate: true,
     sharpnessFloor: 8.5,
-    enableAutoCaptureConfirmation: true,
     autoCaptureCornerThreshold: .014,
     autoCaptureStabilityDuration: Duration(milliseconds: 1100),
     autoCaptureConfirmationDelay: Duration(milliseconds: 400),

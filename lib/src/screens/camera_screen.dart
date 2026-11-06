@@ -6,7 +6,7 @@ import '../services/document_edges.dart';
 import '../theme.dart';
 import 'manual_camera_screen.dart';
 
-/// Live native document contour tracking, stability gating and auto-capture.
+/// Live native document contour tracking with manual shutter capture.
 /// Kept behind this screen so callers always receive the same list of paths.
 /// The manual camera is retained as a fallback on unsupported devices.
 class CameraScreen extends StatefulWidget {
@@ -117,13 +117,13 @@ class _CameraScreenState extends State<CameraScreen> {
                 : _batchMode
                     ? DoclensMultiScreen(
                         appBarTitle: 'Batch Scan',
-                        captureHintText: 'Follow the green outline • Hold steady',
+                        captureHintText: 'Align green edges • Tap shutter',
                         addPageLabel: 'Add page',
                         doneLabel: 'Done',
                         editCornersLabel: 'Adjust corners',
                         accentColor: _outlineColor,
                         overlayStyle: QuadOverlayStyle.outline,
-                        enableAutoCapture: true,
+                        enableAutoCapture: false,
                         enableEditCorners: true,
                         imageEnhancement: ImageEnhancement.enhanced,
                         jpegQuality: 95,
@@ -140,13 +140,13 @@ class _CameraScreenState extends State<CameraScreen> {
                     : DoclensScreen(
                         appBarTitle: widget.side ?? 'DocScanner',
                         captureHintText: widget.side ??
-                            'Follow the green outline • Hold steady',
+                            'Align green edges • Tap shutter',
                         useLabel: 'Use scan',
                         editCornersLabel: 'Adjust edges',
                         retakeLabel: 'Retake',
                         accentColor: _outlineColor,
                         overlayStyle: QuadOverlayStyle.outline,
-                        enableAutoCapture: true,
+                        enableAutoCapture: false,
                         enableEditCorners: true,
                         autoCaptureStabilityDuration:
                             const Duration(milliseconds: 1100),
