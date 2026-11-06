@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.math.abs
 
 class QuadDetectorTest {
     @Test
@@ -43,6 +44,40 @@ class QuadDetectorTest {
     fun uniformFrameNeverProducesFakeDocument() {
         val luma = ByteArray(128 * 96) { 120.toByte() }
         assertNull(QuadDetector.detect(luma, 128, 96, DetectionPolarity.AUTO, 12))
+    }
+
+    @Test
+    fun separateBrightCardKeepsItsExactFourCorners() {
+        val width = 320
+        val height = 240
+        val luma = ByteArray(width * height) { 35 }
+        // A brighter background region occupies more pixels than the card.
+        fill(luma, width, 0, 0, 110, 240, 230)
+        fill(luma, width, 139, 49, 293, 199, 190)
+
+        val quad = assertNotNull(
+            QuadDetector.detect(luma, width, height, DetectionPolarity.AUTO, 12),
+        )
+        assertTrue(abs(quad.topLeft.x - 139f / width) < .035f)
+        assertTrue(abs(quad.topLeft.y - 49f / height) < .035f)
+        assertTrue(abs(quad.bottomRight.x - 292f / width) < .035f)
+        assertTrue(abs(quad.bottomRight.y - 198f / height) < .035f)
+    }
+
+    @Test
+    fun darkWalletIsDetectedAgainstLightSurface() {
+        val width = 320
+        val height = 240
+        val luma = ByteArray(width * height) { 200.toByte() }
+        fill(luma, width, 65, 52, 264, 193, 45)
+
+        val quad = assertNotNull(
+            QuadDetector.detect(luma, width, height, DetectionPolarity.AUTO, 12),
+        )
+        assertTrue(abs(quad.topLeft.x - 65f / width) < .035f)
+        assertTrue(abs(quad.topLeft.y - 52f / height) < .035f)
+        assertTrue(abs(quad.bottomRight.x - 263f / width) < .035f)
+        assertTrue(abs(quad.bottomRight.y - 192f / height) < .035f)
     }
 
     private fun fill(

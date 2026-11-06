@@ -53,7 +53,7 @@ class _HomeShellState extends State<HomeShell> {
         captureHintText: 'Align all four corners • Hold steady',
         accentColor: const Color(0xFF28C78A),
         overlayStyle: QuadOverlayStyle.outline,
-        enableAutoCapture: true,
+        enableAutoCapture: false,
         imageEnhancement: ImageEnhancement.enhanced,
         config: DocumentEdges.scannerConfig,
       );

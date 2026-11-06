@@ -164,7 +164,12 @@ class QuadOverlay extends StatelessWidget {
         return warning;
       case DetectionStatus.searching:
       case DetectionStatus.noPaper:
-        return const Color(0x99FFFFFF);
+        // A quad can arrive before the stability/status classifier catches
+        // up. Keep the *detected* outline green even while advising the user
+        // to move closer; never paint a white box over a valid candidate.
+        return quad == null
+            ? const Color(0x99FFFFFF)
+            : accent.withValues(alpha: 0.90);
     }
   }
 

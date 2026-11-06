@@ -129,6 +129,25 @@ object QuadDetector {
         val quadWidth = (corners.maxOf { it.x } - corners.minOf { it.x })
         val quadHeight = (corners.maxOf { it.y } - corners.minOf { it.y })
         if (quadHeight <= 0f || quadWidth / quadHeight !in 0.22f..5f) return 0f
+        // The previous four-extrema approximation would accept a polygon
+        // around a chair, shadow, or textured background as a document. Real
+        // cards/pages have four usable sides and a reasonably filled bounding
+        // rectangle, including when viewed at a moderate perspective angle.
+        if (area / (quadWidth * quadHeight).coerceAtLeast(1f) < 0.58f) return 0f
+        for (i in corners.indices) {
+            val before = corners[(i + 3) % 4]
+            val at = corners[i]
+            val after = corners[(i + 1) % 4]
+            val ux = before.x - at.x
+            val uy = before.y - at.y
+            val vx = after.x - at.x
+            val vy = after.y - at.y
+            val ul = kotlin.math.sqrt(ux * ux + uy * uy)
+            val vl = kotlin.math.sqrt(vx * vx + vy * vy)
+            if (ul < min(width, height) * .09f || vl < min(width, height) * .09f) return 0f
+            val cos = abs((ux * vx + uy * vy) / (ul * vl))
+            if (cos > .91f) return 0f // almost straight or pinched corner
+        }
         var onBorder = 0
         for (idx in component) {
             val x = idx % width
@@ -137,6 +156,9 @@ object QuadDetector {
         }
         val borderTotal = (2 * width + 2 * height - 4).coerceAtLeast(1)
         val borderFraction = (onBorder.toFloat() / borderTotal).coerceIn(0f, 1f)
+        // A valid fully visible document must have a closed boundary; a
+        // region touching a large portion of the image edge is background.
+        if (borderFraction > .16f) return 0f
         val cx = corners.sumOf { it.x.toDouble() }.toFloat() / (corners.size * width)
         val cy = corners.sumOf { it.y.toDouble() }.toFloat() / (corners.size * height)
         val centrality = (1f - (abs(cx - .5f) + abs(cy - .5f))).coerceIn(0f, 1f)
@@ -180,40 +202,49 @@ object QuadDetector {
             ?: throw ScannerException.CaptureFailed("Decode failed: $path")
         val upright = ExifRotator.rotated(raw, path)
         try {
-            val w = upright.width
-            val h = upright.height
-            // Downscale for detection; the largest side caps at ~480 px. The
-            // detector emits normalized [0,1] coords, so this is purely a
-            // speed/memory optimisation and doesn't affect the result space.
-            val target = 480
-            val scale = min(1.0, target.toDouble() / max(w, h))
-            val dw = max(16, (w * scale).toInt())
-            val dh = max(16, (h * scale).toInt())
-            val small = if (dw == w && dh == h) upright
-                        else Bitmap.createScaledBitmap(upright, dw, dh, true)
-            val pixels = IntArray(dw * dh)
-            small.getPixels(pixels, 0, dw, 0, 0, dw, dh)
-            if (small !== upright) small.recycle()
-
-            val luma = ByteArray(dw * dh)
-            for (i in pixels.indices) {
-                val p = pixels[i]
-                val r = (p shr 16) and 0xFF
-                val g = (p shr 8) and 0xFF
-                val b = p and 0xFF
-                // Rec.601 luma, integer weights (77/150/29 ≈ /256).
-                luma[i] = (((r * 77 + g * 150 + b * 29) shr 8) and 0xFF).toByte()
-            }
-
-            val quad = detect(luma, dw, dh, polarity, thresholdOffset)
+            val quad = detectInBitmap(upright, polarity, thresholdOffset)
             return mapOf(
                 "quad" to quad?.toMap(),
-                "imageSize" to listOf(w.toDouble(), h.toDouble()),
+                "imageSize" to listOf(upright.width.toDouble(), upright.height.toDouble()),
             )
         } finally {
             if (upright !== raw) upright.recycle()
             raw.recycle()
         }
+    }
+
+    /** Detect from the actual upright shutter bitmap, not the lower-resolution
+     *  analysis preview. This avoids applying stale preview-frame coordinates
+     *  to a still frame with a different sensor crop/rotation.
+     */
+    fun detectInBitmap(
+        bitmap: Bitmap,
+        polarity: DetectionPolarity = DetectionPolarity.BRIGHTER,
+        thresholdOffset: Int = DEFAULT_THRESHOLD_OFFSET,
+    ): Quad? {
+        val w = bitmap.width
+        val h = bitmap.height
+        val scale = min(1.0, 512.0 / max(w, h))
+        val dw = max(16, (w * scale).toInt())
+        val dh = max(16, (h * scale).toInt())
+        val small = if (dw == w && dh == h) bitmap
+                    else Bitmap.createScaledBitmap(bitmap, dw, dh, true)
+        val pixels = IntArray(dw * dh)
+        try {
+            small.getPixels(pixels, 0, dw, 0, 0, dw, dh)
+        } finally {
+            if (small !== bitmap) small.recycle()
+        }
+        val luma = ByteArray(dw * dh)
+        for (i in pixels.indices) {
+            val p = pixels[i]
+            val r = (p shr 16) and 0xFF
+            val g = (p shr 8) and 0xFF
+            val b = p and 0xFF
+            // Rec.601 luma, integer weights (77/150/29 ~= /256).
+            luma[i] = (((r * 77 + g * 150 + b * 29) shr 8) and 0xFF).toByte()
+        }
+        return detect(luma, dw, dh, polarity, thresholdOffset)
     }
 
     /**

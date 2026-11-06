@@ -3,7 +3,21 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
-## Implemented in v0.3.2 (work in progress)
+## Implemented in v0.3.3 (work in progress)
+
+- **Camera four-corner alignment fix (v0.3.3):** CameraX Preview,
+  ImageAnalysis and ImageCapture now request the same 4:3 field of view.
+  Previously a 16:9 preview and 4:3 detection buffer could stretch/move
+  the live polygon relative to the real card (especially on tall phones).
+- Still photos are now re-detected at capture time before perspective crop,
+  preventing a stale preview-frame quad from being applied to a differently
+  cropped full-resolution image. The original image remains available when
+  detection fails, for manual corner adjustment.
+- Stronger native quad rejection for shapes that touch frame edges, have
+  pinched corners, or fail to resemble a convex page/card. Live detected
+  outlines stay green while the operator moves closer or steadies the phone.
+- Added Kotlin regression cases for a light card on a dark surface and a dark
+  card on a light surface. Automatic shutter remains disabled.
 
 - Flutter Material 3 UI: Home, Files, Scan, Tools, Me; light and dark modes.
 - Native live document corner tracking with **manual shutter only** (auto

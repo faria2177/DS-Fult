@@ -33,6 +33,8 @@ jobs:
         run: flutter pub get
       - name: Repair legacy Tesseract Android build script
         run: bash tool/patch_tesseract_gradle.sh
+      - name: Verify native four-corner detector
+        run: cd android && ./gradlew :doclens:testDebugUnitTest --no-daemon
       - name: Static analysis
         run: flutter analyze
       - name: Unit tests

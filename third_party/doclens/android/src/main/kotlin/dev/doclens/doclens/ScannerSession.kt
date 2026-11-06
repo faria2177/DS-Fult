@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.Size
 import androidx.annotation.MainThread
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -98,7 +99,14 @@ class ScannerSession(
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         val surfaceTexture = textureEntry.surfaceTexture()
 
-        preview = Preview.Builder().build().also { p ->
+        // Without a shared aspect ratio CameraX may pick a 16:9 preview and
+        // a 4:3 analysis buffer. Normalized analysis corners then stretch
+        // vertically on the preview (~33% error), even with a perfect quad.
+        // Match preview, analysis and still-capture field of view on every
+        // device. Flutter scales preview + overlay together using BoxFit.cover.
+        preview = Preview.Builder()
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .build().also { p ->
             p.setSurfaceProvider { request: SurfaceRequest ->
                 val res = request.resolution
                 previewSurfaceWidth = res.width
@@ -144,7 +152,7 @@ class ScannerSession(
 
         analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setTargetResolution(Size(640, 480))
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
             .build()
             .also { a ->
@@ -152,6 +160,7 @@ class ScannerSession(
             }
 
         imageCapture = ImageCapture.Builder()
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setFlashMode(flashMode)
             .build()
@@ -312,7 +321,16 @@ class ScannerSession(
                         ?: throw ScannerException.CaptureFailed("Decode failed")
                     rotated = ExifRotator.rotated(raw, file.absolutePath)
                     val rawSize = Size(rotated.width, rotated.height)
-                    val q = lastQuad
+                    // The preview quad is measured on a low-resolution YUV
+                    // stream and can drift if a phone uses a different sensor
+                    // crop for still capture. Re-detect against the actual
+                    // upright captured pixels before the irreversible warp.
+                    // Only reuse the preview quad if still detection fails.
+                    val q = QuadDetector.detectInBitmap(
+                        rotated,
+                        config.detectionPolarity,
+                        config.detectionThresholdOffset,
+                    ) ?: lastQuad
                     val pixelQuad = q?.let {
                         Quad(
                             PointF(it.topLeft.x * rawSize.width, it.topLeft.y * rawSize.height),
