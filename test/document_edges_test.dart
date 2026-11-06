@@ -10,7 +10,7 @@ void main() {
     expect(config.detectionPolarity, DetectionPolarity.auto);
     expect(config.detectionThresholdOffset, 12);
     expect(config.enableQuadSmoothing, isTrue);
-    expect(config.quadSmoothingWindow, 9);
+    expect(config.quadSmoothingWindow, 7);
     expect(config.enableSharpnessGate, isTrue);
     expect(config.enablePerspectiveWarp, isTrue);
     expect(config.autoCaptureStabilityDuration.inMilliseconds, 1100);
