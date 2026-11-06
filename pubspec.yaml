@@ -1,0 +1,30 @@
+name: docscanner
+description: Local-first document scanner with camera, ID copies, PDF and text tools.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.12.2
+  image_picker: ^1.2.4
+  image: ^4.12.0
+  path: ^1.9.1
+  google_mlkit_text_recognition: ^0.16.0
+  path_provider: ^2.1.6
+  pdf: ^3.13.1
+  printing: ^5.15.1
+  share_plus: ^13.3.1
+  shared_preferences: ^2.5.6
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

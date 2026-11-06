@@ -1,0 +1,31 @@
+import 'package:docscanner/src/models.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('document model round-trips with pages and local path', () {
+    final original = ScanDocument(
+      id: 'doc1',
+      name: 'My scan',
+      createdAt: DateTime.utc(2026, 11, 6),
+      pages: const [
+        ScanPage(id: 'p1', path: '/tmp/edited.jpg',
+            originalPath: '/tmp/scan.jpg', recognizedText: 'Hello world'),
+      ],
+      kind: DocumentKind.idCard,
+      folderId: 'folder1',
+    );
+    final loaded = ScanDocument.fromJson(original.toJson());
+    expect(loaded.name, original.name);
+    expect(loaded.kind, DocumentKind.idCard);
+    expect(loaded.folderId, 'folder1');
+    expect(loaded.pages.first.recognizedText, 'Hello world');
+    expect(loaded.pages.first.originalPath, '/tmp/scan.jpg');
+  });
+
+  test('two-sided kinds have a documented two-image limit', () {
+    expect(DocumentKind.idCard.twoSided, isTrue);
+    expect(DocumentKind.driverLicense.twoSided, isTrue);
+    expect(DocumentKind.bankCard.twoSided, isTrue);
+    expect(DocumentKind.document.twoSided, isFalse);
+  });
+}
