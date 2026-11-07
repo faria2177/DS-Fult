@@ -209,9 +209,12 @@ class _FilesWorkspaceState extends State<FilesWorkspace> {
   Future<void> _delete() async {
     if (!_requireUnlocked()) return;
     final ids = _chosen.map((e) => e.id).toList(growable: false);
-    if (!await _confirm('Delete ${ids.length} document(s)?',
+    final confirmed = await _confirm('Delete ${ids.length} document(s)?',
         'The selected files will be removed from Files. Original image data '
-        'is retained for recovery, but there is no in-app Trash yet.')) return;
+        'is retained for recovery, but there is no in-app Trash yet.');
+    if (!confirmed) {
+      return;
+    }
     await _run(() async {
       for (final id in ids) {
         await widget.store.deleteDocument(id);

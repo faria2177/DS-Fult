@@ -63,9 +63,11 @@ class _FilesMergeScreenState extends State<FilesMergeScreen> {
         ],
       )),
     );
-    if (result != null) setState(() {
-      _ids..clear()..addAll(result);
-    });
+    if (result != null) {
+      setState(() {
+        _ids..clear()..addAll(result);
+      });
+    }
   }
 
   Future<String?> _save() async {
@@ -93,8 +95,10 @@ class _FilesMergeScreenState extends State<FilesMergeScreen> {
           keepOriginals: _keepOriginals);
       return merged.id;
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Merge failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Merge failed: $error')));
+      }
       return null;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -146,9 +150,8 @@ class _FilesMergeScreenState extends State<FilesMergeScreen> {
         Expanded(child: ReorderableListView.builder(
           itemCount: docs.length,
           buildDefaultDragHandles: false,
-          onReorder: (oldIndex, newIndex) {
+          onReorderItem: (oldIndex, newIndex) {
             setState(() {
-              if (newIndex > oldIndex) newIndex--;
               _ids.insert(newIndex, _ids.removeAt(oldIndex));
             });
           },
@@ -180,7 +183,9 @@ class _FilesMergeScreenState extends State<FilesMergeScreen> {
             const SizedBox(width: 10),
             Expanded(child: FilledButton(onPressed: docs.length < 2 || _busy ? null : () async {
               final id = await _save();
-              if (id != null && mounted) Navigator.pop(context, id);
+              if (id != null && context.mounted) {
+                Navigator.pop(context, id);
+              }
             }, child: Text(_busy ? 'Merging…' : 'Merge Documents'))),
           ]),
         ),
