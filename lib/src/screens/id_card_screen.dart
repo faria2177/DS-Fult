@@ -161,10 +161,10 @@ class _IdCardScreenState extends State<IdCardScreen> {
               style: TextStyle(color: dsTeal, fontWeight: FontWeight.bold))),
         ]),
         body: SafeArea(child: Column(children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 10, 20, 6),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
             child: Text('Capture or import your ${widget.template?.label ?? 'card'}',
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 15)),
           ),
           const SizedBox(height: 8),
           Expanded(child: ListView(

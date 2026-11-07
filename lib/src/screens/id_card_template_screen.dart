@@ -153,7 +153,7 @@ class _IdCardTemplateScreenState extends State<IdCardTemplateScreen>
               Navigator.pop(sheetContext);
               await _stopPreview();
               if (!mounted) return;
-              await Navigator.push<void>(context, MaterialPageRoute(
+              await Navigator.push<void>(this.context, MaterialPageRoute(
                 builder: (_) => ScanMoreSettingsScreen(settings: _settings),
               ));
               if (mounted) unawaited(_startPreview());
