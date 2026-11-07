@@ -10,10 +10,12 @@ void main() {
     img.fill(page, color: img.ColorRgb8(255, 255, 255));
     final input = Uint8List.fromList(img.encodePng(page));
 
-    final signed = await SignatureComposer.composite(input, [
+    // Image codec and GPU-backed picture encoding need the real async clock.
+    final signed = await tester.runAsync(() => SignatureComposer.composite(input, [
       [const Offset(.20, .50), const Offset(.80, .50)],
-    ]);
-    final result = img.decodePng(signed)!;
+    ]));
+    expect(signed, isNotNull);
+    final result = img.decodePng(signed!)!;
     final inside = result.getPixel(50, 50);
     final outside = result.getPixel(50, 10);
 
