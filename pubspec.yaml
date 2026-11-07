@@ -1,7 +1,7 @@
 name: docscanner
 description: Local-first document scanner with camera, ID copies, PDF and text tools.
 publish_to: none
-version: 0.3.7+10
+version: 0.3.8+11
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
@@ -35,6 +35,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/ds_logo.png
     - assets/tessdata_config.json
     - assets/tessdata/
     - assets/pptx/blank_template.pptx

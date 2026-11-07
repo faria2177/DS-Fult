@@ -384,7 +384,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.3.7 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.3.8 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -787,15 +787,13 @@ class _DsMark extends StatelessWidget {
   final bool big;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
         width: big ? 82 : 39,
         height: big ? 82 : 39,
-        decoration: BoxDecoration(
-          color: dsTeal,
-          borderRadius: BorderRadius.circular(big ? 24 : 12),
+        child: Image.asset(
+          'assets/branding/ds_logo.png',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
         ),
-        alignment: Alignment.center,
-        child: Text('DS', style: TextStyle(
-          color: Colors.white, fontSize: big ? 30 : 15, fontWeight: FontWeight.w900)),
       );
 }
