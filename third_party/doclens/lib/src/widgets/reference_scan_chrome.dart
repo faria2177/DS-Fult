@@ -413,7 +413,7 @@ class ReferenceScanChrome extends StatelessWidget {
         else
           Expanded(child: ListView.separated(
             itemCount: cameraModes.length,
-            separatorBuilder: (_, _) => const Divider(
+            separatorBuilder: (context, index) => const Divider(
               height: 1, color: Color(0xFF383838)),
             itemBuilder: (_, index) {
               final mode = cameraModes[index];
@@ -551,5 +551,4 @@ class _ScanGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
 }

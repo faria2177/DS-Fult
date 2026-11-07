@@ -280,9 +280,11 @@ class _CameraScreenState extends State<CameraScreen> {
       final cropped = await DocumentEdges.autoCropFiles([image.path]);
       await _finishProcessed(cropped.paths);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('System camera failed: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('System camera failed: $error')),
+        );
+      }
     } finally {
       if (mounted && !_finished) setState(() => _cameraSuspended = false);
     }
