@@ -28,12 +28,15 @@ class ImageTextEditorScreen extends StatefulWidget {
     required this.documentId,
     required this.pageId,
     required this.regions,
+    this.startInEraseMode = false,
   });
 
   final DocumentStore store;
   final String documentId;
   final String pageId;
   final List<DetectedTextRegion> regions;
+  /// Opens the existing offline region-erase engine directly from Tools.
+  final bool startInEraseMode;
 
   @override
   State<ImageTextEditorScreen> createState() => _ImageTextEditorScreenState();
@@ -51,6 +54,7 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.startInEraseMode) _mode = _EditMode.erase;
     _loadPage();
   }
 

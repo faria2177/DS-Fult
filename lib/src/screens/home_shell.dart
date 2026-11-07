@@ -7,14 +7,18 @@ import 'package:image_picker/image_picker.dart';
 import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
+import '../services/docx_export.dart';
 import '../services/image_tool_operations.dart';
+import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
 import 'document_screen.dart';
 import 'id_card_screen.dart';
+import 'image_text_editor_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'qr_code_screen.dart';
+import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -277,8 +281,8 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
         _Tool('Image to PDF', Icons.picture_as_pdf_outlined, _import),
         _Tool('Text to PDF', Icons.text_snippet_outlined, _textToPdf),
-        _Tool('To Word', Icons.description_outlined, () => _notReady('To Word')),
-        _Tool('To Excel', Icons.table_chart_outlined, () => _notReady('To Excel')),
+        _Tool('To Word', Icons.description_outlined, _exportWord),
+        _Tool('To Excel', Icons.table_chart_outlined, _exportExcel),
         _Tool('To PPT', Icons.slideshow_outlined, () => _notReady('To PPT')),
         _Tool('PDF to Images', Icons.collections_outlined, _shareDocumentImages),
         _Tool('PDF to Long Image', Icons.panorama_vertical_outlined, _shareLongImage),
@@ -289,10 +293,10 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('BG Remover', Icons.wallpaper_outlined, () => _notReady('BG Remover')),
         _Tool('Image Resizer', Icons.photo_size_select_large_outlined, _resizeImage),
         _Tool('Split PDF', Icons.call_split_outlined, () => _openExisting('pdf')),
-        _Tool('Sign', Icons.draw_outlined, () => _notReady('Sign')),
+        _Tool('Sign', Icons.draw_outlined, _startSign),
         _Tool('Add Watermark', Icons.branding_watermark_outlined, () => _openExisting('pdf')),
-        _Tool('Smart Erase', Icons.auto_fix_high_outlined, () => _notReady('Smart Erase')),
-        _Tool('Erase Marks', Icons.auto_fix_normal_outlined, () => _notReady('Erase Marks')),
+        _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startErase),
+        _Tool('Erase Marks', Icons.auto_fix_normal_outlined, _startErase),
         _Tool('Restore Photo', Icons.restore_outlined, () => _notReady('Restore Photo')),
         _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('pdf')),
         _Tool('Extract PDF Pages', Icons.content_copy_outlined, () => _openExisting('pdf')),
@@ -459,6 +463,116 @@ class _HomeShellState extends State<HomeShell> {
             ),
         ],
       ));
+  }
+
+  Future<void> _startErase() async {
+    final document = await _chooseDocument();
+    if (document == null || !mounted || document.pages.isEmpty) return;
+    final page = await _choosePage(document, 'Choose a page to erase');
+    if (page == null || !mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ImageTextEditorScreen(
+        store: widget.store,
+        documentId: document.id,
+        pageId: page.id,
+        regions: const [],
+        startInEraseMode: true,
+      ),
+    ));
+  }
+
+  Future<ScanPage?> _choosePage(ScanDocument doc, String title) async {
+    if (doc.pages.isEmpty) {
+      _message('Document has no pages.');
+      return null;
+    }
+    if (doc.pages.length == 1) return doc.pages.first;
+    return showDialog<ScanPage>(context: context,
+      builder: (dialog) => SimpleDialog(
+        title: Text(title),
+        children: [
+          for (var i = 0; i < doc.pages.length; i++)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialog, doc.pages[i]),
+              child: Text('Page ${i + 1}'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startSign() async {
+    final document = await _chooseDocument();
+    if (document == null || !mounted) return;
+    final page = await _choosePage(document, 'Choose a page to sign');
+    if (page == null || !mounted) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => SignatureScreen(
+        store: widget.store,
+        documentId: document.id,
+        pageId: page.id,
+      ),
+    ));
+  }
+
+  Future<void> _exportWord() => _exportOffice(toExcel: false);
+
+  Future<void> _exportExcel() => _exportOffice(toExcel: true);
+
+  Future<void> _exportOffice({required bool toExcel}) async {
+    final document = await _chooseDocument();
+    if (document == null || !mounted) return;
+    final bengali = await showDialog<bool>(context: context,
+      builder: (dialog) => SimpleDialog(
+        title: Text('${toExcel ? 'Excel' : 'Word'} OCR language'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('English / Latin'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('বাংলা / Bengali'),
+          ),
+        ],
+      ),
+    );
+    if (bengali == null || !mounted) return;
+    showDialog<void>(context: context, barrierDismissible: false,
+      builder: (_) => const PopScope(canPop: false, child: AlertDialog(
+        title: Text('Converting document'),
+        content: Row(children: [
+          CircularProgressIndicator(),
+          SizedBox(width: 18),
+          Expanded(child: Text('Recognizing text on your device…')),
+        ]),
+      )),
+    );
+    File? result;
+    Object? failure;
+    try {
+      result = toExcel
+          ? await XlsxExport.createFile(document, bengali: bengali)
+          : await DocxExport.createFile(document, bengali: bengali);
+    } catch (error) {
+      failure = error;
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+    if (!mounted) return;
+    if (failure != null) {
+      _message('To ${toExcel ? 'Excel' : 'Word'} failed: $failure');
+    } else if (result != null) {
+      try {
+        if (toExcel) {
+          await XlsxExport.shareFile(result, document.name);
+        } else {
+          await DocxExport.shareFile(result, document.name);
+        }
+      } catch (error) {
+        _message('Could not share converted document: $error');
+      }
+    }
   }
 
   Future<void> _textToPdf() async {

@@ -54,6 +54,31 @@ Bank Card, Edit Text, Smart Erase, Erase Marks, Restore Photo and To PPT.
 | Currently routed to PDF page tools | Split PDF (extract selected page subset, not an arbitrary imported-PDF splitter) |
 | Exposed clearly as not yet implemented | Import File (external PDF), Passport Photo Maker, Photo Translation, Scan Code, To Word, To Excel, To PPT, BG Remover, Sign, Smart Erase, Erase Marks, Restore Photo, Lock PDF, AI Chat |
 
+### Milestone 2: functional tools
+
+The following additions turn previously unimplemented Tools buttons into working
+local workflows:
+
+- **Smart Erase / Erase Marks** now open the existing image text editor in erase
+  mode on a chosen document page. A drag-defined rectangle is filled using
+  adjacent paper colors. There is Undo during editing. This is **not** the
+  full AI inpainting/brush/lasso pipeline of the reference app; complex image
+  backgrounds can show artifacts.
+- **Sign** lets a user draw black or blue handwritten strokes directly on a
+  selected scanned page. The signature is composited at the original image
+  resolution only when the user applies it. This is a **visual electronic
+  signature**, not a cryptographically validated PDF signature.
+- **To Word** uses existing stored OCR text or attempts on-device English or
+  Bengali OCR, then generates a standards-based editable `.docx` file with a
+  page break between source pages. Scanned layouts and tables are not preserved.
+- **To Excel** uses the same OCR text and creates a multi-sheet editable `.xlsx`.
+  Tabs and repeated spaces separate cells when present. Account identifiers
+  are stored as text to preserve leading zeroes; full table layout
+  reconstruction from photographed pages remains a future improvement.
+
+The first-milestone status table above is retained as a historical snapshot;
+the four actions just listed are now functional at the stated scope.
+
 **Scope distinction**: reference screens are **not automatically executable**
 inside Flutter. Some need their own Dart UI/processing engine, on-device AI
 models, a PDF renderer or document format writers. An option is not considered

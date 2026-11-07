@@ -1,7 +1,7 @@
 name: docscanner
 description: Local-first document scanner with camera, ID copies, PDF and text tools.
 publish_to: none
-version: 0.3.4+7
+version: 0.3.5+8
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  archive: ^4.6.0
   camera: ^0.12.2
   # Pinned local fork: improves small-document candidate ranking on busy frames.
   doclens:
