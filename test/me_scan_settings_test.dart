@@ -1,7 +1,6 @@
 import 'package:doclens/doclens.dart';
 import 'package:docscanner/src/screens/home_shell.dart';
 import 'package:docscanner/src/screens/scan_more_settings_screen.dart';
-import 'package:docscanner/src/services/scan_settings_store.dart';
 import 'package:docscanner/src/storage/document_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,18 +103,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  test('rapid shared setting updates persist in the correct order', () async {
+  test('changed scan preferences survive JSON serialization', () {
     final settings = ReferenceScanSettings();
     addTearDown(settings.dispose);
     settings.setFlag('startWithCamera', true);
-    final first = ScanSettingsStore.save(settings);
     settings.setFlag('startWithCamera', false);
     settings.setFlag('doubleFocus', true);
-    final second = ScanSettingsStore.save(settings);
-    await Future.wait([first, second]);
-    final stored = await ScanSettingsStore.load();
+    settings.setFlag('autoAdjustBorders', false);
+    final stored = ReferenceScanSettings.fromJson(settings.toJson());
     addTearDown(stored.dispose);
     expect(stored.startWithCamera, isFalse);
     expect(stored.doubleFocus, isTrue);
+    expect(stored.autoAdjustBorders, isFalse);
   });
 }

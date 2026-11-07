@@ -62,7 +62,7 @@ class ScanMoreSettingsScreen extends StatelessWidget {
         ),
       );
 
-  Widget _toggle(String title, String? description, String key) => Container(
+  Widget _toggle(String title, String? description, String key) => Material(
         color: const Color(0xFF2A2A2E),
         child: Column(children: [
           SwitchListTile(
