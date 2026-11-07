@@ -392,7 +392,7 @@ class ReferenceScanChrome extends StatelessWidget {
               Expanded(child: InkWell(
                 onTap: () => settings.selectResolution(mode.id),
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 9),
+                  margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: settings.resolution == mode.id
@@ -418,13 +418,16 @@ class ReferenceScanChrome extends StatelessWidget {
             itemBuilder: (_, index) {
               final mode = cameraModes[index];
               final selected = settings.resolution == mode.id;
-              return ListTile(
-                dense: true,
-                title: Text(mode.label, style: const TextStyle(color: Colors.white)),
-                trailing: Icon(selected
-                  ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                  color: selected ? accent : Colors.white, size: 21),
-                onTap: () => settings.selectResolution(mode.id),
+              return Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  dense: true,
+                  title: Text(mode.label, style: const TextStyle(color: Colors.white)),
+                  trailing: Icon(selected
+                    ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                    color: selected ? accent : Colors.white, size: 21),
+                  onTap: () => settings.selectResolution(mode.id),
+                ),
               );
             },
           )),
