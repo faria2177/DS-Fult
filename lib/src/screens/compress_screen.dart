@@ -5,7 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/document_export.dart';
-import '../theme.dart';
+import 'video_tool_style.dart';
 
 enum CompressionLevel { medium, high }
 
@@ -81,38 +81,55 @@ class _CompressScreenState extends State<CompressScreen> {
   @override
   Widget build(BuildContext context) {
     final result = _result;
-    return Scaffold(
+    return VideoToolStyle.wrapDark(Scaffold(
       appBar: AppBar(title: const Text('Compress')),
       body: SafeArea(child: Column(children: [
         if (_busy) const LinearProgressIndicator(),
         Expanded(child: result == null
-          ? ListView(padding: const EdgeInsets.all(18), children: [
-              const SizedBox(height: 28),
-              const Center(child: CircleAvatar(radius: 36,
-                  backgroundColor: dsTeal,
-                  child: Icon(Icons.compress, size: 38, color: Colors.white))),
-              const SizedBox(height: 18),
-              Text(widget.document.name, textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              Text(_originalBytes == null ? 'Calculating PDF size…' :
-                  'Original PDF: ${_formatBytes(_originalBytes!)}',
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 32),
-              const Text('Select compression level:'),
-              const SizedBox(height: 8),
+          ? ListView(padding: EdgeInsets.zero, children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 36, 16, 29),
+                decoration: const BoxDecoration(gradient: LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [Color(0xFF27333D), Color(0xFF1C2D2D),
+                    VideoToolStyle.background],
+                )),
+                child: Column(children: [
+                  const CircleAvatar(radius: 51,
+                    backgroundColor: VideoToolStyle.teal,
+                    child: Icon(Icons.compress, size: 62, color: Colors.white)),
+                  const SizedBox(height: 18),
+                  Text(widget.document.name, textAlign: TextAlign.center,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 21, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Text(_originalBytes == null ? 'Calculating PDF size…' :
+                      _formatBytes(_originalBytes!),
+                      style: const TextStyle(fontSize: 14, color: Colors.white70)),
+                ]),
+              ),
+              const Padding(padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+                child: Text('Select compression level:',
+                  style: TextStyle(fontSize: 16, color: Colors.white))),
               for (final level in CompressionLevel.values)
-                Card(
-                  color: _level == level ? dsTeal.withValues(alpha: .12) : null,
+                Card(margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  color: _level == level
+                      ? VideoToolStyle.teal.withValues(alpha: .10)
+                      : VideoToolStyle.background,
                   shape: RoundedRectangleBorder(
-                    side: BorderSide(color: _level == level ? dsTeal :
-                        Theme.of(context).dividerColor),
-                    borderRadius: BorderRadius.circular(8)),
+                    side: BorderSide(color: _level == level
+                        ? VideoToolStyle.teal : const Color(0xFF55555A)),
+                    borderRadius: BorderRadius.circular(5)),
                   child: ListTile(
-                    title: Text(level.label),
-                    subtitle: Text(level.description),
+                    contentPadding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
+                    title: Text(level.label, style: TextStyle(fontSize: 19,
+                      color: _level == level
+                          ? VideoToolStyle.teal : Colors.white)),
+                    subtitle: Padding(padding: const EdgeInsets.only(top: 5),
+                      child: Text(level.description,
+                        style: const TextStyle(color: VideoToolStyle.muted))),
                     trailing: _level == level ?
-                        const Icon(Icons.check, color: dsTeal) : null,
+                        const Icon(Icons.check, color: VideoToolStyle.teal) : null,
                     onTap: _busy ? null : () => setState(() => _level = level),
                   ),
                 ),
@@ -129,14 +146,16 @@ class _CompressScreenState extends State<CompressScreen> {
                     : 'Calculating compressed size…'),
               )),
             ])),
-        Padding(padding: const EdgeInsets.all(16),
+        Container(color: VideoToolStyle.header,
+          padding: const EdgeInsets.fromLTRB(16, 9, 16, 12),
           child: SizedBox(width: double.infinity,
             child: FilledButton(
               onPressed: _busy ? null : result == null ? _compress : _share,
+              style: VideoToolStyle.tealButton,
               child: Text(_busy ? 'Compressing…' : result == null
                   ? 'Compress' : 'Share Compressed PDF'),
             ))),
       ])),
-    );
+    ));
   }
 }

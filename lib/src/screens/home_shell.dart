@@ -18,17 +18,19 @@ import 'camera_screen.dart';
 import 'compress_screen.dart';
 import 'document_detail_screen.dart';
 import 'files_workspace.dart';
+import 'files_merge_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
-import 'image_text_editor_screen.dart';
 import 'lock_document_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'qr_code_screen.dart';
 import 'reorder_pages_screen.dart';
 import 'scan_more_settings_screen.dart';
+import 'smart_erase_screen.dart';
 import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
 import 'watermark_screen.dart';
+import 'video_tool_source_picker.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -496,23 +498,25 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _startErase() async {
-    final document = await _chooseDocument();
+    final document = await _chooseVideoDocument('Smart Erase',
+        'Precisely remove unwanted marks and text from documents.',
+        Icons.auto_fix_high, allowGallery: true, allowScan: true);
     if (document == null || !mounted || document.pages.isEmpty) return;
     final page = await _choosePage(document, 'Choose a page to erase');
     if (page == null || !mounted) return;
     await Navigator.push<void>(context, MaterialPageRoute(
-      builder: (_) => ImageTextEditorScreen(
+      builder: (_) => SmartEraseScreen(
         store: widget.store,
         documentId: document.id,
         pageId: page.id,
-        regions: const [],
-        startInEraseMode: true,
       ),
     ));
   }
 
   Future<void> _startWatermark() async {
-    final document = await _chooseDocument();
+    final document = await _chooseVideoDocument('Add Watermark',
+        'Add watermarks and customize the style.',
+        Icons.branding_watermark_outlined, allowGallery: true);
     if (document == null || !mounted) return;
     final page = await _choosePage(document, 'Choose a page for watermark');
     if (page == null || !mounted) return;
@@ -523,6 +527,32 @@ class _HomeShellState extends State<HomeShell> {
         pageId: page.id,
       ),
     ));
+  }
+
+  Future<List<String>?> _chooseVideoIds(String title, String description,
+      IconData icon, {bool multiSelect = false, bool light = false,
+      bool allowGallery = false, bool allowScan = false}) =>
+      Navigator.push<List<String>>(context, MaterialPageRoute(
+        builder: (_) => VideoToolSourcePicker(
+          store: widget.store,
+          title: title,
+          description: description,
+          icon: icon,
+          multiSelect: multiSelect,
+          light: light,
+          allowGallery: allowGallery,
+          onScan: allowScan ? () async => _capture() : null,
+        ),
+      ));
+
+  Future<ScanDocument?> _chooseVideoDocument(String title,
+      String description, IconData icon,
+      {bool light = false, bool allowGallery = false,
+      bool allowScan = false}) async {
+    final ids = await _chooseVideoIds(title, description, icon,
+      light: light, allowGallery: allowGallery, allowScan: allowScan);
+    if (ids == null || ids.isEmpty) return null;
+    return widget.store.byId(ids.first);
   }
 
   Future<ScanPage?> _choosePage(ScanDocument doc, String title) async {
@@ -675,7 +705,16 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _openExisting(String action) async {
-    final doc = await _chooseDocument();
+    final doc = switch (action) {
+      'reorder' => await _chooseVideoDocument('Reorder Pages',
+          'Drag and drop to reorder pages.', Icons.swap_vert),
+      'compress' => await _chooseVideoDocument('Compress',
+          'Reduce file size to save space.', Icons.compress),
+      'lock' => await _chooseVideoDocument('Lock',
+          'Protect documents with a password inside the app.',
+          Icons.lock_outline, light: true),
+      _ => await _chooseDocument(),
+    };
     if (doc == null || !mounted) return;
     final id = doc.id;
     if (action == 'pdf') {
@@ -706,8 +745,12 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _mergeDocuments() async {
+    final ids = await _chooseVideoIds('Merge Files',
+        'Merge files in seconds to save time and effort.',
+        Icons.merge_type, multiSelect: true);
+    if (ids == null || !mounted) return;
     final id = await Navigator.push<String>(context, MaterialPageRoute(
-      builder: (_) => MergeDocumentsScreen(store: widget.store),
+      builder: (_) => FilesMergeScreen(store: widget.store, initialIds: ids),
     ));
     if (id != null && mounted) await _open(id);
   }

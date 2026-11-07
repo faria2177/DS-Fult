@@ -63,7 +63,7 @@ void main() {
     expect(find.text('01'), findsOneWidget);
     expect(find.text('02'), findsOneWidget);
     expect(store.committedOrder, isNull);
-    await tester.tap(find.text('Cancel'));
+    await tester.tap(find.byTooltip('Cancel'));
     await tester.pump();
     expect(store.committedOrder, isNull);
   });

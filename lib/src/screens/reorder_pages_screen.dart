@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import '../storage/document_store.dart';
-import '../theme.dart';
+import 'video_tool_style.dart';
 
 /// Two-column, drag-to-sort page workspace. Changes are saved only on Done.
 class ReorderPagesScreen extends StatefulWidget {
@@ -23,7 +23,7 @@ class ReorderPagesScreen extends StatefulWidget {
 
 class _ReorderPagesScreenState extends State<ReorderPagesScreen> {
   late final List<String> _order;
-  String? _selectedId;
+  final Set<String> _selectedIds = {};
   bool _saving = false;
 
   @override
@@ -43,7 +43,7 @@ class _ReorderPagesScreenState extends State<ReorderPagesScreen> {
     setState(() {
       _order.removeAt(from);
       _order.insert(to, movingId);
-      _selectedId = movingId;
+      _selectedIds..clear()..add(movingId);
     });
   }
 
@@ -70,51 +70,70 @@ class _ReorderPagesScreenState extends State<ReorderPagesScreen> {
       return const Scaffold(body: Center(child: Text('Document not found')));
     }
     final pages = {for (final page in doc.pages) page.id: page};
-    return Scaffold(
+    return VideoToolStyle.wrapDark(Scaffold(
       appBar: AppBar(
-        title: Text(_selectedId == null ? 'Reorder Pages' : '1 selected'),
+        title: Text(_selectedIds.isEmpty ? 'Reorder Pages' :
+            '${_selectedIds.length} selected'),
+        actions: [TextButton(
+          onPressed: () => setState(() {
+            if (_selectedIds.length == _order.length) {
+              _selectedIds.clear();
+            } else {
+              _selectedIds..clear()..addAll(_order);
+            }
+          }),
+          child: Text(_selectedIds.length == _order.length
+              ? 'Deselect All' : 'Select All',
+              style: const TextStyle(color: VideoToolStyle.teal)),
+        )],
       ),
       body: SafeArea(child: Column(children: [
         if (_saving) const LinearProgressIndicator(),
-        const ListTile(
-          dense: true,
-          leading: Icon(Icons.info_outline, size: 19),
-          title: Text('Hold and drag a page to change its position'),
+        const Padding(padding: EdgeInsets.fromLTRB(15, 10, 15, 7),
+          child: Row(children: [
+            Icon(Icons.info_outline, color: VideoToolStyle.muted, size: 17),
+            SizedBox(width: 6),
+            Text('Hold and drag to reorder',
+              style: TextStyle(color: VideoToolStyle.muted, fontSize: 13)),
+          ]),
         ),
         Expanded(child: GridView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 18),
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 18),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 10,
-            childAspectRatio: .72,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 9,
+            childAspectRatio: .70,
           ),
           itemCount: _order.length,
           itemBuilder: (context, index) {
             final id = _order[index];
             final page = pages[id]!;
-            final selected = _selectedId == id;
-            Widget tile({bool dragging = false}) => Card(
+            final selected = _selectedIds.contains(id);
+            Widget tile() => Card(
               margin: EdgeInsets.zero,
               clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: selected ? dsTeal : Colors.transparent,
+                borderRadius: BorderRadius.circular(3),
+                side: BorderSide(color: selected
+                    ? VideoToolStyle.teal : Colors.transparent,
                     width: selected ? 2.5 : 1),
               ),
               child: Column(children: [
                 Expanded(child: Stack(fit: StackFit.expand, children: [
-                  Image.file(File(page.path), fit: BoxFit.contain,
+                  Image.file(File(page.path), fit: BoxFit.cover,
                     errorBuilder: (_, _, _) =>
                         const Center(child: Icon(Icons.broken_image_outlined))),
                   if (selected)
                     const Positioned(right: 6, top: 6,
-                      child: Icon(Icons.check_circle, color: dsTeal)),
+                      child: Icon(Icons.check_box,
+                          color: VideoToolStyle.teal, size: 25)),
                 ])),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 5),
-                  color: selected ? dsTeal : Theme.of(context).colorScheme.surface,
+                  color: selected ? VideoToolStyle.teal
+                      : VideoToolStyle.background,
                   child: Text('${index + 1}'.padLeft(2, '0'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: selected ? Colors.white : null)),
@@ -128,15 +147,18 @@ class _ReorderPagesScreenState extends State<ReorderPagesScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   border: candidates.isEmpty ? null :
-                      Border.all(color: dsTeal, width: 3),
+                      Border.all(color: VideoToolStyle.teal, width: 3),
                 ),
                 child: LongPressDraggable<String>(
                   data: id,
                   feedback: Material(color: Colors.transparent,
-                    child: SizedBox(width: 140, height: 190, child: tile(dragging: true))),
+                    child: SizedBox(width: 140, height: 190, child: tile())),
                   childWhenDragging: Opacity(opacity: .3, child: tile()),
                   child: InkWell(
-                    onTap: () => setState(() => _selectedId = id),
+                    onTap: () => setState(() {
+                      if (selected) { _selectedIds.remove(id); }
+                      else { _selectedIds.add(id); }
+                    }),
                     child: tile(),
                   ),
                 ),
@@ -144,19 +166,12 @@ class _ReorderPagesScreenState extends State<ReorderPagesScreen> {
             );
           },
         )),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-          child: Row(children: [
-            Expanded(child: OutlinedButton.icon(
-              onPressed: _saving ? null : () => Navigator.pop(context, false),
-              icon: const Icon(Icons.close), label: const Text('Cancel'))),
-            const SizedBox(width: 12),
-            Expanded(child: FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: const Icon(Icons.check), label: const Text('Confirm'))),
-          ]),
+        VideoToolBottomBar(
+          title: 'Reorder Pages', busy: _saving,
+          onCancel: () => Navigator.pop(context, false),
+          onDone: _save,
         ),
       ])),
-    );
+    ));
   }
 }

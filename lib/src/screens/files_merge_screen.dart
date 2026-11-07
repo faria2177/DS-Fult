@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import '../storage/document_store.dart';
-import '../theme.dart';
+import 'video_tool_style.dart';
 
 /// Reorder and preview selected documents before a non-destructive merge.
 class FilesMergeScreen extends StatefulWidget {
@@ -137,16 +137,20 @@ class _FilesMergeScreenState extends State<FilesMergeScreen> {
   @override
   Widget build(BuildContext context) {
     final docs = _documents;
-    return Scaffold(
+    return VideoToolStyle.wrapDark(Scaffold(
       appBar: AppBar(title: const Text('Merge Documents'), actions: [
         IconButton(onPressed: docs.length < 2 || _busy ? null : _preview,
             tooltip: 'Preview merged pages', icon: const Icon(Icons.preview_outlined)),
       ]),
       body: SafeArea(child: Column(children: [
         if (_busy) const LinearProgressIndicator(),
-        const ListTile(dense: true, leading: Icon(Icons.info_outline, size: 18),
-          title: Text('Press and drag to sort. Pages follow this order.'),
-          titleTextStyle: TextStyle(fontSize: 12, color: dsMuted)),
+        const Padding(padding: EdgeInsets.fromLTRB(15, 10, 15, 12),
+          child: Row(children: [
+            Icon(Icons.info_outline, size: 17, color: VideoToolStyle.muted),
+            SizedBox(width: 6),
+            Text('Press and Drag to Sort',
+              style: TextStyle(color: VideoToolStyle.muted, fontSize: 14)),
+          ])),
         Expanded(child: ReorderableListView.builder(
           itemCount: docs.length,
           buildDefaultDragHandles: false,
@@ -157,39 +161,60 @@ class _FilesMergeScreenState extends State<FilesMergeScreen> {
           },
           itemBuilder: (_, index) {
             final doc = docs[index];
-            return Card(key: ValueKey(doc.id), margin: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-              child: ListTile(
+            return Container(key: ValueKey(doc.id),
+              decoration: const BoxDecoration(color: VideoToolStyle.header,
+                  border: Border(bottom: BorderSide(color: Color(0xFF37373A)))),
+              margin: const EdgeInsets.only(bottom: 2),
+              child: ListTile(contentPadding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
                 leading: doc.pages.isEmpty
                   ? const Icon(Icons.description_outlined)
-                  : Image.file(File(doc.pages.first.path), width: 45, height: 52,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined)),
-                title: Text(doc.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text('${doc.pages.length} page(s)'),
+                  : ClipRRect(borderRadius: BorderRadius.circular(4),
+                      child: Image.file(File(doc.pages.first.path), width: 57, height: 65,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            const Icon(Icons.broken_image_outlined))),
+                title: Text(doc.name, maxLines: 1,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  overflow: TextOverflow.ellipsis),
+                subtitle: Padding(padding: const EdgeInsets.only(top: 6),
+                  child: Text('${doc.createdAt.day.toString().padLeft(2, '0')}/'
+                    '${doc.createdAt.month.toString().padLeft(2, '0')}/'
+                    '${doc.createdAt.year}  ·  ▯ ${doc.pages.length}',
+                    style: const TextStyle(color: VideoToolStyle.muted,
+                      fontSize: 12))),
                 trailing: ReorderableDragStartListener(index: index,
                   child: const Padding(padding: EdgeInsets.all(8),
-                      child: Icon(Icons.drag_handle))),
+                      child: Icon(Icons.drag_handle, color: Colors.white70))),
               ),
             );
           },
         )),
-        CheckboxListTile(dense: true, value: _keepOriginals,
-            title: const Text('Keep originals'),
-            onChanged: _busy ? null : (yes) => setState(() => _keepOriginals = yes ?? true)),
-        Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Row(children: [
-            Expanded(child: OutlinedButton(onPressed: _busy ? null : _addFile,
-              child: const Text('Add File'))),
+        Container(color: VideoToolStyle.header,
+          padding: const EdgeInsets.fromLTRB(12, 5, 12, 11),
+          child: Column(children: [
+            Row(children: [
+              SizedBox(width: 28, height: 33, child: Checkbox(
+                value: _keepOriginals, activeColor: VideoToolStyle.teal,
+                onChanged: _busy ? null : (yes) =>
+                    setState(() => _keepOriginals = yes ?? true))),
+              const Text('Keep originals',
+                style: TextStyle(color: Colors.white70, fontSize: 14)),
+            ]),
+            Row(children: [
+            Expanded(child: FilledButton(onPressed: _busy ? null : _addFile,
+              style: VideoToolStyle.greyButton, child: const Text('Add File'))),
             const SizedBox(width: 10),
             Expanded(child: FilledButton(onPressed: docs.length < 2 || _busy ? null : () async {
               final id = await _save();
               if (id != null && context.mounted) {
                 Navigator.pop(context, id);
               }
-            }, child: Text(_busy ? 'Merging…' : 'Merge Documents'))),
+            }, style: VideoToolStyle.tealButton,
+              child: Text(_busy ? 'Merging…' : 'Merge Documents'))),
+          ]),
           ]),
         ),
       ])),
-    );
+    ));
   }
 }

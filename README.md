@@ -3,6 +3,30 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Six reference-video tool interfaces — v0.5.8
+
+- The **Tools** entries for Add Watermark, Smart Erase, Merge Files, Compress,
+  Reorder Pages and Lock now use original Flutter layouts patterned on the six
+  supplied recordings: charcoal tool backgrounds, turquoise accents, square
+  action buttons, source document tiles and a bottom confirm bar where shown.
+- **Add Watermark** has a collapsible adjustment sheet with Single/Tile,
+  colour swatches, Opacity/Size/Rotate and a preview on the source page.
+  The collapsed bar exposes Edit Text, Adjust and Remove Watermark.
+- **Smart Erase** now has Magic, Handwriting and Text tabs, stroke thickness,
+  brush/rectangle selection, Compare, Undo/Redo and an explicit Save action.
+  All modes edit pixels locally; the mode tabs are editing affordances, **not**
+  proprietary automatic AI removal. Complex textures can still show seams.
+- **Merge Files** first selects existing documents or imports photos, then
+  shows the video-style draggable document list, Keep Originals, Add File,
+  Merge Documents and preview. Compression has Medium/High cards, local size
+  measurement and a shareable result; reorder has a two-column grid with
+  Select All and drag-to-sort.
+- **Lock** opens the light document picker followed by a dark password sheet,
+  including show/hide and matching-six-character validation. The app protects
+  access to its library, **not** the exported PDF bytes. Ask AI and paywalls
+  are deliberately absent. Layouts adapt to screen width and Android bars,
+  so exact pixel positions may differ by device.
+
 ## Reference-video Tools update — v0.5.7
 
 - **Add Watermark** now opens directly from Tools. The on-device preview and
@@ -21,9 +45,9 @@ The app does **not** include CamScanner's proprietary code, artwork, cloud servi
   match and contain at least six characters. It uses the same app-level PIN
   hash as the existing document unlock screen. This **does not encrypt files**
   or exported PDFs; real at-rest encryption remains a separate engineering task.
-- Existing offline Merge Documents and basic region erase remain available.
-  Brush-segmentation **Magic/Handwriting/Text** erase is not yet implemented;
-  no proprietary cloud AI, paywall or Ask AI option was added.
+- Existing offline Merge Documents is retained. The Magic/Handwriting/Text
+  visual editor was subsequently added in v0.5.8, without proprietary
+  semantic segmentation, cloud AI, paywalls or Ask AI options.
 
 ## Repeat-scan crop reliability — v0.5.6
 

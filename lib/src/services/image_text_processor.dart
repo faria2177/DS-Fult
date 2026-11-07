@@ -10,6 +10,23 @@ import 'package:image/image.dart' as img;
 /// user-supplied replacement is drawn in Flutter (supports Bengali glyphs).
 /// This is not a generative inpainting model and can leave artifacts on photos.
 class ImageTextProcessor {
+  /// Offline brush removal for a manually marked stroke. Samples neighbouring
+  /// pixels and fills only the selected stroke, never the entire bounding box.
+  /// Unlike proprietary cloud inpainting, textured surfaces may show seams.
+  static Future<Uint8List> eraseBrush(
+    Uint8List original, {
+    required List<Offset> normalizedPoints,
+    required double normalizedRadius,
+  }) {
+    if (normalizedPoints.isEmpty) return Future.value(original);
+    return compute(_eraseBrushInIsolate, {
+      'bytes': original,
+      'points': [for (final point in normalizedPoints) point.dx,
+        for (final point in normalizedPoints) point.dy],
+      'radius': normalizedRadius,
+    });
+  }
+
   static Future<Uint8List> replace(
     Uint8List original, {
     required Rect normalizedArea,
@@ -109,4 +126,71 @@ Uint8List _eraseInIsolate(Map<String, Object> options) {
     }
   }
   return Uint8List.fromList(img.encodePng(image));
+}
+
+Uint8List _eraseBrushInIsolate(Map<String, Object> options) {
+  final source = img.decodeImage(options['bytes']! as Uint8List);
+  if (source == null) throw const FormatException('Unsupported image');
+  final original = img.bakeOrientation(source);
+  final result = img.Image.from(original);
+  final coords = options['points']! as List<double>;
+  final count = coords.length ~/ 2;
+  final shortSide = math.min(result.width, result.height);
+  final radius = ((options['radius']! as double) * shortSide)
+      .round().clamp(2, math.max(2, shortSide ~/ 10)).toInt();
+
+  // The input points are paired as all X values followed by all Y values.
+  final centres = <math.Point<double>>[
+    for (var i = 0; i < count; i++)
+      math.Point(coords[i] * result.width, coords[i + count] * result.height),
+  ];
+  final sampled = <math.Point<double>>[];
+  for (var i = 0; i < centres.length; i++) {
+    final current = centres[i];
+    if (i == 0) { sampled.add(current); continue; }
+    final previous = centres[i - 1];
+    final distance = math.sqrt(math.pow(current.x - previous.x, 2) +
+        math.pow(current.y - previous.y, 2));
+    final steps = math.max(1, (distance / math.max(2, radius * .6)).ceil());
+    for (var k = 1; k <= steps; k++) {
+      final t = k / steps;
+      sampled.add(math.Point(previous.x + (current.x - previous.x) * t,
+          previous.y + (current.y - previous.y) * t));
+    }
+  }
+
+  for (final center in sampled) {
+    final cx = center.x.round().clamp(0, result.width - 1).toInt();
+    final cy = center.y.round().clamp(0, result.height - 1).toInt();
+    final border = radius * 1.65;
+    var red = 0.0;
+    var green = 0.0;
+    var blue = 0.0;
+    var samples = 0;
+    for (var k = 0; k < 12; k++) {
+      final a = 2 * math.pi * k / 12;
+      final sx = (cx + math.cos(a) * border)
+          .round().clamp(0, result.width - 1).toInt();
+      final sy = (cy + math.sin(a) * border)
+          .round().clamp(0, result.height - 1).toInt();
+      final pixel = original.getPixel(sx, sy);
+      red += pixel.r;
+      green += pixel.g;
+      blue += pixel.b;
+      samples++;
+    }
+    final r = (red / samples).round();
+    final g = (green / samples).round();
+    final b = (blue / samples).round();
+    for (var y = math.max(0, cy - radius); y <= math.min(result.height - 1, cy + radius); y++) {
+      for (var x = math.max(0, cx - radius); x <= math.min(result.width - 1, cx + radius); x++) {
+        final dx = x - cx;
+        final dy = y - cy;
+        if (dx * dx + dy * dy <= radius * radius) {
+          result.setPixelRgb(x, y, r, g, b);
+        }
+      }
+    }
+  }
+  return Uint8List.fromList(img.encodePng(result));
 }
