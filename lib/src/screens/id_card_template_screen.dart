@@ -402,7 +402,8 @@ class _TemplateIllustration extends StatelessWidget {
             color: Colors.white, fontSize: 9)),
         ),
       )),
-      Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Center(child: FittedBox(fit: BoxFit.scaleDown,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
         if (template == IdCardTemplate.certificate) ...[
           const Icon(Icons.workspace_premium_outlined,
             color: Color(0xFFBAA06A), size: 60),
@@ -430,7 +431,8 @@ class _TemplateIllustration extends StatelessWidget {
             _exampleCard(template, back: true),
           ],
         ],
-      ])),
+        ]),
+      )),
     ]),
   );
 

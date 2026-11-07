@@ -58,7 +58,7 @@ class ReferenceIdCardChrome extends StatelessWidget {
 
     return AnimatedBuilder(
       animation: settings,
-      builder: (context, _) => ColoredBox(
+      builder: (context, _) => Material(
         color: Colors.black,
         child: Stack(fit: StackFit.expand, children: [
           Column(children: [
