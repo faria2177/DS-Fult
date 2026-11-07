@@ -3,6 +3,34 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Document detail, More, editor and sharing reference — v0.5.3
+
+- New dark document detail screen opens scanned pages as a two-column grid,
+  with **Add Pages**, editable name, **Tags**, info and a **More** menu.
+  Long-press pages for visible multi-selection checks and **Share**, **Save
+  to Gallery**, **Move/Copy**, **Collage** and **Delete**. **Manage Pages**
+  opens the existing functional drag-reorder editor.
+- The **More** sheet now matches the reference's four groups: Edit PDF,
+  Send to PC, Save to Gallery and Print; Convert (Word, Excel); Smart Tools
+  (Extract Text, Collage, Translate, Compress, No Handwriting, Create Quiz,
+  Extract Formulas, Read Mode); Manage (Manage Pages, Lock, Merge Files,
+  Copy/Move), plus Delete. **Ask AI is intentionally absent.**
+- New scans open the processing/compare/filter/retake/crop preview before
+  the document grid. Opening an existing page enters the Images/Markup/Page
+  editor with crop, filters, OCR, image text edits, erase, retake, sign,
+  brush, mosaic, page title and PDF watermark actions.
+- Share supports real PDF, offline OCR-based Word, page images and a stitched
+  long image. The two-column Collage is distinct from a long image. Android
+  MediaStore writes Gallery files on Android 10+ through the bundled plugin.
+- Lock is **only an access PIN inside DocScanner**, not encrypted storage or
+  an encrypted PDF. **Send to PC** invokes Android's file-share chooser.
+  Translation sends extracted text to an installed translation app; the app
+  itself does not translate or upload. Quiz and formula extraction are
+  limited local text heuristics, not advanced AI or a math-vision model.
+  **Share Link** is shown with a local-only explanation because no hosted
+  link can exist without a cloud server. The screenshot's proprietary
+  processing results and exact fonts are not included.
+
 ## Me → Scan preferences and Tools cleanup — v0.5.2
 
 - **Me → Scan** opens the same seven-preference page as the camera's

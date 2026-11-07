@@ -121,6 +121,39 @@ class DocumentStore extends ChangeNotifier {
     await _replace(doc.copyWith(pages: pages));
   }
 
+  Future<void> renamePage(String documentId, String pageId, String title) async {
+    final doc = byId(documentId);
+    if (doc == null) return;
+    await _replace(doc.copyWith(pages: [
+      for (final page in doc.pages)
+        page.id == pageId ? page.copyWith(title: title.trim()) : page,
+    ]));
+  }
+
+  Future<void> setTags(String documentId, List<String> tags) async {
+    final doc = byId(documentId);
+    if (doc != null) await _replace(doc.copyWith(tags: tags));
+  }
+
+  Future<void> setLockHash(String documentId, String? hash) async {
+    final doc = byId(documentId);
+    if (doc != null) {
+      await _replace(doc.copyWith(lockHash: hash, clearLock: hash == null));
+    }
+  }
+
+  /// Removes selected page records, retaining original files for recovery.
+  /// The final page is not removable: delete the entire document instead.
+  Future<void> removePages(String documentId, Set<String> pageIds) async {
+    final doc = byId(documentId);
+    if (doc == null || pageIds.isEmpty) return;
+    final remaining = doc.pages.where((p) => !pageIds.contains(p.id)).toList();
+    if (remaining.isEmpty) {
+      throw StateError('A document must contain at least one page.');
+    }
+    await _replace(doc.copyWith(pages: remaining));
+  }
+
   /// Reorder source pages without modifying any saved image data.
   Future<void> reorderPages(String documentId, int oldIndex, int newIndex) async {
     final doc = byId(documentId);

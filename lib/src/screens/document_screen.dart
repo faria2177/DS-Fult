@@ -7,30 +7,46 @@ import 'package:image_picker/image_picker.dart';
 import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
+import '../services/docx_export.dart';
 import '../services/image_processor.dart';
+import '../services/image_tool_operations.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
 import 'crop_screen.dart';
 import 'edit_text_screen.dart';
+import 'image_text_editor_screen.dart';
+import 'mosaic_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'signature_screen.dart';
 
 class DocumentScreen extends StatefulWidget {
-  const DocumentScreen({super.key, required this.store, required this.documentId});
+  const DocumentScreen({super.key, required this.store, required this.documentId,
+      this.initialPage = 0, this.initialPreview = false});
   final DocumentStore store;
   final String documentId;
+  final int initialPage;
+  final bool initialPreview;
 
   @override
   State<DocumentScreen> createState() => _DocumentScreenState();
 }
 
 class _DocumentScreenState extends State<DocumentScreen> {
-  final PageController _pages = PageController();
+  late final PageController _pages = PageController(initialPage: widget.initialPage);
   int _index = 0;
   bool _busy = false;
+  bool _compare = false;
+  int _editTab = 0;
   final _picker = ImagePicker();
 
   ScanDocument? get _document => widget.store.byId(widget.documentId);
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialPage;
+  }
 
   void _message(Object error) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
@@ -49,7 +65,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
     setState(() => _busy = true);
     try {
       final source = await File(
-        filter == ScanFilter.original && rotation == 0 ? page.originalPath : page.path,
+        rotation != 0 ? page.path : page.originalPath,
       ).readAsBytes();
       final bytes = await ImageProcessor.process(source,
           filter: filter, rotateDegrees: rotation);
@@ -88,6 +104,77 @@ class _DocumentScreenState extends State<DocumentScreen> {
         pageId: doc.pages[_index].id,
       ),
     ));
+  }
+
+  Future<void> _editOnImage({bool erase = false}) async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ImageTextEditorScreen(store: widget.store,
+        documentId: doc.id, pageId: doc.pages[_index].id,
+        regions: const [], startInEraseMode: erase),
+    ));
+  }
+
+  Future<void> _sign() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => SignatureScreen(store: widget.store,
+          documentId: doc.id, pageId: doc.pages[_index].id),
+    ));
+  }
+
+  Future<void> _retake() async {
+    final doc = _document;
+    if (doc == null || _busy || doc.pages.isEmpty) return;
+    final paths = await Navigator.push<List<String>>(context,
+      MaterialPageRoute(builder: (_) => CameraScreen(cardMode: doc.kind.twoSided)),
+    );
+    if (paths == null || paths.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await File(paths.first).readAsBytes();
+      await widget.store.replacePageBytes(doc.id, doc.pages[_index].id, bytes);
+    } catch (error) {
+      _message(error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _renamePage() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    final page = doc.pages[_index];
+    final controller = TextEditingController(text: page.title);
+    final title = await showDialog<String>(context: context,
+      builder: (dialog) => AlertDialog(title: const Text('Page Title'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog),
+              child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialog, controller.text),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (title != null) await widget.store.renamePage(doc.id, page.id, title);
+  }
+
+  Future<void> _deletePage() async {
+    final doc = _document;
+    if (doc == null || doc.pages.length < 2) {
+      _message('Delete the document from More to remove its final page.');
+      return;
+    }
+    final page = doc.pages[_index];
+    await widget.store.removePages(doc.id, {page.id});
+    if (mounted) {
+      setState(() => _index = 0);
+      if (_pages.hasClients) _pages.jumpToPage(0);
+    }
   }
 
   Future<void> _pdfTools() async {
@@ -176,6 +263,11 @@ class _DocumentScreenState extends State<DocumentScreen> {
           await DocumentExport.sharePdf(doc);
         case 'image':
           await DocumentExport.shareImages(doc);
+        case 'long':
+          await ImageToolOperations.shareLongImage(doc);
+        case 'word':
+          final file = await DocxExport.createFile(doc);
+          await DocxExport.shareFile(file, doc.name);
         case 'print':
           await DocumentExport.printPdf(doc);
       }
@@ -194,6 +286,15 @@ class _DocumentScreenState extends State<DocumentScreen> {
           onTap: () { Navigator.pop(sheetContext); _export('pdf'); },
         ),
         ListTile(
+          leading: const Icon(Icons.description_outlined), title: const Text('Share as Word'),
+          onTap: () { Navigator.pop(sheetContext); _export('word'); },
+        ),
+        ListTile(
+          leading: const Icon(Icons.panorama_vertical_outlined),
+          title: const Text('Share as Long Image'),
+          onTap: () { Navigator.pop(sheetContext); _export('long'); },
+        ),
+        ListTile(
           leading: const Icon(Icons.image_outlined), title: const Text('Share as Images'),
           onTap: () { Navigator.pop(sheetContext); _export('image'); },
         ),
@@ -205,82 +306,186 @@ class _DocumentScreenState extends State<DocumentScreen> {
     ));
   }
 
+  Widget _editorTool(IconData icon, String label, VoidCallback action) =>
+      SizedBox(width: 77, child: InkWell(onTap: _busy ? null : action,
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 5),
+          Text(label, style: const TextStyle(color: Colors.white,
+              fontSize: 11), maxLines: 2, textAlign: TextAlign.center),
+        ]),
+      ));
+
+  Widget _filterBar(ScanDocument doc) => SizedBox(height: 86,
+    child: ListView(scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      children: [
+        for (final filter in ScanFilter.values)
+          Padding(padding: const EdgeInsets.only(right: 8),
+            child: InkWell(onTap: _busy ? null : () => _process(filter),
+              child: Container(width: 84, padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: doc.pages[_index].filter == filter.label
+                      ? dsTeal : Colors.white12, width: 2),
+                  color: const Color(0xFF343438),
+                ),
+                child: Column(children: [
+                  Expanded(child: Image.file(File(doc.pages[_index].path),
+                      fit: BoxFit.cover, width: double.infinity)),
+                  Text(filter.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 10)),
+                ]),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget _editorTools() {
+    final tools = switch (_editTab) {
+      0 => <Widget>[
+        _editorTool(Icons.picture_as_pdf_outlined, 'CS PDF', _pdfTools),
+        _editorTool(Icons.crop_rotate, 'Crop', _crop),
+        _editorTool(Icons.tune, 'Filter', () => setState(() => _editTab = 3)),
+        _editorTool(Icons.text_fields, 'Edit Text', _ocr),
+        _editorTool(Icons.auto_fix_high, 'Smart Erase', () => _editOnImage(erase: true)),
+        _editorTool(Icons.camera_alt_outlined, 'Retake', _retake),
+        _editorTool(Icons.draw_outlined, 'Sign', _sign),
+        _editorTool(Icons.title, 'Add Text', _editOnImage),
+        _editorTool(Icons.brush_outlined, 'Brush', _sign),
+        _editorTool(Icons.blur_on_outlined, 'Mosaic', _mosaic),
+        _editorTool(Icons.branding_watermark_outlined, 'Add Watermark', _pdfTools),
+      ],
+      1 => <Widget>[
+        _editorTool(Icons.grid_view_outlined, 'Collage', _shareCollage),
+        _editorTool(Icons.title, 'Page Title', _renamePage),
+      ],
+      2 => <Widget>[
+        _editorTool(Icons.swap_vert, 'Manage Pages', _pdfTools),
+        _editorTool(Icons.rotate_left, 'Rotate Left', () =>
+            _process(ScanFilter.original, rotation: -90)),
+        _editorTool(Icons.rotate_right, 'Rotate Right', () =>
+            _process(ScanFilter.original, rotation: 90)),
+        _editorTool(Icons.add_photo_alternate_outlined, 'Add Page', () =>
+            _addImages(fromCamera: false)),
+        _editorTool(Icons.delete_outline, 'Delete Page', _deletePage),
+      ],
+      _ => <Widget>[],
+    };
+    return SizedBox(height: 79, child: ListView(scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 5), children: tools));
+  }
+
+  Future<void> _shareCollage() async {
+    final doc = _document;
+    if (doc == null) return;
+    await ImageToolOperations.shareCollage(doc);
+  }
+
+  Future<void> _mosaic() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => MosaicScreen(store: widget.store,
+        documentId: doc.id, pageId: doc.pages[_index].id),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.store,
     builder: (_, _) {
       final doc = _document;
-      if (doc == null) return Scaffold(appBar: AppBar(title: const Text('Document not found')));
+      if (doc == null || doc.pages.isEmpty) {
+        return const Scaffold(body: Center(child: Text('Document not found')));
+      }
       return Scaffold(
+        backgroundColor: const Color(0xFF1B1B1D),
         appBar: AppBar(
-          title: InkWell(onTap: _rename, child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Flexible(child: Text(doc.name, overflow: TextOverflow.ellipsis)),
-            const SizedBox(width: 6), const Icon(Icons.edit_outlined, size: 16),
-          ])),
-          actions: [
-            IconButton(onPressed: _exportSheet, icon: const Icon(Icons.ios_share_outlined), tooltip: 'Export'),
-          ],
+          backgroundColor: const Color(0xFF2C2C2F),
+          foregroundColor: Colors.white,
+          title: widget.initialPreview
+              ? InkWell(onTap: _rename,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Flexible(child: Text(doc.name, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16))),
+                    const SizedBox(width: 4), const Icon(Icons.edit, size: 16),
+                  ]))
+              : null,
+          actions: widget.initialPreview
+              ? [TextButton(onPressed: () => _addImages(fromCamera: false),
+                  child: const Text('Add', style: TextStyle(color: dsTeal)))]
+              : [
+                  TextButton(onPressed: _exportSheet,
+                      child: const Text('Share',
+                          style: TextStyle(color: Colors.white))),
+                  Padding(padding: const EdgeInsets.only(right: 8),
+                    child: FilledButton(onPressed: () => Navigator.pop(context),
+                      style: FilledButton.styleFrom(backgroundColor: dsTeal),
+                      child: const Text('Done'))),
+                ],
         ),
         body: SafeArea(child: Column(children: [
           if (_busy) const LinearProgressIndicator(color: dsTeal),
           Expanded(child: PageView.builder(
             controller: _pages,
             itemCount: doc.pages.length,
-            onPageChanged: (page) => setState(() => _index = page),
+            onPageChanged: (page) => setState(() { _index = page; _compare = false; }),
             itemBuilder: (_, pageIndex) => Padding(
-              padding: const EdgeInsets.all(12),
-              child: Card(child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: InteractiveViewer(
-                  minScale: .8,
-                  maxScale: 5,
-                  child: Image.file(
-                    File(doc.pages[pageIndex].path),
-                    key: ValueKey(doc.pages[pageIndex].path),
-                    width: double.infinity,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_outlined)),
-                  ),
+              padding: const EdgeInsets.all(15),
+              child: InteractiveViewer(minScale: .8, maxScale: 5,
+                child: Image.file(File(_compare
+                    ? doc.pages[pageIndex].originalPath
+                    : doc.pages[pageIndex].path),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Center(child: Icon(
+                      Icons.broken_image_outlined, color: Colors.white70)),
                 ),
-              )),
+              ),
             ),
           )),
-          Text('${_index + 1} / ${doc.pages.length}',
-              style: const TextStyle(fontWeight: FontWeight.w600, color: dsMuted)),
-          SizedBox(height: 60, child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            children: [
-              for (final filter in ScanFilter.values)
-                Padding(padding: const EdgeInsets.only(right: 7),
-                    child: ChoiceChip(
-                      label: Text(filter.label),
-                      selected: doc.pages[_index].filter == filter.label,
-                      onSelected: _busy ? null : (_) => _process(filter),
-                    )),
-            ],
-          )),
-          const Divider(height: 1),
-          SizedBox(height: 83, child: Row(children: [
-            _action(Icons.crop_rotate, 'Crop', _crop),
-            _action(Icons.rotate_right, 'Rotate', () => _process(ScanFilter.original, rotation: 90)),
-            _action(Icons.text_fields, 'Edit Text', _ocr),
-            _action(Icons.add_photo_alternate_outlined, 'Add Page', () => _addImages(fromCamera: false)),
-            _action(Icons.picture_as_pdf_outlined, 'PDF Tools', _pdfTools),
-            _action(Icons.ios_share, 'Share', _exportSheet),
-          ])),
+          if (widget.initialPreview) ...[
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(children: [
+                const Spacer(),
+                Text('${_index + 1} / ${doc.pages.length}',
+                  style: const TextStyle(color: Colors.white)),
+                const Spacer(),
+                TextButton.icon(onPressed: () => setState(() => _compare = !_compare),
+                  icon: const Icon(Icons.compare, color: Colors.white70, size: 16),
+                  label: Text(_compare ? 'Processed' : 'Compare',
+                    style: const TextStyle(color: Colors.white70))),
+              ])),
+            _filterBar(doc),
+            Container(height: 75, color: const Color(0xFF2C2C2F),
+              child: Row(children: [
+                Expanded(child: _editorTool(Icons.camera_alt_outlined, 'Retake', _retake)),
+                Expanded(child: _editorTool(Icons.rotate_left, 'Left', () =>
+                    _process(ScanFilter.original, rotation: -90))),
+                Expanded(child: _editorTool(Icons.crop_rotate, 'Crop', _crop)),
+                Expanded(child: _editorTool(Icons.text_fields, 'Extract Text', _ocr)),
+                Expanded(child: IconButton(onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.check_box, color: dsTeal, size: 37),
+                  tooltip: 'Done')),
+              ])),
+          ] else ...[
+            Container(color: const Color(0xFF2C2C2F),
+              child: Row(children: [
+                for (final entry in const ['Images', 'Markup', 'Page'].indexed)
+                  TextButton(onPressed: () => setState(() => _editTab = entry.$1),
+                    child: Text(entry.$2, style: TextStyle(
+                      color: _editTab == entry.$1 ? dsTeal : Colors.white70))),
+                if (_editTab == 3)
+                  TextButton(onPressed: () => setState(() => _editTab = 0),
+                      child: const Text('Back to Tools',
+                          style: TextStyle(color: dsTeal))),
+              ])),
+            if (_editTab == 3) _filterBar(doc) else _editorTools(),
+          ],
         ])),
       );
     },
   );
-
-  Widget _action(IconData icon, String label, VoidCallback callback) =>
-      Expanded(child: InkWell(
-        onTap: _busy ? null : callback,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: dsTeal),
-          const SizedBox(height: 5),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-        ]),
-      ));
 }

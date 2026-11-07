@@ -206,7 +206,8 @@ class _MergeDocumentsScreenState extends State<MergeDocumentsScreen> {
     appBar: AppBar(title: const Text('Merge Documents')),
     body: SafeArea(child: Column(children: [
       Expanded(child: ListView(children: [
-        for (final doc in widget.store.documents)
+        for (final doc in widget.store.documents.where((doc) =>
+            doc.lockHash == null))
           CheckboxListTile(
             value: _selected.contains(doc.id),
             secondary: const Icon(Icons.picture_as_pdf_outlined),

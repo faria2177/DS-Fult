@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -12,6 +13,23 @@ import 'package:share_plus/share_plus.dart';
 import '../models.dart';
 
 class DocumentExport {
+  static const MethodChannel _galleryChannel = MethodChannel('doclens/methods');
+
+  /// Uses Android MediaStore through the bundled doclens native plugin.
+  /// This writes actual gallery entries rather than merely opening Share.
+  static Future<int> saveImagesToGallery(ScanDocument document) async {
+    var saved = 0;
+    for (final page in document.pages) {
+      final success = await _galleryChannel.invokeMethod<bool>(
+          'saveImageToGallery', {'imagePath': page.path});
+      if (success != true) {
+        throw StateError('Could not save page ${saved + 1} to Gallery. '
+            'Android 10 or newer is required.');
+      }
+      saved++;
+    }
+    return saved;
+  }
   static Future<Uint8List> toPdf(
     ScanDocument document, {
     String? watermark,

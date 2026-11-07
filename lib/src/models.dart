@@ -21,6 +21,7 @@ class ScanPage {
     required this.originalPath,
     this.filter = 'Original',
     this.recognizedText = '',
+    this.title = '',
   });
 
   final String id;
@@ -28,13 +29,15 @@ class ScanPage {
   final String originalPath;
   final String filter;
   final String recognizedText;
+  final String title;
 
-  ScanPage copyWith({String? path, String? filter, String? recognizedText}) => ScanPage(
+  ScanPage copyWith({String? path, String? filter, String? recognizedText, String? title}) => ScanPage(
         id: id,
         path: path ?? this.path,
         originalPath: originalPath,
         filter: filter ?? this.filter,
         recognizedText: recognizedText ?? this.recognizedText,
+        title: title ?? this.title,
       );
 
   factory ScanPage.fromJson(Map<String, dynamic> json) => ScanPage(
@@ -43,6 +46,7 @@ class ScanPage {
         originalPath: json['originalPath'] as String? ?? json['path'] as String,
         filter: json['filter'] as String? ?? 'Original',
         recognizedText: json['recognizedText'] as String? ?? '',
+        title: json['title'] as String? ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -51,6 +55,7 @@ class ScanPage {
         'originalPath': originalPath,
         'filter': filter,
         'recognizedText': recognizedText,
+        'title': title,
       };
 }
 
@@ -63,6 +68,8 @@ class ScanDocument {
     required this.pages,
     this.folderId,
     this.kind = DocumentKind.document,
+    this.tags = const [],
+    this.lockHash,
   });
 
   final String id;
@@ -71,12 +78,18 @@ class ScanDocument {
   final List<ScanPage> pages;
   final String? folderId;
   final DocumentKind kind;
+  final List<String> tags;
+  /// An app-level access PIN hash, not encryption of exported PDF files.
+  final String? lockHash;
 
   ScanDocument copyWith({
     String? name,
     List<ScanPage>? pages,
     String? folderId,
     bool clearFolder = false,
+    List<String>? tags,
+    String? lockHash,
+    bool clearLock = false,
   }) => ScanDocument(
         id: id,
         name: name ?? this.name,
@@ -84,6 +97,8 @@ class ScanDocument {
         pages: pages ?? this.pages,
         kind: kind,
         folderId: clearFolder ? null : (folderId ?? this.folderId),
+        tags: tags ?? this.tags,
+        lockHash: clearLock ? null : (lockHash ?? this.lockHash),
       );
 
   factory ScanDocument.fromJson(Map<String, dynamic> json) => ScanDocument(
@@ -94,6 +109,8 @@ class ScanDocument {
             .map((e) => ScanPage.fromJson(e as Map<String, dynamic>))
             .toList(growable: false),
         folderId: json['folderId'] as String?,
+        tags: (json['tags'] as List<dynamic>? ?? []).whereType<String>().toList(),
+        lockHash: json['lockHash'] as String?,
         kind: DocumentKind.values.firstWhere(
           (e) => e.name == json['kind'],
           orElse: () => DocumentKind.document,
@@ -107,6 +124,8 @@ class ScanDocument {
         'pages': pages.map((p) => p.toJson()).toList(),
         'folderId': folderId,
         'kind': kind.name,
+        'tags': tags,
+        'lockHash': lockHash,
       };
 }
 

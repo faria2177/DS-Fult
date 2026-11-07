@@ -35,4 +35,21 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('collage lays out pages in a two-column grid', () {
+    final red = img.Image(width: 30, height: 20);
+    final blue = img.Image(width: 30, height: 20);
+    img.fill(red, color: img.ColorRgb8(240, 0, 0));
+    img.fill(blue, color: img.ColorRgb8(0, 0, 240));
+    final collage = img.decodeJpg(ImageToolOperations.buildCollageBytes([
+      Uint8List.fromList(img.encodePng(red)),
+      Uint8List.fromList(img.encodePng(blue)),
+    ]))!;
+    expect(collage.width, 1116);
+    expect(collage.height, 784);
+    final left = collage.getPixel(270, 380);
+    final right = collage.getPixel(830, 380);
+    expect(left.r, greaterThan(left.b));
+    expect(right.b, greaterThan(right.r));
+  });
 }

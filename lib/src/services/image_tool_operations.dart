@@ -34,6 +34,57 @@ class ImageToolOperations {
     ));
   }
 
+  /// A real two-column collage (distinct from vertical long-image export).
+  static Future<void> shareCollage(ScanDocument document) async {
+    if (document.pages.isEmpty) {
+      throw const FormatException('This document has no images.');
+    }
+    final pages = <Uint8List>[];
+    for (final page in document.pages) {
+      pages.add(await File(page.path).readAsBytes());
+    }
+    final bytes = await compute(buildCollageBytes, pages);
+    final directory = await getTemporaryDirectory();
+    final file = File(p.join(directory.path,
+        'docscanner_collage_${DateTime.now().microsecondsSinceEpoch}.jpg'));
+    await file.writeAsBytes(bytes, flush: true);
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(file.path, mimeType: 'image/jpeg')],
+      subject: '${document.name} - Collage',
+    ));
+  }
+
+  @visibleForTesting
+  static Uint8List buildCollageBytes(List<Uint8List> images) {
+    if (images.isEmpty) throw const FormatException('No images for collage');
+    const cellWidth = 540;
+    const cellHeight = 760;
+    const gap = 12;
+    final columns = images.length == 1 ? 1 : 2;
+    final rows = (images.length + columns - 1) ~/ columns;
+    final canvas = img.Image(
+      width: columns * cellWidth + (columns + 1) * gap,
+      height: rows * cellHeight + (rows + 1) * gap,
+    );
+    img.fill(canvas, color: img.ColorRgb8(244, 244, 244));
+    for (var i = 0; i < images.length; i++) {
+      final source = img.decodeImage(images[i]);
+      if (source == null) throw const FormatException('Unsupported image');
+      final upright = img.bakeOrientation(source);
+      final factor = math.min(cellWidth / upright.width, cellHeight / upright.height);
+      final resized = img.copyResize(upright,
+        width: math.max(1, (upright.width * factor).round()),
+        height: math.max(1, (upright.height * factor).round()),
+      );
+      final column = i % columns;
+      final row = i ~/ columns;
+      final x = gap + column * (cellWidth + gap) + (cellWidth - resized.width) ~/ 2;
+      final y = gap + row * (cellHeight + gap) + (cellHeight - resized.height) ~/ 2;
+      img.compositeImage(canvas, resized, dstX: x, dstY: y);
+    }
+    return Uint8List.fromList(img.encodeJpg(canvas, quality: 88));
+  }
+
   static Future<void> shareResizedImage(String path, int maxDimension) async {
     final bytes = await File(path).readAsBytes();
     final resized = await compute(_resize, {

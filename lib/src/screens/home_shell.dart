@@ -15,6 +15,7 @@ import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
 import 'document_screen.dart';
+import 'document_detail_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'image_text_editor_screen.dart';
@@ -100,15 +101,16 @@ class _HomeShellState extends State<HomeShell> {
     try {
       final doc = await widget.store.createFromPaths(paths);
       if (!mounted) return;
-      await _open(doc.id);
+      await _open(doc.id, openEditorFirst: true);
     } catch (error) {
       _message('Could not save document: $error');
     }
   }
 
-  Future<void> _open(String id) async {
+  Future<void> _open(String id, {bool openEditorFirst = false}) async {
     await Navigator.push<void>(context, MaterialPageRoute(
-      builder: (_) => DocumentScreen(store: widget.store, documentId: id),
+      builder: (_) => DocumentDetailScreen(store: widget.store,
+          documentId: id, openEditorFirst: openEditorFirst),
     ));
   }
 
@@ -451,19 +453,21 @@ class _HomeShellState extends State<HomeShell> {
     final doc = await _chooseDocument();
     if (doc == null || !mounted) return;
     await _open(doc.id);
-    if (mounted) _message('Tap Edit Text in the document toolbar.');
+    if (mounted) _message('Tap Edit, then Edit Text or Extract Text.');
   }
 
   Future<ScanDocument?> _chooseDocument() async {
-    if (widget.store.documents.isEmpty) {
-      _message('Scan or import a document first.');
+    final unlocked = widget.store.documents.where((doc) =>
+        doc.lockHash == null).toList();
+    if (unlocked.isEmpty) {
+      _message('No unlocked documents. Open a document to manage its lock.');
       return null;
     }
     return showDialog<ScanDocument>(context: context, builder: (dialog) =>
       SimpleDialog(
         title: const Text('Choose a document'),
         children: [
-          for (final doc in widget.store.documents)
+          for (final doc in unlocked)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(dialog, doc),
               child: Padding(
@@ -689,6 +693,10 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _documentAction(ScanDocument doc, String action) async {
+    if (doc.lockHash != null) {
+      _message('This document has an access PIN. Open it to unlock first.');
+      return;
+    }
     switch (action) {
       case 'rename':
         final name = await _inputDialog('Rename document', 'Name', initial: doc.name);

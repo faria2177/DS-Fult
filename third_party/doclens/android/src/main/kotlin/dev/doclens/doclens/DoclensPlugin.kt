@@ -180,11 +180,14 @@ class DoclensPlugin :
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
         val source = File(path)
         if (!source.isFile) return false
+        val png = source.extension.equals("png", ignoreCase = true)
+        val extension = if (png) "png" else "jpg"
+        val mimeType = if (png) "image/png" else "image/jpeg"
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME,
-                "DocScanner_${System.currentTimeMillis()}.jpg")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                "DocScanner_${System.currentTimeMillis()}_${source.nameWithoutExtension}.$extension")
+            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
             put(MediaStore.Images.Media.RELATIVE_PATH,
                 Environment.DIRECTORY_PICTURES + "/DocScanner")
             put(MediaStore.Images.Media.IS_PENDING, 1)
