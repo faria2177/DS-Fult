@@ -99,7 +99,9 @@ void main() {
     }
     await tester.enterText(search, 'ID Cards');
     await tester.pumpAndSettle();
-    expect(find.text('ID Cards'), findsOneWidget);
+    expect(find.byWidgetPredicate(
+      (widget) => widget is Text && widget.data == 'ID Cards',
+    ), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
