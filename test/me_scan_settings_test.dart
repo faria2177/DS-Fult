@@ -93,7 +93,10 @@ void main() {
     ]) {
       await tester.enterText(search, name);
       await tester.pumpAndSettle();
-      expect(find.text(name), findsNothing, reason: name);
+      // EditableText itself contains the query, so only inspect grid labels.
+      expect(find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data == name,
+      ), findsNothing, reason: name);
     }
     await tester.enterText(search, 'ID Cards');
     await tester.pumpAndSettle();
