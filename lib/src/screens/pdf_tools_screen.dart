@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/document_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
+import 'compress_screen.dart';
 import 'document_screen.dart';
 
 /// Organize and export the current image-backed document as a PDF.
@@ -96,7 +97,9 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
   Future<void> _compress() async {
     final doc = widget.store.byId(widget.documentId);
     if (doc == null) return;
-    await _run(() => DocumentExport.shareCustomizedPdf(doc, imageQuality: 55));
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => CompressScreen(document: doc),
+    ));
   }
 
   Future<void> _run(Future<void> Function() action) async {

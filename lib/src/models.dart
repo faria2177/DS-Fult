@@ -22,6 +22,7 @@ class ScanPage {
     this.filter = 'Original',
     this.recognizedText = '',
     this.title = '',
+    this.watermarkBackupPath,
   });
 
   final String id;
@@ -30,15 +31,21 @@ class ScanPage {
   final String filter;
   final String recognizedText;
   final String title;
+  /// Previous image before the most recently applied text watermark.
+  /// Cleared when another kind of image edit is applied.
+  final String? watermarkBackupPath;
 
   ScanPage copyWith({String? path, String? originalPath,
-      String? filter, String? recognizedText, String? title}) => ScanPage(
+      String? filter, String? recognizedText, String? title,
+      String? watermarkBackupPath, bool clearWatermark = false}) => ScanPage(
         id: id,
         path: path ?? this.path,
         originalPath: originalPath ?? this.originalPath,
         filter: filter ?? this.filter,
         recognizedText: recognizedText ?? this.recognizedText,
         title: title ?? this.title,
+        watermarkBackupPath: clearWatermark ? null :
+            (watermarkBackupPath ?? this.watermarkBackupPath),
       );
 
   factory ScanPage.fromJson(Map<String, dynamic> json) => ScanPage(
@@ -48,6 +55,7 @@ class ScanPage {
         filter: json['filter'] as String? ?? 'Original',
         recognizedText: json['recognizedText'] as String? ?? '',
         title: json['title'] as String? ?? '',
+        watermarkBackupPath: json['watermarkBackupPath'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -57,6 +65,7 @@ class ScanPage {
         'filter': filter,
         'recognizedText': recognizedText,
         'title': title,
+        'watermarkBackupPath': watermarkBackupPath,
       };
 }
 

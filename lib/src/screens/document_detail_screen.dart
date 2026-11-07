@@ -15,9 +15,11 @@ import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
+import 'compress_screen.dart';
 import 'document_screen.dart';
 import 'document_text_tools_screen.dart';
 import 'edit_text_screen.dart';
+import 'lock_document_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'signature_screen.dart';
 
@@ -146,15 +148,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       }
       await _run(() => widget.store.setLockHash(doc.id, null));
     } else {
-      final pin = await _input('Lock document',
-          hint: 'At least 6 digits / characters', secret: true);
-      if (pin == null) return;
-      if (pin.length < 6) {
-        _notice('Use an access PIN with at least 6 characters.');
-        return;
-      }
-      await _run(() => widget.store.setLockHash(doc.id, _pinHash(pin)));
-      _notice('App-level PIN enabled. Exported files are NOT encrypted.');
+      await Navigator.push<bool>(context, MaterialPageRoute(
+        builder: (_) => LockDocumentScreen(
+          store: widget.store, documentId: doc.id),
+      ));
     }
   }
 
@@ -365,7 +362,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Future<void> _compress() async {
     final doc = _activeDocument();
     if (doc != null) {
-      await _run(() => DocumentExport.shareCustomizedPdf(doc, imageQuality: 55));
+      await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => CompressScreen(document: doc),
+      ));
     }
   }
 

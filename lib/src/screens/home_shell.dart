@@ -15,16 +15,20 @@ import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
+import 'compress_screen.dart';
 import 'document_detail_screen.dart';
 import 'files_workspace.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'image_text_editor_screen.dart';
+import 'lock_document_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'qr_code_screen.dart';
+import 'reorder_pages_screen.dart';
 import 'scan_more_settings_screen.dart';
 import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
+import 'watermark_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -313,17 +317,16 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Image Resizer', Icons.photo_size_select_large_outlined, _resizeImage),
         _Tool('Split PDF', Icons.call_split_outlined, () => _openExisting('pdf')),
         _Tool('Sign', Icons.draw_outlined, _startSign),
-        _Tool('Add Watermark', Icons.branding_watermark_outlined, () => _openExisting('pdf')),
+        _Tool('Add Watermark', Icons.branding_watermark_outlined, _startWatermark),
         _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startErase),
-        _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('pdf')),
+        _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('reorder')),
         _Tool('Extract PDF Pages', Icons.content_copy_outlined, () => _openExisting('pdf')),
         _Tool('Rotate PDF', Icons.rotate_90_degrees_ccw_outlined,
             () => _openExisting('document')),
-        _Tool('Lock PDF', Icons.lock_outline, () => _notReady('Lock PDF')),
-        _Tool('Compress PDF', Icons.compress, () => _openExisting('pdf')),
+        _Tool('Lock PDF', Icons.lock_outline, () => _openExisting('lock')),
+        _Tool('Compress PDF', Icons.compress, () => _openExisting('compress')),
       ],
       'Utilities': [
-        _Tool('AI Chat', Icons.smart_toy_outlined, () => _notReady('AI Chat')),
         _Tool('Print', Icons.print_outlined, () => _openExisting('print')),
         _Tool('Create QR Code', Icons.qr_code_2_outlined, _createQrCode),
       ],
@@ -508,6 +511,20 @@ class _HomeShellState extends State<HomeShell> {
     ));
   }
 
+  Future<void> _startWatermark() async {
+    final document = await _chooseDocument();
+    if (document == null || !mounted) return;
+    final page = await _choosePage(document, 'Choose a page for watermark');
+    if (page == null || !mounted) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => WatermarkScreen(
+        store: widget.store,
+        documentId: document.id,
+        pageId: page.id,
+      ),
+    ));
+  }
+
   Future<ScanPage?> _choosePage(ScanDocument doc, String title) async {
     if (doc.pages.isEmpty) {
       _message('Document has no pages.');
@@ -664,6 +681,18 @@ class _HomeShellState extends State<HomeShell> {
     if (action == 'pdf') {
       await Navigator.push<void>(context, MaterialPageRoute(
         builder: (_) => PdfToolsScreen(store: widget.store, documentId: id),
+      ));
+    } else if (action == 'reorder') {
+      await Navigator.push<bool>(context, MaterialPageRoute(
+        builder: (_) => ReorderPagesScreen(store: widget.store, documentId: id),
+      ));
+    } else if (action == 'compress') {
+      await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => CompressScreen(document: doc),
+      ));
+    } else if (action == 'lock') {
+      await Navigator.push<bool>(context, MaterialPageRoute(
+        builder: (_) => LockDocumentScreen(store: widget.store, documentId: id),
       ));
     } else if (action == 'print') {
       try {

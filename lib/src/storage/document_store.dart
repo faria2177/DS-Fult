@@ -98,6 +98,7 @@ class DocumentStore extends ChangeNotifier {
     String filter = 'Original',
     String extension = '.jpg',
     bool replaceOriginal = false,
+    bool asWatermark = false,
   }) async {
     final doc = byId(documentId);
     if (doc == null) return;
@@ -109,9 +110,27 @@ class DocumentStore extends ChangeNotifier {
     final pages = doc.pages.map((page) {
       if (page.id != pageId) return page;
       return page.copyWith(path: imagePath,
-          originalPath: replaceOriginal ? imagePath : null, filter: filter);
+          originalPath: replaceOriginal ? imagePath : null, filter: filter,
+          watermarkBackupPath: asWatermark ? page.path : null,
+          clearWatermark: !asWatermark);
     }).toList(growable: false);
     await _replace(doc.copyWith(pages: pages));
+  }
+
+  /// Restore the image from just before the last watermark. Other edits clear
+  /// this backup pointer, preventing removal from silently erasing later edits.
+  Future<void> removeLastWatermark(String documentId, String pageId) async {
+    final doc = byId(documentId);
+    if (doc == null) throw StateError('Document not found');
+    final page = doc.pages.where((item) => item.id == pageId).firstOrNull;
+    final backup = page?.watermarkBackupPath;
+    if (backup == null || !await File(backup).exists()) {
+      throw StateError('No removable watermark found on this page');
+    }
+    await _replace(doc.copyWith(pages: [
+      for (final item in doc.pages)
+        item.id == pageId ? item.copyWith(path: backup, clearWatermark: true) : item,
+    ]));
   }
 
   Future<void> updatePageText(String documentId, String pageId, String text) async {
@@ -168,6 +187,20 @@ class DocumentStore extends ChangeNotifier {
     final removed = pages.removeAt(oldIndex);
     pages.insert(newIndex, removed);
     await _replace(doc.copyWith(pages: pages));
+  }
+
+  /// Commit a staged page order in one operation. A cancelled reorder screen
+  /// must not mutate the stored order, and no image files are rewritten.
+  Future<void> setPageOrder(String documentId, List<String> pageIds) async {
+    final doc = byId(documentId);
+    if (doc == null) throw StateError('Document not found');
+    final original = {for (final page in doc.pages) page.id: page};
+    if (pageIds.length != doc.pages.length ||
+        pageIds.toSet().length != pageIds.length ||
+        pageIds.toSet().difference(original.keys.toSet()).isNotEmpty) {
+      throw ArgumentError('The new order must contain every page exactly once');
+    }
+    await _replace(doc.copyWith(pages: [for (final id in pageIds) original[id]!]));
   }
 
   /// Create a separate editable image-based document from selected local pages.

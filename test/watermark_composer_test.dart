@@ -29,4 +29,28 @@ void main() {
     }
     expect(markedPixels, greaterThan(25));
   });
+
+  testWidgets('tile watermark repeats text and rotation remains supported',
+      (tester) async {
+    final page = img.Image(width: 240, height: 300);
+    img.fill(page, color: img.ColorRgb8(255, 255, 255));
+    final source = Uint8List.fromList(img.encodePng(page));
+    final single = await tester.runAsync(() => WatermarkComposer.composite(
+      source, text: 'DS', color: Colors.black, opacity: 1,
+      fontFraction: .09, rotationDegrees: -30,
+    ));
+    final tile = await tester.runAsync(() => WatermarkComposer.composite(
+      source, text: 'DS', color: Colors.black, opacity: 1,
+      fontFraction: .09, rotationDegrees: -30, tiled: true,
+    ));
+    int darkPixels(Uint8List bytes) {
+      final result = img.decodePng(bytes)!;
+      var total = 0;
+      for (final pixel in result) {
+        if (pixel.r < 180) total++;
+      }
+      return total;
+    }
+    expect(darkPixels(tile!), greaterThan(darkPixels(single!) * 2));
+  });
 }

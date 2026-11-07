@@ -3,6 +3,28 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Reference-video Tools update — v0.5.7
+
+- **Add Watermark** now opens directly from Tools. The on-device preview and
+  exported full-resolution PNG share the same drawing code for **Single/Tile**
+  layouts, placement, colours, opacity, size and ±45° rotation. The previous
+  page image is retained so **Remove Last Watermark** restores only the most
+  recent watermark; subsequent unrelated edits clear this undo reference to
+  prevent accidental loss of later work.
+- **Reorder Pages** from Tools shows the reference-style two-column page grid,
+  teal selected state and long-press drag-to-sort. Cancel discards the staged
+  order; Confirm saves it in one index update without touching image files.
+- **Compress PDF** offers **Medium** (better quality) and **High** (smaller
+  file), measures source/result PDF size, previews the first page, and shares
+  the generated local PDF. Compression does not overwrite the stored scan.
+- **Lock PDF** is no longer a placeholder: the password and confirmation must
+  match and contain at least six characters. It uses the same app-level PIN
+  hash as the existing document unlock screen. This **does not encrypt files**
+  or exported PDFs; real at-rest encryption remains a separate engineering task.
+- Existing offline Merge Documents and basic region erase remain available.
+  Brush-segmentation **Magic/Handwriting/Text** erase is not yet implemented;
+  no proprietary cloud AI, paywall or Ask AI option was added.
+
 ## Repeat-scan crop reliability — v0.5.6
 
 - The supplied 38-second video exposed a third **Add Pages** capture that
