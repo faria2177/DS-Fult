@@ -69,9 +69,11 @@ class _ScanCodeScreenState extends State<ScanCodeScreen> {
 
   Future<void> _copy(String value) async {
     await Clipboard.setData(ClipboardData(text: value));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Code copied')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Code copied')),
+      );
+    }
   }
 
   @override
