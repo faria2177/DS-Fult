@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'reference_scan_chrome.dart';
+
 import '../controller.dart';
 import '../fallback/file_io.dart';
 import '../models.dart';
@@ -150,6 +152,12 @@ class DoclensScreen extends StatefulWidget {
     this.showHint = true,
     this.showCloseButton = true,
     this.enableEditCorners = true,
+    this.referenceScanChrome = false,
+    this.onBatchModeChanged,
+    this.onImportFiles,
+    this.onImportImages,
+    this.onOpenIdCards,
+    this.onManualScan,
     // --- multi-page / batch ---
     this.multiPage = false,
     this.maxPages,
@@ -371,6 +379,15 @@ class DoclensScreen extends StatefulWidget {
   /// `false` for apps that never want the user to touch up the crop.
   /// Default `true`.
   final bool enableEditCorners;
+
+  /// Match DocScanner's framed Scan camera without changing the capture,
+  /// native detection, manual-crop or multi-page result state machines.
+  final bool referenceScanChrome;
+  final ValueChanged<bool>? onBatchModeChanged;
+  final VoidCallback? onImportFiles;
+  final VoidCallback? onImportImages;
+  final VoidCallback? onOpenIdCards;
+  final VoidCallback? onManualScan;
 
   /// When `true`, the scanner stays open after each accepted page and
   /// accumulates them into a batch instead of popping on the first
@@ -993,6 +1010,27 @@ class _DoclensScreenState extends State<DoclensScreen> {
     }
   }
 
+  Future<void> _requestBatchMode(bool batch) async {
+    if (widget.multiPage && !batch && _pages.isNotEmpty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (_) => _DiscardDialog(
+          title: 'Discard batch pages?',
+          message: 'You have ${_pages.length} captured page(s). '
+              'Discard them before switching to Single?',
+          accent: _accent,
+          keepLabel: 'Keep batch',
+        ),
+      );
+      if (discard != true || !mounted) return;
+      for (final page in _pages) {
+        _discardPageFiles(page);
+      }
+      _pages.clear();
+    }
+    widget.onBatchModeChanged?.call(batch);
+  }
+
   Future<void> _handleClose() async {
     if (widget.multiPage && _pages.isNotEmpty) {
       final discard = await showDialog<bool>(
@@ -1069,6 +1107,53 @@ class _DoclensScreenState extends State<DoclensScreen> {
     }
   }
 
+  Widget _liveCameraView() => DoclensView(
+        controller: _controller,
+        backgroundColor: widget.backgroundColor,
+        overlayBuilder: (context, quad, status) {
+          if (widget.overlayStyle != null) {
+            return quadOverlayFor(
+              style: widget.overlayStyle!,
+              quad: quad,
+              status: status,
+              accent: _accent,
+              warning: _warning,
+            );
+          }
+          return _ReticleOverlay(
+            quad: quad,
+            status: status,
+            accent: _accent,
+            warning: _warning,
+          );
+        },
+        captureButtonBuilder: null,
+        flashButtonBuilder: null,
+        lowLightHintBuilder: null,
+        onCapture: _handleCapture,
+      );
+
+  Widget _referenceCameraView() => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => ReferenceScanChrome(
+          preview: _liveCameraView(),
+          flashMode: _controller.flashMode,
+          batchMode: widget.multiPage,
+          pageCount: _pages.length,
+          capturing: _controller.isCapturing,
+          accent: _accent,
+          onClose: _handleClose,
+          onFlash: _controller.cycleFlashMode,
+          onCapture: _manualCapture,
+          onBatchChanged: _requestBatchMode,
+          onFinishBatch: _finishMultiPage,
+          onImportFiles: widget.onImportFiles,
+          onImportImages: widget.onImportImages,
+          onIdCards: widget.onOpenIdCards,
+          onManualScan: widget.onManualScan,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     if (_initFailed) {
@@ -1090,7 +1175,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
       },
       child: Scaffold(
         backgroundColor: widget.backgroundColor,
-        body: SafeArea(
+        body: widget.referenceScanChrome ? _referenceCameraView() : SafeArea(
           top: false,
           bottom: false,
           child: Stack(
@@ -1098,35 +1183,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
             children: [
               // Live preview + overlay + shutter (provided by the package's
               // builder slots). The shutter floats inside this child too.
-              DoclensView(
-                controller: _controller,
-                backgroundColor: widget.backgroundColor,
-                overlayBuilder: (ctx, quad, status) {
-                  // When the caller picks a `QuadOverlayStyle`, render that
-                  // package-shipped family member instead of the screen's
-                  // built-in reticle. Either way colours follow the
-                  // user-supplied accent / warning.
-                  if (widget.overlayStyle != null) {
-                    return quadOverlayFor(
-                      style: widget.overlayStyle!,
-                      quad: quad,
-                      status: status,
-                      accent: _accent,
-                      warning: _warning,
-                    );
-                  }
-                  return _ReticleOverlay(
-                    quad: quad,
-                    status: status,
-                    accent: _accent,
-                    warning: _warning,
-                  );
-                },
-                captureButtonBuilder: null, // we draw the shutter ourselves
-                flashButtonBuilder: null, // ditto
-                lowLightHintBuilder: null,
-                onCapture: _handleCapture,
-              ),
+              _liveCameraView(),
 
               // Vignette + film-grain feel without an image asset.
               IgnorePointer(child: _Vignette()),

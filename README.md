@@ -3,6 +3,24 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Framed Scan camera — v0.3.9
+
+- Rebuilt the main Scan camera interface around the supplied reference image:
+  black upper controls, bordered central live preview, Single/Batch selection,
+  Scan / ID Cards tabs, and separate lower Import / shutter controls.
+- Preserved native CameraX live detection, manual shutter, editable four-corner
+  review and multi-page flow. Camera UI remains Flutter widgets, not a static
+  screenshot. The existing gallery image picker currently handles both Import
+  shortcuts; a separate PDF/file picker is still future work.
+- Tightened document visibility checks to reject detected quadrilaterals
+  clipped by the image edge. Small, valid ID-card-sized contours get more
+  balanced scoring against large background patterns.
+- Captures now start with natural (unfiltered) image pixels rather than a
+  forced enhanced filter that could wash out light cards; users can choose a
+  filter later in the document editor.
+- Flutter UI tests and Kotlin geometry regression tests added. Real-camera
+  testing on the target Android device remains necessary to verify parity.
+
 ## DS logo update — v0.3.8
 
 - Uses the supplied navy, white and teal **DS** logo in the Home and Me screens.

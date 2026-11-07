@@ -327,25 +327,22 @@ class DocumentBoundaryDetector(
     ): CandidateScore? {
         if (!ContourDetector.isValidClockwiseConvex(corners)) return null
 
+        if (!ScannerTuning.hasFourVisibleCorners(corners, imgWidth, imgHeight)) {
+            return null
+        }
+
         val quadArea = ContourDetector.calculatePolygonArea(corners)
         val areaRatio = quadArea / totalImageArea
 
-        // Area Score: optimal document size is 30% - 85% of screen. The floor
-        // used to be 0.08 (8%), which is far too permissive for this use case —
-        // a document being scanned is expected to dominate the frame, so an
-        // 8%-of-frame quad is almost never the real page. In practice that low
-        // floor let small, high-contrast *internal* regions (e.g. this form's
-        // bold section-header bars, which have stronger edge contrast than the
-        // paper-vs-desk boundary under some lighting) pass validation and win
-        // when the true full-page contour failed to simplify into a clean quad
-        // — producing a confidently-wrong small box instead of an honest "still
-        // searching" state. Raising the floor forces the pipeline to keep
-        // looking (or report low confidence) rather than lock onto a fragment.
+        // A small but fully visible ID card must not lose to a huge, weak
+        // blanket/table contour solely because the background has more area.
+        // Area saturates at 12%; geometry and all four visible edges remain
+        // essential to score a small candidate confidently.
         val areaScore = when {
             areaRatio < ScannerTuning.MIN_LIVE_AREA_RATIO -> return null // Reject fragments smaller than a plausible in-frame document
             areaRatio > ScannerTuning.MAX_LIVE_AREA_RATIO -> 0.15 // Reject outer frame
-            areaRatio in 0.30..0.85 -> 1.0
-            areaRatio < 0.30 -> (areaRatio / 0.30).coerceIn(0.3, 1.0)
+            areaRatio in 0.12..0.85 -> 1.0
+            areaRatio < 0.12 -> (areaRatio / 0.12).coerceIn(0.25, 1.0)
             else -> ((0.98 - areaRatio) / 0.13).coerceIn(0.2, 1.0)
         }
 
@@ -379,8 +376,9 @@ class DocumentBoundaryDetector(
         val internalVariance = computeInternalContentVariance(corners, gray)
         var contentBonus = 1.0
         if (internalVariance < 8.0) {
-            // Very flat/featureless: might be a blank table or wall section
-            contentBonus = 0.85
+            // Blank ID cards and forms are valid scans. Penalize only if
+            // neither the border contrast nor the contour support is strong.
+            contentBonus = if (edgeScore >= 0.35 || boundaryContrast >= 12.0) 1.0 else 0.88
         }
 
         // Angle bonus scales confidence down smoothly for corners that deviate from

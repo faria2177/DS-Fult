@@ -124,6 +124,12 @@ object QuadDetector {
     ): Float {
         val area = polygonArea(corners)
         if (area <= 0f) return 0f
+        // Even the low-cost fallback must not interpret an off-screen patch
+        // of fabric or desk as a fully capturable four-corner document.
+        val insetX = width * 0.015f
+        val insetY = height * 0.015f
+        if (corners.any { it.x < insetX || it.y < insetY ||
+                it.x > width - insetX || it.y > height - insetY }) return 0f
         val solidity = (component.size / area).coerceIn(0f, 1f)
         val coverage = (area / (width * height).toFloat()).coerceIn(0f, 1f)
         if (coverage < 0.02f || coverage > 0.96f || solidity < 0.45f) return 0f

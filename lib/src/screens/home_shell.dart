@@ -51,7 +51,14 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _capture() async {
     final paths = await Navigator.push<List<String>>(context,
-        MaterialPageRoute(builder: (_) => const CameraScreen()));
+        MaterialPageRoute(builder: (_) => CameraScreen(
+          onOpenIdCards: (scannerContext) => Navigator.of(scannerContext).push<void>(
+            MaterialPageRoute(builder: (_) => IdCardScreen(
+              store: widget.store,
+              kind: DocumentKind.idCard,
+            )),
+          ),
+        )));
     if (paths == null || paths.isEmpty || !mounted) return;
     await _create(paths);
   }
@@ -384,7 +391,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.3.8 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.3.9 • Md Jahidul Islam'),
         )),
       ]);
 

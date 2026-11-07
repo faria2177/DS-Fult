@@ -20,10 +20,33 @@ object ScannerTuning {
     const val ID_CARD_RATIO = 1.5857725
     const val RECEIPT_RATIO = 2.20
 
-    const val MIN_LIVE_AREA_RATIO = 0.035
+    // Blank ID cards can occupy only 2.5-8% of a portrait preview when the
+    // phone is held at a comfortable distance. Geometry/edge support still
+    // decide whether such a candidate is a real document.
+    const val MIN_LIVE_AREA_RATIO = 0.025
     const val MAX_LIVE_AREA_RATIO = 0.985
     const val MIN_AVG_EDGE_SUPPORT = 0.15
     const val MIN_BOUNDARY_CONTRAST = 2.5
+
+    /**
+     * A document must have all four corners inside the photographed frame.
+     * A polygon touching / escaping the frame often outlines a blanket,
+     * table or shadow rather than a complete page. In that case keep the
+     * untouched capture for manual four-corner adjustment.
+     */
+    fun hasFourVisibleCorners(
+        corners: Array<Point>, width: Int, height: Int,
+        insetFraction: Double = 0.015,
+    ): Boolean {
+        if (corners.size != 4 || width <= 0 || height <= 0) return false
+        val insetX = width * insetFraction
+        val insetY = height * insetFraction
+        return corners.all { point ->
+            point.x.isFinite() && point.y.isFinite() &&
+                point.x >= insetX && point.y >= insetY &&
+                point.x <= width - insetX && point.y <= height - insetY
+        }
+    }
 
     fun normalizedLongRatio(q: Array<Point>): Double {
         if (q.size != 4) return 0.0

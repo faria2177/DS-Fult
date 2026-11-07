@@ -2,6 +2,7 @@ package dev.doclens.doclens
 
 import android.graphics.Bitmap
 import com.docscan.scanner.DocumentBoundaryDetector
+import com.docscan.scanner.ScannerTuning
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.CvType
@@ -107,6 +108,9 @@ internal class OpenCvBoundaryAdapter {
         ): Quad? {
             if (!result.isValid || result.corners.size != 4 ||
                 !result.confidence.isFinite()) return null
+            if (!ScannerTuning.hasFourVisibleCorners(result.corners.toTypedArray(), width, height)) {
+                return null
+            }
             val points = result.corners.map { point ->
                 PointF(
                     (point.x / width).toFloat().coerceIn(0f, 1f),
