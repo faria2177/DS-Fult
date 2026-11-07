@@ -14,7 +14,6 @@ import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
-import 'document_screen.dart';
 import 'document_detail_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';

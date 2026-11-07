@@ -18,7 +18,6 @@ import 'camera_screen.dart';
 import 'document_screen.dart';
 import 'document_text_tools_screen.dart';
 import 'edit_text_screen.dart';
-import 'image_text_editor_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'signature_screen.dart';
 
@@ -142,7 +141,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     if (doc == null) return;
     if (doc.lockHash != null) {
       if (!await _confirm('Remove document lock?',
-          'This removes the app-level access PIN.')) return;
+          'This removes the app-level access PIN.')) {
+        return;
+      }
       await _run(() => widget.store.setLockHash(doc.id, null));
     } else {
       final pin = await _input('Lock document',
@@ -396,7 +397,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         ],
       )),
     );
-    if (choice == null) return;
+    if (choice == null || !mounted) return;
     if (choice == 'copy' || _selected.isNotEmpty) {
       await _run(() async {
         final pages = _activeDocument()!.pages;
@@ -476,20 +477,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     }
   }
 
-  Future<void> _editPageText({bool erase = false}) async {
-    final doc = _doc;
-    if (doc == null || doc.pages.isEmpty) return;
-    final page = _selected.isEmpty
-        ? doc.pages.first
-        : doc.pages.firstWhere((p) => _selected.contains(p.id));
-    await Navigator.push<void>(context, MaterialPageRoute(
-      builder: (_) => ImageTextEditorScreen(
-        store: widget.store, documentId: doc.id, pageId: page.id,
-        regions: const [], startInEraseMode: erase,
-      ),
-    ));
-  }
-
   void _shareSheet() {
     final doc = _activeDocument();
     if (doc == null) return;
@@ -533,8 +520,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 scrollDirection: Axis.horizontal, children: [
                   for (final page in doc.pages)
                     Padding(padding: const EdgeInsets.only(right: 10),
-                      child: Image.file(File(page.path), width: 105,
-                          fit: BoxFit.contain)),
+                    child: Image.file(File(page.path), width: 105,
+                          cacheWidth: 220, fit: BoxFit.contain)),
                 ],
               )),
               const SizedBox(height: 12),
@@ -616,8 +603,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     fit: BoxFit.cover),
               title: Text(doc.name, maxLines: 1,
                   style: const TextStyle(color: Colors.white)),
-              subtitle: Text(doc.tags.isEmpty ? 'Tags +' : doc.tags.join(', '),
-                  style: const TextStyle(color: Colors.white54)),
+              subtitle: Align(alignment: Alignment.centerLeft,
+                child: InkWell(onTap: () {
+                  Navigator.pop(sheetContext); _tags();
+                }, child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Text(doc.tags.isEmpty ? 'Tags +' : doc.tags.join(', '),
+                      style: const TextStyle(color: Colors.white54)),
+                )),
+              ),
               trailing: IconButton(icon: const Icon(Icons.info_outline,
                       color: Colors.white70), onPressed: () {
                     Navigator.pop(sheetContext); _info();
@@ -698,7 +692,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       child: Column(children: [
         Expanded(child: Stack(fit: StackFit.expand, children: [
           Container(color: Colors.white,
-            child: Image.file(File(page.path), fit: BoxFit.contain,
+            child: Image.file(File(page.path), cacheWidth: 450,
+              fit: BoxFit.contain,
               errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined))),
           if (_selecting)
             Positioned(top: 8, right: 8, child: CircleAvatar(radius: 14,

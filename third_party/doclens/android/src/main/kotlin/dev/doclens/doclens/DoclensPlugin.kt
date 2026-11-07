@@ -180,9 +180,16 @@ class DoclensPlugin :
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
         val source = File(path)
         if (!source.isFile) return false
-        val png = source.extension.equals("png", ignoreCase = true)
-        val extension = if (png) "png" else "jpg"
-        val mimeType = if (png) "image/png" else "image/jpeg"
+        val extension = when (source.extension.lowercase()) {
+            "png" -> "png"
+            "webp" -> "webp"
+            else -> "jpg"
+        }
+        val mimeType = when (extension) {
+            "png" -> "image/png"
+            "webp" -> "image/webp"
+            else -> "image/jpeg"
+        }
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME,

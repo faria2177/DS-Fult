@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -66,12 +65,18 @@ class _MosaicScreenState extends State<MosaicScreen> {
       });
       await widget.store.replacePageBytes(widget.documentId,
           widget.pageId, result);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Mosaic failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Mosaic failed: $error')));
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 

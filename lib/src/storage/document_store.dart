@@ -97,6 +97,7 @@ class DocumentStore extends ChangeNotifier {
     Uint8List jpegBytes, {
     String filter = 'Original',
     String extension = '.jpg',
+    bool replaceOriginal = false,
   }) async {
     final doc = byId(documentId);
     if (doc == null) return;
@@ -107,7 +108,8 @@ class DocumentStore extends ChangeNotifier {
     await File(imagePath).writeAsBytes(jpegBytes, flush: true);
     final pages = doc.pages.map((page) {
       if (page.id != pageId) return page;
-      return page.copyWith(path: imagePath, filter: filter);
+      return page.copyWith(path: imagePath,
+          originalPath: replaceOriginal ? imagePath : null, filter: filter);
     }).toList(growable: false);
     await _replace(doc.copyWith(pages: pages));
   }

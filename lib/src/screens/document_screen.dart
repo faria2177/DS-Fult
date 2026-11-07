@@ -135,7 +135,8 @@ class _DocumentScreenState extends State<DocumentScreen> {
     setState(() => _busy = true);
     try {
       final bytes = await File(paths.first).readAsBytes();
-      await widget.store.replacePageBytes(doc.id, doc.pages[_index].id, bytes);
+      await widget.store.replacePageBytes(doc.id, doc.pages[_index].id, bytes,
+          replaceOriginal: true);
     } catch (error) {
       _message(error);
     } finally {
@@ -320,7 +321,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
     child: ListView(scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       children: [
-        for (final filter in ScanFilter.values)
+        for (final filter in _referenceFilters)
           Padding(padding: const EdgeInsets.only(right: 8),
             child: InkWell(onTap: _busy ? null : () => _process(filter),
               child: Container(width: 84, padding: const EdgeInsets.all(3),
@@ -332,8 +333,9 @@ class _DocumentScreenState extends State<DocumentScreen> {
                 ),
                 child: Column(children: [
                   Expanded(child: Image.file(File(doc.pages[_index].path),
+                      cacheWidth: 190,
                       fit: BoxFit.cover, width: double.infinity)),
-                  Text(filter.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  Text(_filterTitle(filter), maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white, fontSize: 10)),
                 ]),
               ),
@@ -383,6 +385,29 @@ class _DocumentScreenState extends State<DocumentScreen> {
     if (doc == null) return;
     await ImageToolOperations.shareCollage(doc);
   }
+
+  static const _referenceFilters = <ScanFilter>[
+    ScanFilter.original,
+    ScanFilter.lighten,
+    ScanFilter.enhance,
+    ScanFilter.magicColor,
+    ScanFilter.noWatermark,
+    ScanFilter.shadowFree,
+    ScanFilter.noHandwriting,
+    ScanFilter.blackWhite,
+    ScanFilter.auto,
+    ScanFilter.grayscale,
+    ScanFilter.eco,
+    ScanFilter.invert,
+  ];
+
+  String _filterTitle(ScanFilter filter) => switch (filter) {
+    ScanFilter.magicColor => 'Magic Pro',
+    ScanFilter.shadowFree => 'No Shadow',
+    ScanFilter.noWatermark => 'No Watermark',
+    ScanFilter.noHandwriting => 'No Handwriting',
+    _ => filter.label,
+  };
 
   Future<void> _mosaic() async {
     final doc = _document;

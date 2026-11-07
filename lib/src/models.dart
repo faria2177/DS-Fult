@@ -31,10 +31,11 @@ class ScanPage {
   final String recognizedText;
   final String title;
 
-  ScanPage copyWith({String? path, String? filter, String? recognizedText, String? title}) => ScanPage(
+  ScanPage copyWith({String? path, String? originalPath,
+      String? filter, String? recognizedText, String? title}) => ScanPage(
         id: id,
         path: path ?? this.path,
-        originalPath: originalPath,
+        originalPath: originalPath ?? this.originalPath,
         filter: filter ?? this.filter,
         recognizedText: recognizedText ?? this.recognizedText,
         title: title ?? this.title,

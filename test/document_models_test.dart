@@ -26,6 +26,9 @@ void main() {
     expect(loaded.lockHash, 'example-hash');
     final titled = loaded.pages.first.copyWith(title: 'Back');
     expect(ScanPage.fromJson(titled.toJson()).title, 'Back');
+    final retaken = titled.copyWith(path: '/tmp/new.jpg',
+        originalPath: '/tmp/new.jpg');
+    expect(retaken.originalPath, '/tmp/new.jpg');
   });
 
   test('two-sided kinds have a documented two-image limit', () {

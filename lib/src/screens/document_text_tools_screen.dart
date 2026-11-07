@@ -81,9 +81,11 @@ class _DocumentTextToolsScreenState extends State<DocumentTextToolsScreen> {
     body: FutureBuilder<String>(
       future: _text,
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Padding(
-          padding: const EdgeInsets.all(20), child: Text('${snapshot.error}'),
-        ));
+        if (snapshot.hasError) {
+          return Center(child: Padding(
+            padding: const EdgeInsets.all(20), child: Text('${snapshot.error}'),
+          ));
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: dsTeal));
         }

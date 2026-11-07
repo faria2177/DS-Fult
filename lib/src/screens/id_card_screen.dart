@@ -12,7 +12,7 @@ import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
 import 'crop_screen.dart';
-import 'document_screen.dart';
+import 'document_detail_screen.dart';
 import 'id_card_templates.dart';
 
 class IdCardScreen extends StatefulWidget {
@@ -144,7 +144,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
       );
       if (!mounted) return;
       await Navigator.push<void>(context, MaterialPageRoute(
-        builder: (_) => DocumentScreen(store: widget.store, documentId: document.id),
+        builder: (_) => DocumentDetailScreen(store: widget.store,
+            documentId: document.id),
       ));
       if (mounted) Navigator.pop(context);
     } catch (error) {
