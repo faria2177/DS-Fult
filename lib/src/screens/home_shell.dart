@@ -9,6 +9,7 @@ import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/docx_export.dart';
 import '../services/image_tool_operations.dart';
+import '../services/pptx_export.dart';
 import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
@@ -18,6 +19,7 @@ import 'id_card_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'qr_code_screen.dart';
+import 'scan_code_screen.dart';
 import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
 
@@ -274,8 +276,7 @@ class _HomeShellState extends State<HomeShell> {
             () => _notReady('Passport Photo Maker')),
         _Tool('Photo Translation', Icons.translate_outlined,
             () => _notReady('Photo Translation')),
-        _Tool('Scan Code', Icons.qr_code_scanner_outlined,
-            () => _notReady('Scan Code')),
+        _Tool('Scan Code', Icons.qr_code_scanner_outlined, _scanCode),
       ],
       'Convert': [
         _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
@@ -283,7 +284,7 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Text to PDF', Icons.text_snippet_outlined, _textToPdf),
         _Tool('To Word', Icons.description_outlined, _exportWord),
         _Tool('To Excel', Icons.table_chart_outlined, _exportExcel),
-        _Tool('To PPT', Icons.slideshow_outlined, () => _notReady('To PPT')),
+        _Tool('To PPT', Icons.slideshow_outlined, _exportPptx),
         _Tool('PDF to Images', Icons.collections_outlined, _shareDocumentImages),
         _Tool('PDF to Long Image', Icons.panorama_vertical_outlined, _shareLongImage),
       ],
@@ -518,6 +519,45 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _exportWord() => _exportOffice(toExcel: false);
 
   Future<void> _exportExcel() => _exportOffice(toExcel: true);
+
+  Future<void> _scanCode() async {
+    await Navigator.push<void>(context,
+        MaterialPageRoute(builder: (_) => const ScanCodeScreen()));
+  }
+
+  Future<void> _exportPptx() async {
+    final document = await _chooseDocument();
+    if (document == null || !mounted) return;
+    showDialog<void>(context: context, barrierDismissible: false,
+      builder: (_) => const PopScope(canPop: false, child: AlertDialog(
+        title: Text('Creating PowerPoint'),
+        content: Row(children: [
+          CircularProgressIndicator(),
+          SizedBox(width: 18),
+          Expanded(child: Text('Adding scanned pages to slides…')),
+        ]),
+      )),
+    );
+    File? file;
+    Object? failure;
+    try {
+      file = await PptxExport.createFile(document);
+    } catch (error) {
+      failure = error;
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+    if (!mounted) return;
+    if (failure != null) {
+      _message('To PPT failed: $failure');
+    } else if (file != null) {
+      try {
+        await PptxExport.shareFile(file, document.name);
+      } catch (error) {
+        _message('Could not share PowerPoint: $error');
+      }
+    }
+  }
 
   Future<void> _exportOffice({required bool toExcel}) async {
     final document = await _chooseDocument();
