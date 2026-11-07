@@ -15,11 +15,13 @@ class SignatureScreen extends StatefulWidget {
     required this.store,
     required this.documentId,
     required this.pageId,
+    this.brushMode = false,
   });
 
   final DocumentStore store;
   final String documentId;
   final String pageId;
+  final bool brushMode;
 
   @override
   State<SignatureScreen> createState() => _SignatureScreenState();
@@ -27,10 +29,13 @@ class SignatureScreen extends StatefulWidget {
 
 class _SignatureScreenState extends State<SignatureScreen> {
   final List<List<Offset>> _strokes = [];
+  final List<Color> _strokeColors = [];
+  final List<double> _strokeScales = [];
   List<Offset>? _activeStroke;
   String? _path;
   double _aspectRatio = 0.72;
   Color _ink = Colors.black;
+  double _strokeScale = .006;
   bool _busy = false;
 
   @override
@@ -79,14 +84,22 @@ class _SignatureScreenState extends State<SignatureScreen> {
     final active = _activeStroke;
     if (active == null) return;
     setState(() {
-      if (active.isNotEmpty) _strokes.add(List.of(active));
+      if (active.isNotEmpty) {
+        _strokes.add(List.of(active));
+        _strokeColors.add(_ink);
+        _strokeScales.add(_strokeScale);
+      }
       _activeStroke = null;
     });
   }
 
   void _undo() {
     if (_busy || _strokes.isEmpty) return;
-    setState(() => _strokes.removeLast());
+    setState(() {
+      _strokes.removeLast();
+      _strokeColors.removeLast();
+      _strokeScales.removeLast();
+    });
   }
 
   Future<void> _save() async {
@@ -98,6 +111,8 @@ class _SignatureScreenState extends State<SignatureScreen> {
       final encoded = await SignatureComposer.composite(
         bytes, _strokes,
         inkColor: _ink,
+        strokeColors: _strokeColors,
+        strokeScales: _strokeScales,
       );
       await widget.store.replacePageBytes(
         widget.documentId,
@@ -120,22 +135,30 @@ class _SignatureScreenState extends State<SignatureScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Sign Document'),
+      title: Text(widget.brushMode ? 'Brush' : 'Sign Document'),
       actions: [
         IconButton(onPressed: _strokes.isEmpty || _busy ? null : _undo,
             tooltip: 'Undo last stroke', icon: const Icon(Icons.undo)),
         IconButton(onPressed: _strokes.isEmpty || _busy ? null :
-            () => setState(() => _strokes.clear()),
+            () => setState(() {
+              _strokes.clear();
+              _strokeColors.clear();
+              _strokeScales.clear();
+            }),
             tooltip: 'Clear signature', icon: const Icon(Icons.delete_outline)),
       ],
     ),
     body: SafeArea(child: Column(children: [
       if (_busy) const LinearProgressIndicator(),
-      const Padding(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: Text('Draw your signature on the page with a finger. '
-            'Changes are saved only when you tap Apply.',
-            textAlign: TextAlign.center, style: TextStyle(color: dsMuted)),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Text(widget.brushMode
+            ? 'Draw directly on the page. Choose ink color and brush size. '
+                'Every stroke keeps its own settings.'
+            : 'Draw your signature on the page with a finger. '
+                'Changes are saved only when you tap Apply.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: dsMuted)),
       ),
       Expanded(child: Center(child: _path == null
           ? const CircularProgressIndicator()
@@ -158,6 +181,10 @@ class _SignatureScreenState extends State<SignatureScreen> {
                     CustomPaint(painter: SignaturePainter(
                       strokes: [..._strokes, ?_activeStroke],
                       inkColor: _ink,
+                      strokeColors: [..._strokeColors,
+                        if (_activeStroke != null) _ink],
+                      strokeScales: [..._strokeScales,
+                        if (_activeStroke != null) _strokeScale],
                     )),
                   ]),
                 ),
@@ -168,7 +195,10 @@ class _SignatureScreenState extends State<SignatureScreen> {
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Text('Ink:'),
           const SizedBox(width: 14),
-          for (final color in [Colors.black, const Color(0xFF1244A2)])
+          for (final color in widget.brushMode
+              ? [Colors.black, const Color(0xFF1244A2), Colors.red,
+                  Colors.green, Colors.white]
+              : [Colors.black, const Color(0xFF1244A2)])
             Padding(
               padding: const EdgeInsets.only(right: 10),
               child: InkWell(
@@ -178,19 +208,32 @@ class _SignatureScreenState extends State<SignatureScreen> {
                   backgroundColor: color,
                   radius: _ink == color ? 19 : 16,
                   child: _ink == color
-                      ? const Icon(Icons.check, size: 18, color: Colors.white)
+                      ? Icon(Icons.check, size: 18,
+                          color: color == Colors.white ? Colors.black : Colors.white)
                       : null,
                 ),
               ),
             ),
         ]),
       ),
+      if (widget.brushMode)
+        Row(children: [
+          const SizedBox(width: 18),
+          const Text('Brush size'),
+          Expanded(child: Slider(
+            value: _strokeScale,
+            min: .002, max: .025,
+            activeColor: dsTeal,
+            onChanged: (size) => setState(() => _strokeScale = size),
+          )),
+        ]),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
         child: FilledButton.icon(
           onPressed: _busy || _strokes.isEmpty ? null : _save,
           icon: const Icon(Icons.check),
-          label: Text(_busy ? 'Applying…' : 'Apply Signature'),
+          label: Text(_busy ? 'Applying…' : widget.brushMode
+              ? 'Apply Brush' : 'Apply Signature'),
           style: FilledButton.styleFrom(backgroundColor: dsTeal,
               minimumSize: const Size(double.infinity, 50)),
         ),
@@ -202,26 +245,34 @@ class _SignatureScreenState extends State<SignatureScreen> {
 /// One painter is used for the on-screen preview and final full-resolution
 /// output. Coordinates are always normalized to the original page dimensions.
 class SignaturePainter extends CustomPainter {
-  const SignaturePainter({required this.strokes, required this.inkColor});
+  const SignaturePainter({required this.strokes, required this.inkColor,
+      this.strokeColors, this.strokeScales});
 
   final List<List<Offset>> strokes;
   final Color inkColor;
+  final List<Color>? strokeColors;
+  final List<double>? strokeScales;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final pen = Paint()
-      ..color = inkColor
-      ..strokeWidth = (size.shortestSide * .006).clamp(1.5, 18.0).toDouble()
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    for (final stroke in strokes) {
+    for (var index = 0; index < strokes.length; index++) {
+      final stroke = strokes[index];
       if (stroke.isEmpty) continue;
+      final color = strokeColors != null && index < strokeColors!.length
+          ? strokeColors![index] : inkColor;
+      final scale = strokeScales != null && index < strokeScales!.length
+          ? strokeScales![index] : .006;
+      final pen = Paint()
+        ..color = color
+        ..strokeWidth = (size.shortestSide * scale).clamp(1.5, 75.0).toDouble()
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
       final first = Offset(stroke.first.dx * size.width,
           stroke.first.dy * size.height);
       final path = Path()..moveTo(first.dx, first.dy);
       if (stroke.length == 1) {
-        canvas.drawCircle(first, pen.strokeWidth / 2, Paint()..color = inkColor);
+        canvas.drawCircle(first, pen.strokeWidth / 2, Paint()..color = color);
       } else {
         for (final point in stroke.skip(1)) {
           path.lineTo(point.dx * size.width, point.dy * size.height);
@@ -233,7 +284,8 @@ class SignaturePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(SignaturePainter old) =>
-      old.strokes != strokes || old.inkColor != inkColor;
+      old.strokes != strokes || old.inkColor != inkColor ||
+      old.strokeColors != strokeColors || old.strokeScales != strokeScales;
 }
 
 class SignatureComposer {
@@ -242,6 +294,8 @@ class SignatureComposer {
     Uint8List original,
     List<List<Offset>> strokes, {
     Color inkColor = Colors.black,
+    List<Color>? strokeColors,
+    List<double>? strokeScales,
   }) async {
     final codec = await ui.instantiateImageCodec(original);
     final frame = await codec.getNextFrame();
@@ -251,7 +305,8 @@ class SignatureComposer {
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       canvas.drawImage(source, Offset.zero, Paint());
-      SignaturePainter(strokes: strokes, inkColor: inkColor)
+      SignaturePainter(strokes: strokes, inkColor: inkColor,
+          strokeColors: strokeColors, strokeScales: strokeScales)
           .paint(canvas, size);
       final output = await recorder.endRecording()
           .toImage(source.width, source.height);

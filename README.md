@@ -3,6 +3,21 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Watermark and Brush editing — v0.5.4
+
+- **Edit → Images → Add Watermark** opens a dedicated image editing screen,
+  not PDF Tools. Users can choose watermark text, colour, opacity, size,
+  and top-left/center/bottom-right position. The text is applied to a new
+  full-resolution PNG on the current page, with the untouched original
+  retained for Compare/Original. All processing happens on the device.
+- **Edit → Images → Brush** opens a freehand annotation tool with ink colours,
+  adjustable width, undo, and clear. Every completed stroke retains its
+  own chosen ink colour and width, including in the saved image. The **Sign**
+  action remains a separate, simpler signature workflow.
+- Composer tests verify the watermark pixels, unchanged background and
+  independent red/blue brush strokes. There is still no Ask AI button or
+  cloud document handling.
+
 ## Document detail, More, editor and sharing reference — v0.5.3
 
 - New dark document detail screen opens scanned pages as a two-column grid,

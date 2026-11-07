@@ -19,6 +19,7 @@ import 'image_text_editor_screen.dart';
 import 'mosaic_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'signature_screen.dart';
+import 'watermark_screen.dart';
 
 class DocumentScreen extends StatefulWidget {
   const DocumentScreen({super.key, required this.store, required this.documentId,
@@ -121,6 +122,25 @@ class _DocumentScreenState extends State<DocumentScreen> {
     if (doc == null || doc.pages.isEmpty) return;
     await Navigator.push<bool>(context, MaterialPageRoute(
       builder: (_) => SignatureScreen(store: widget.store,
+          documentId: doc.id, pageId: doc.pages[_index].id),
+    ));
+  }
+
+  Future<void> _brush() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => SignatureScreen(store: widget.store,
+          documentId: doc.id, pageId: doc.pages[_index].id,
+          brushMode: true),
+    ));
+  }
+
+  Future<void> _watermark() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => WatermarkScreen(store: widget.store,
           documentId: doc.id, pageId: doc.pages[_index].id),
     ));
   }
@@ -356,9 +376,9 @@ class _DocumentScreenState extends State<DocumentScreen> {
         _editorTool(Icons.camera_alt_outlined, 'Retake', _retake),
         _editorTool(Icons.draw_outlined, 'Sign', _sign),
         _editorTool(Icons.title, 'Add Text', _editOnImage),
-        _editorTool(Icons.brush_outlined, 'Brush', _sign),
+        _editorTool(Icons.brush_outlined, 'Brush', _brush),
         _editorTool(Icons.blur_on_outlined, 'Mosaic', _mosaic),
-        _editorTool(Icons.branding_watermark_outlined, 'Add Watermark', _pdfTools),
+        _editorTool(Icons.branding_watermark_outlined, 'Add Watermark', _watermark),
       ],
       1 => <Widget>[
         _editorTool(Icons.grid_view_outlined, 'Collage', _shareCollage),
