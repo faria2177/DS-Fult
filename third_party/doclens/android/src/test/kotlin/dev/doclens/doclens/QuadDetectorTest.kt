@@ -80,6 +80,31 @@ class QuadDetectorTest {
         assertTrue(abs(quad.bottomRight.y - 192f / height) < .035f)
     }
 
+    @Test
+    fun whiteSheetOnBlueClothKeepsCornersWhenLumaEdgesAreWeak() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFF2E62B7.toInt() }
+        for (y in 62 until 348) for (x in 69 until 263) {
+            // Include lightly shaded paper and some dirty marks, as with a
+            // real white document on a blue tablecloth.
+            val paper = if ((x + y) % 19 == 0) 0xFFCBC9C3.toInt()
+                else 0xFFECECE8.toInt()
+            pixels[y * width + x] = paper
+        }
+        val quad = assertNotNull(QuadDetector.detectNeutralPaper(pixels, width, height))
+        assertTrue(abs(quad.topLeft.x - 69f / width) < .035f)
+        assertTrue(abs(quad.topLeft.y - 62f / height) < .035f)
+        assertTrue(abs(quad.bottomRight.x - 262f / width) < .035f)
+        assertTrue(abs(quad.bottomRight.y - 347f / height) < .035f)
+    }
+
+    @Test
+    fun whiteDeskWithoutColourContrastDoesNotInventPage() {
+        val pixels = IntArray(320 * 240) { 0xFFE7E5E2.toInt() }
+        assertNull(QuadDetector.detectNeutralPaper(pixels, 320, 240))
+    }
+
     private fun fill(
         image: ByteArray,
         width: Int,

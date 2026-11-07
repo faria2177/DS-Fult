@@ -82,8 +82,9 @@ object QuadDetector {
         height: Int,
         darker: Boolean,
         offset: Int,
-    ): Candidate? {
-        val mask = buildMask(luma, darker, offset)
+    ): Candidate? = analyzeMask(buildMask(luma, darker, offset), width, height)
+
+    private fun analyzeMask(mask: BooleanArray, width: Int, height: Int): Candidate? {
         var best: Candidate? = null
         for (component in largestComponents(mask, width, height)) {
             val boundary = traceBoundary(component, width, height) ?: continue
@@ -100,6 +101,44 @@ object QuadDetector {
             }
         }
         return best
+    }
+
+    /**
+     * Still-image safety net for a pale page on a saturated surface (for
+     * example, the white sheet on blue cloth in the supplied Add Pages video).
+     * Its paper/background contrast is largely chromatic rather than luma,
+     * so an ordinary mean-luma threshold can miss the page entirely.
+     *
+     * Only enable this mask when a meaningful share of the scene is genuinely
+     * colourful. On a white/grey desk its mask would include the whole image;
+     * that scene must continue through the regular contour/luma detectors.
+     * This is deliberately pixel-only and unit-testable without Android/JNI.
+     */
+    internal fun detectNeutralPaper(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+    ): Quad? {
+        if (width < 32 || height < 32 || pixels.size != width * height) return null
+        val mask = BooleanArray(pixels.size)
+        var colouredBackgroundPixels = 0
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            val high = max(r, max(g, b))
+            val low = min(r, min(g, b))
+            val spread = high - low
+            if (high >= 60 && spread * 100 >= high * 37) {
+                colouredBackgroundPixels++
+            }
+            // Permit mild yellow/grey paper and photographed shadows; exclude
+            // the saturated blue/green/red backdrop even if it is bright.
+            mask[i] = high >= 106 && spread * 100 <= high * 27
+        }
+        if (colouredBackgroundPixels < pixels.size / 10) return null
+        return analyzeMask(mask, width, height)?.quad
     }
 
     /**
@@ -229,10 +268,11 @@ object QuadDetector {
         polarity: DetectionPolarity = DetectionPolarity.BRIGHTER,
         thresholdOffset: Int = DEFAULT_THRESHOLD_OFFSET,
     ): Quad? {
-        // Use the working reference pipeline for full-colour still images,
-        // including gallery imports. Retain this inexpensive segmenter as a
-        // fallback for poorly lit or otherwise unsupported images.
-        OpenCvBoundaryAdapter.detectStill(bitmap)?.let { return it }
+        // The reference OpenCV pipeline is primary, including gallery imports.
+        // Keep a chroma-aware fallback for pale documents on coloured fabric;
+        // without it a missed still quad silently saves the entire camera
+        // frame (the incorrect third page in the supplied video).
+        val cvQuad = OpenCvBoundaryAdapter.detectStill(bitmap)
         val w = bitmap.width
         val h = bitmap.height
         val scale = min(1.0, 512.0 / max(w, h))
@@ -246,6 +286,22 @@ object QuadDetector {
         } finally {
             if (small !== bitmap) small.recycle()
         }
+        val neutralQuad = detectNeutralPaper(pixels, dw, dh)
+        if (cvQuad != null) {
+            if (neutralQuad != null) {
+                fun area(quad: Quad): Float {
+                    val pts = listOf(quad.topLeft, quad.topRight,
+                        quad.bottomRight, quad.bottomLeft)
+                    return polygonArea(pts)
+                }
+                // An inward contour on a crumpled/stacked sheet can clip the
+                // outside page. Only replace it when the colour-separated
+                // page is substantially larger; normal accurate CV crops win.
+                if (area(neutralQuad) > area(cvQuad) * 1.30f) return neutralQuad
+            }
+            return cvQuad
+        }
+        if (neutralQuad != null) return neutralQuad
         val luma = ByteArray(dw * dh)
         for (i in pixels.indices) {
             val p = pixels[i]

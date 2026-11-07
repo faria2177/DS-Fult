@@ -1010,8 +1010,14 @@ class _DoclensScreenState extends State<DoclensScreen> {
             editCornersLabel: widget.editCornersLabel,
             useLabel: useLabel,
             enableEditCorners: widget.enableEditCorners,
-            openCornerEditorInitially: widget.multiPage &&
-                (widget.referenceSettings?.adjustAfterEachScan ?? false),
+            autoCropRequested: widget.enablePerspectiveWarp ??
+                widget.config.enablePerspectiveWarp,
+            openCornerEditorInitially: widget.enableEditCorners && (
+                (widget.multiPage &&
+                    (widget.referenceSettings?.adjustAfterEachScan ?? false)) ||
+                ((widget.enablePerspectiveWarp ??
+                    widget.config.enablePerspectiveWarp) &&
+                    result.croppedImagePath == null)),
             headerBuilder: widget.reviewHeaderBuilder,
             imageBuilder: widget.reviewImageBuilder,
             emptyBuilder: widget.reviewEmptyBuilder,
@@ -1446,6 +1452,7 @@ class DoclensReviewScreen extends StatefulWidget {
     this.editCornersLabel = 'Edit corners',
     this.useLabel = 'Use',
     this.enableEditCorners = true,
+    this.autoCropRequested = false,
     this.openCornerEditorInitially = false,
     this.headerBuilder,
     this.imageBuilder,
@@ -1466,6 +1473,8 @@ class DoclensReviewScreen extends StatefulWidget {
   final String editCornersLabel;
   final String useLabel;
   final bool enableEditCorners;
+  /// True when a raw-only review means automatic crop could not be completed.
+  final bool autoCropRequested;
   final bool openCornerEditorInitially;
 
   /// Replaces the top header (back button + title). The default renders
@@ -1611,6 +1620,23 @@ class _DoclensReviewScreenState extends State<DoclensReviewScreen> {
         child: Column(
           children: [
             header,
+            if (widget.autoCropRequested && _result.croppedImagePath == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF422F19),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Text(
+                    'Auto-crop could not confirm all four corners. '
+                    'Adjust corners before saving to remove the background.',
+                    style: TextStyle(color: Color(0xFFFFDCA5), fontSize: 12),
+                  ),
+                ),
+              ),
             Expanded(child: body),
             actions,
           ],

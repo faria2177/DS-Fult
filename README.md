@@ -3,6 +3,26 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Repeat-scan crop reliability — v0.5.6
+
+- The supplied 38-second video exposed a third **Add Pages** capture that
+  retained the blue cloth and wide margins despite the first two pages being
+  cropped. CameraX now tests a second still-image candidate for **neutral,
+  bright paper surrounded by a saturated-colour background**. This fallback
+  uses colour separation rather than luma alone, and does not guess a page
+  when the background is an ordinary white/grey surface.
+- If a valid colour-separated page is substantially larger than the original
+  OpenCV candidate, prefer the complete page to avoid inward clipping.
+  The normal OpenCV pipeline remains authoritative for ordinary documents.
+- With Auto Crop enabled, a capture without a successful crop now opens
+  **Adjust corners** for the user automatically and warns in Preview that
+  the full raw image still contains the background. It no longer silently
+  presents a non-cropped page as though automatic cropping succeeded.
+- Native regression tests cover pale, slightly textured paper on blue fabric
+  and ensure uniform neutral backgrounds do not generate fake document edges.
+  Existing saved files are not altered; physical-device testing is still
+  needed for unusual lighting, glare and stacked pages.
+
 ## Files multi-selection and management — v0.5.5
 
 - **Files** now has the video-reference list/grid toggle, date/name/page-count
