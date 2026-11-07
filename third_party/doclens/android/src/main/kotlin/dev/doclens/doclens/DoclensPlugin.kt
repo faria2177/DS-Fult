@@ -1,9 +1,16 @@
 package dev.doclens.doclens
 
 import android.Manifest
+import android.content.ContentValues
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.ImageFormat
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.ActivityCompat
@@ -16,6 +23,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 import io.flutter.view.TextureRegistry
+import java.io.File
 import java.util.concurrent.Executors
 
 private const val CAMERA_PERMISSION_REQUEST = 0x4F4E
@@ -28,6 +36,7 @@ class DoclensPlugin :
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
+    private lateinit var levelChannel: EventChannel
     private lateinit var textureRegistry: TextureRegistry
     private lateinit var context: Context
 
@@ -40,6 +49,7 @@ class DoclensPlugin :
     private var session: ScannerSession? = null
     private var pendingPermissionInit: (() -> Unit)? = null
     private var nativeUIScanner: NativeUIScanner? = null
+    private var levelStream: DeviceLevelStream? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -48,11 +58,17 @@ class DoclensPlugin :
         methodChannel.setMethodCallHandler(this)
         eventChannel = EventChannel(binding.binaryMessenger, "doclens/events")
         eventChannel.setStreamHandler(eventStream)
+        levelStream = DeviceLevelStream(context)
+        levelChannel = EventChannel(binding.binaryMessenger, "doclens/level")
+        levelChannel.setStreamHandler(levelStream)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
+        levelChannel.setStreamHandler(null)
+        levelStream?.dispose()
+        levelStream = null
         session?.dispose()
         session = null
         backgroundExecutor.shutdown()
@@ -101,6 +117,43 @@ class DoclensPlugin :
                 session?.focus(x, y)
                 result.success(null)
             }
+            "getCaptureResolutions" -> {
+                try {
+                    val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                    val cameraId = manager.cameraIdList.firstOrNull { id ->
+                        manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) ==
+                            CameraCharacteristics.LENS_FACING_BACK
+                    }
+                    val sizes = if (cameraId == null) emptyList() else {
+                        val map = manager.getCameraCharacteristics(cameraId)
+                            .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                        map?.getOutputSizes(ImageFormat.JPEG)?.toList() ?: emptyList()
+                    }
+                    // The scanner retains JPEG pixels up to 4096 px on the long
+                    // side. Do not offer high-megapixel modes we would downscale.
+                    val supported = sizes.filter { size ->
+                        size.width >= 1600 && size.height >= 1000 &&
+                            size.width <= 4096 && size.height <= 4096 &&
+                            size.width.toLong() * size.height <= 13000000
+                    }.distinctBy { size -> size.width to size.height }
+                        .sortedByDescending { size -> size.width.toLong() * size.height }
+                        .map { size -> listOf(size.width, size.height) }
+                    result.success(supported)
+                } catch (_: Exception) {
+                    result.success(emptyList<List<Int>>())
+                }
+            }
+            "saveImageToGallery" -> {
+                val imagePath = call.argument<String>("imagePath")
+                if (imagePath == null) {
+                    result.error("invalid_image", "Missing image path", null)
+                } else {
+                    backgroundExecutor.execute {
+                        val saved = saveImageToGallery(imagePath)
+                        mainHandler.post { result.success(saved) }
+                    }
+                }
+            }
             "scanWithNativeUI" -> handleNativeUIScan(call, result)
             "detectInImage" -> handleDetectInImage(call, result)
             else -> result.notImplemented()
@@ -120,6 +173,36 @@ class DoclensPlugin :
             jpegQuality = call.argument<Int>("jpegQuality") ?: 100,
             result = result,
         )
+    }
+
+    private fun saveImageToGallery(path: String): Boolean {
+        // Scoped-storage insertion avoids requesting broad media permissions.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        val source = File(path)
+        if (!source.isFile) return false
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME,
+                "DocScanner_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH,
+                Environment.DIRECTORY_PICTURES + "/DocScanner")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: return false
+        return try {
+            resolver.openOutputStream(uri)?.use { stream ->
+                source.inputStream().use { input -> input.copyTo(stream) }
+            } ?: throw IllegalStateException("Cannot open gallery output")
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            true
+        } catch (_: Exception) {
+            resolver.delete(uri, null, null)
+            false
+        }
     }
 
     private fun handleWarp(call: MethodCall, result: MethodChannel.Result) {

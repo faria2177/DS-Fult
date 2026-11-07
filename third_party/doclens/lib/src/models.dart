@@ -284,6 +284,7 @@ class ScannerConfig {
     this.autoOrientation = AutoOrientation.none,
     this.outputFormat = ImageFormat.jpeg,
     this.captureResolution = Resolution.high,
+    this.captureSize,
     // Camera
     this.initialFlashMode = FlashMode.auto,
     this.initialLens = CameraLens.back,
@@ -430,6 +431,10 @@ class ScannerConfig {
   /// preset where supported.
   final Resolution captureResolution;
 
+  /// Optional exact still-image size, e.g. `4064x3048`, if CameraX supports it.
+  /// When null CameraX chooses its normal capture resolution.
+  final String? captureSize;
+
   // Camera
 
   /// Initial flash / torch mode the camera starts in.
@@ -504,6 +509,7 @@ class ScannerConfig {
         'autoOrientation': autoOrientation.name,
         'outputFormat': outputFormat.name,
         'captureResolution': captureResolution.name,
+        'captureSize': captureSize,
         'initialFlashMode': initialFlashMode.name,
         'initialLens': initialLens.name,
         'enableTapToFocus': enableTapToFocus,

@@ -4,7 +4,10 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
-enum ScanFilter { original, auto, enhance, shadowFree, magicColor, grayscale, blackWhite }
+enum ScanFilter {
+  original, auto, enhance, shadowFree, magicColor, grayscale, blackWhite,
+  lighten, noWatermark, noHandwriting, eco, invert,
+}
 
 extension ScanFilterName on ScanFilter {
   String get label => switch (this) {
@@ -15,6 +18,11 @@ extension ScanFilterName on ScanFilter {
         ScanFilter.magicColor => 'Magic Color',
         ScanFilter.grayscale => 'Grayscale',
         ScanFilter.blackWhite => 'B&W',
+        ScanFilter.lighten => 'Lighten',
+        ScanFilter.noWatermark => 'No Watermark (experimental)',
+        ScanFilter.noHandwriting => 'No Handwriting (experimental)',
+        ScanFilter.eco => 'Eco',
+        ScanFilter.invert => 'Invert',
       };
 }
 
@@ -139,11 +147,14 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
           break;
         case ScanFilter.auto:
         case ScanFilter.enhance:
-          final blend = filter == ScanFilter.auto ? .72 : 1.0;
+          final blend = filter == ScanFilter.auto ? .48 : .68;
           final relativePaper = (lum / math.max(1, localPaper)).clamp(0.0, 1.0);
-          final lift = backgroundLift * relativePaper * relativePaper * .25;
-          final scale = 1 + (flattenGain - 1) * blend;
-          // Local illumination division maintains ink and stamp contrast.
+          final lift = backgroundLift * relativePaper * relativePaper * .08;
+          // Do not turn a dark coloured surface behind a blank ID card into
+          // bright paper. Reserve strong illumination flattening for the
+          // explicit No Shadow preset.
+          final safeFlatten = flattenGain.clamp(.90, 1.35);
+          final scale = 1 + (safeFlatten - 1) * blend;
           image.setPixelRgb(
             x,
             y,
@@ -174,6 +185,37 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
           final threshold = math.max(otsu * .75, localPaper - 24);
           final value = lum >= threshold ? 255 : 0;
           image.setPixelRgb(x, y, value, value, value);
+        case ScanFilter.lighten:
+          // Preserve dark strokes instead of stretching the highlights to pure white.
+          image.setPixelRgb(x, y, _byte(r * .94 + 20),
+            _byte(g * .94 + 20), _byte(b * .94 + 20));
+        case ScanFilter.noWatermark:
+          // Best-effort faint-background cleaning. This is NOT a generic AI
+          // logo/text remover; dark ink and prominent watermarks remain.
+          final tint = math.max(r, math.max(g, b)) - math.min(r, math.min(g, b));
+          final closeToPaper = (localPaper - lum).abs() < 22 && tint < 35;
+          final cleaned = closeToPaper ? _byte(localPaper) : null;
+          image.setPixelRgb(x, y,
+            cleaned ?? _byte(r), cleaned ?? _byte(g), cleaned ?? _byte(b));
+        case ScanFilter.noHandwriting:
+          // Removes saturated coloured pen strokes on a light page. A fully
+          // accurate handwriting/print distinction requires a segmentation model.
+          final tint = math.max(r, math.max(g, b)) - math.min(r, math.min(g, b));
+          final colouredInk = tint > 58 && lum < 195 && localPaper > 155;
+          final paper = _byte(localPaper);
+          image.setPixelRgb(x, y,
+            colouredInk ? paper : _byte(r),
+            colouredInk ? paper : _byte(g),
+            colouredInk ? paper : _byte(b));
+        case ScanFilter.eco:
+          // Toner-saving monochrome: keep only strong strokes, leave a clean
+          // white background and use dark grey rather than full black.
+          final ink = lum < math.min(otsu, localPaper - 40);
+          final value = ink ? 45 : 255;
+          image.setPixelRgb(x, y, value, value, value);
+        case ScanFilter.invert:
+          image.setPixelRgb(x, y, _byte(255 - r),
+            _byte(255 - g), _byte(255 - b));
       }
     }
   }

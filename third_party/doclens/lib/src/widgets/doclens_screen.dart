@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'reference_scan_chrome.dart';
+import 'reference_scan_settings.dart';
 
 import '../controller.dart';
 import '../fallback/file_io.dart';
@@ -139,6 +140,7 @@ class DoclensScreen extends StatefulWidget {
     this.enableTapToFocus,
     this.enablePinchToZoom,
     this.detectionThrottleHz,
+    this.captureSize,
     // --- UI knobs ---
     this.accentColor,
     this.warningColor,
@@ -158,6 +160,13 @@ class DoclensScreen extends StatefulWidget {
     this.onImportImages,
     this.onOpenIdCards,
     this.onManualScan,
+    this.referenceSettings,
+    this.referenceCameraModes = const [],
+    this.onReferenceMoreSettings,
+    this.referenceDoubleFocus = false,
+    this.onReferenceShutterTap,
+    this.onReferenceCaptureOverride,
+    this.referenceLevel = Offset.zero,
     // --- multi-page / batch ---
     this.multiPage = false,
     this.maxPages,
@@ -301,6 +310,9 @@ class DoclensScreen extends StatefulWidget {
   /// comfortably on A12+; Android's Sobel detector is fine up to ~20 Hz.
   final int? detectionThrottleHz;
 
+  /// Optional hardware-supported JPEG capture size (`widthxheight`).
+  final String? captureSize;
+
   /// Primary brand colour. Tints:
   /// - the detected-quad outline when status is `aligned` or
   ///   `confirming` (brighter when about to capture),
@@ -388,6 +400,13 @@ class DoclensScreen extends StatefulWidget {
   final VoidCallback? onImportImages;
   final VoidCallback? onOpenIdCards;
   final VoidCallback? onManualScan;
+  final ReferenceScanSettings? referenceSettings;
+  final List<ScanCameraMode> referenceCameraModes;
+  final VoidCallback? onReferenceMoreSettings;
+  final bool referenceDoubleFocus;
+  final VoidCallback? onReferenceShutterTap;
+  final VoidCallback? onReferenceCaptureOverride;
+  final Offset referenceLevel;
 
   /// When `true`, the scanner stays open after each accepted page and
   /// accumulates them into a batch instead of popping on the first
@@ -847,6 +866,7 @@ class DoclensMultiScreen extends StatelessWidget {
 class _DoclensScreenState extends State<DoclensScreen> {
   late final DoclensController _controller =
       DoclensController(config: _resolvedConfig());
+  final ReferenceScanSettings _fallbackReferenceSettings = ReferenceScanSettings();
   bool _initFailed = false;
   String? _initError;
 
@@ -888,6 +908,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
       autoOrientation: widget.autoOrientation ?? c.autoOrientation,
       outputFormat: c.outputFormat,
       captureResolution: c.captureResolution,
+      captureSize: widget.captureSize ?? c.captureSize,
       // camera
       initialFlashMode: widget.initialFlashMode ?? c.initialFlashMode,
       initialLens: widget.initialLens ?? c.initialLens,
@@ -921,6 +942,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _fallbackReferenceSettings.dispose();
     super.dispose();
   }
 
@@ -971,6 +993,8 @@ class _DoclensScreenState extends State<DoclensScreen> {
             editCornersLabel: widget.editCornersLabel,
             useLabel: useLabel,
             enableEditCorners: widget.enableEditCorners,
+            openCornerEditorInitially: widget.multiPage &&
+                (widget.referenceSettings?.adjustAfterEachScan ?? false),
             headerBuilder: widget.reviewHeaderBuilder,
             imageBuilder: widget.reviewImageBuilder,
             emptyBuilder: widget.reviewEmptyBuilder,
@@ -1144,13 +1168,17 @@ class _DoclensScreenState extends State<DoclensScreen> {
           accent: _accent,
           onClose: _handleClose,
           onFlash: _controller.cycleFlashMode,
-          onCapture: _manualCapture,
+          onCapture: widget.onReferenceCaptureOverride ?? _manualCapture,
           onBatchChanged: _requestBatchMode,
           onFinishBatch: _finishMultiPage,
           onImportFiles: widget.onImportFiles,
           onImportImages: widget.onImportImages,
           onIdCards: widget.onOpenIdCards,
           onManualScan: widget.onManualScan,
+          settings: widget.referenceSettings ?? _fallbackReferenceSettings,
+          cameraModes: widget.referenceCameraModes,
+          level: widget.referenceLevel,
+          onMoreSettings: widget.onReferenceMoreSettings,
         ),
       );
 
@@ -1263,6 +1291,11 @@ class _DoclensScreenState extends State<DoclensScreen> {
   Future<void> _manualCapture() async {
     if (_controller.isCapturing || _atPageLimit) return;
     try {
+      if (widget.referenceDoubleFocus) {
+        await _controller.focusAt(const Offset(.5, .5));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+      widget.onReferenceShutterTap?.call();
       final result = await _controller.capture();
       await _handleCapture(result);
     } catch (_) {
@@ -1354,6 +1387,7 @@ class DoclensReviewScreen extends StatefulWidget {
     this.editCornersLabel = 'Edit corners',
     this.useLabel = 'Use',
     this.enableEditCorners = true,
+    this.openCornerEditorInitially = false,
     this.headerBuilder,
     this.imageBuilder,
     this.emptyBuilder,
@@ -1373,6 +1407,7 @@ class DoclensReviewScreen extends StatefulWidget {
   final String editCornersLabel;
   final String useLabel;
   final bool enableEditCorners;
+  final bool openCornerEditorInitially;
 
   /// Replaces the top header (back button + title). The default renders
   /// a serif title with a hairline back chip.
@@ -1403,6 +1438,16 @@ class DoclensReviewScreen extends StatefulWidget {
 
 class _DoclensReviewScreenState extends State<DoclensReviewScreen> {
   late ScanResult _result = widget.result;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openCornerEditorInitially) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _editCorners();
+      });
+    }
+  }
 
   Future<void> _editCorners() async {
     // The edited quad must flow back into _result so a second edit re-seeds

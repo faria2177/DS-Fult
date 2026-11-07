@@ -100,4 +100,33 @@ void main() {
     expect(result!.getPixel(8, 75).r, greaterThan(145));
     expect(result.getPixel(8, 43).r, lessThan(result.getPixel(8, 75).r));
   });
+
+  test('Invert effect reverses a mid-tone pixel', () async {
+    final input = img.Image(width: 16, height: 16);
+    img.fill(input, color: img.ColorRgb8(40, 90, 160));
+    final output = img.decodeImage(await ImageProcessor.process(
+      Uint8List.fromList(img.encodeJpg(input, quality: 100)),
+      filter: ScanFilter.invert,
+    ));
+    expect(output, isNotNull);
+    expect(output!.getPixel(8, 8).r, greaterThan(190));
+    expect(output.getPixel(8, 8).b, lessThan(125));
+  });
+
+  test('All scanner effect presets produce decodable images', () async {
+    final input = img.Image(width: 48, height: 48);
+    for (var y = 0; y < 48; y++) {
+      for (var x = 0; x < 48; x++) {
+        input.setPixelRgb(x, y, x * 4, y * 4, 160);
+      }
+    }
+    final bytes = Uint8List.fromList(img.encodeJpg(input, quality: 100));
+    for (final filter in ScanFilter.values.where((v) => v != ScanFilter.original)) {
+      final result = img.decodeImage(await ImageProcessor.process(
+        bytes, filter: filter,
+      ));
+      expect(result, isNotNull, reason: filter.name);
+      expect(result!.width, 48);
+    }
+  });
 }

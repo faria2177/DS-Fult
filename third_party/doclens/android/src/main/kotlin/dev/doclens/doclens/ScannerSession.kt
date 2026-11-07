@@ -159,15 +159,43 @@ class ScannerSession(
                 a.setAnalyzer(analysisExecutor) { proxy -> onFrame(proxy) }
             }
 
-        imageCapture = ImageCapture.Builder()
-            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+        val captureBuilder = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setFlashMode(flashMode)
-            .build()
+        val requestedSize = config.captureSize?.let { captureSize ->
+            val parts = captureSize.split('x')
+            val w = parts.getOrNull(0)?.toIntOrNull()
+            val h = parts.getOrNull(1)?.toIntOrNull()
+            if (parts.size == 2 && w != null && h != null &&
+                w in 640..4300 && h in 480..4300 && w * h <= 13000000) {
+                Size(w, h)
+            } else null
+        }
+        if (requestedSize != null) {
+            @Suppress("DEPRECATION")
+            captureBuilder.setTargetResolution(requestedSize)
+        } else {
+            captureBuilder.setTargetAspectRatio(AspectRatio.RATIO_4_3)
+        }
+        imageCapture = captureBuilder.build()
 
         val owner = activity as? LifecycleOwner
             ?: throw ScannerException.InitFailed("Activity must be LifecycleOwner")
-        camera = provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+        camera = try {
+            provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+        } catch (error: IllegalArgumentException) {
+            if (requestedSize == null) throw error
+            // A JPEG size can be listed by Camera2 yet be incompatible with
+            // concurrent Preview + Analysis on older hardware. Keep the live
+            // scanner functional if CameraX rejects that combination.
+            provider.unbindAll()
+            imageCapture = ImageCapture.Builder()
+                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setFlashMode(flashMode)
+                .build()
+            provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+        }
         if (torch) camera?.cameraControl?.enableTorch(true)
     }
 
@@ -329,7 +357,9 @@ class ScannerSession(
                 var raw: Bitmap? = null
                 var rotated: Bitmap? = null
                 try {
-                    raw = decodeDownscaled(file.absolutePath, maxDimension = 3000)
+                    // Keep the selected 12MP/8MP HD still instead of silently
+                    // subsampling it to 3MP before applying the perspective warp.
+                    raw = decodeDownscaled(file.absolutePath, maxDimension = 4096)
                         ?: throw ScannerException.CaptureFailed("Decode failed")
                     rotated = ExifRotator.rotated(raw, file.absolutePath)
                     val rawSize = Size(rotated.width, rotated.height)

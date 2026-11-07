@@ -3,6 +3,32 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Scan Effects, HD and Settings — v0.4.0
+
+- The live Scan toolbar now opens the supplied reference's **11-item Effects
+  grid**, **HD resolution picker** and **Settings** panel. The full seven-row
+  More Settings screen mirrors the reference's labels and toggle order.
+- Settings persist locally, including filter, orientation, Grid, sound,
+  automatic shutter, auto-crop, accelerometer-powered spirit level, double
+  focus, batch border review, system-camera preference, and gallery options.
+- The HD picker enumerates **actual rear-camera JPEG resolutions** via
+  Android Camera2; it doesn't promise unsupported 12M/8M modes. The chosen
+  supported size is requested from CameraX. Photos up to 4096 pixels on the
+  long side retain those pixels when decoding for perspective warping.
+- After a scan is accepted, the selected effect runs in a Dart worker. Basic
+  color/grayscale/B&W/shadow presets work offline. **No Watermark** and
+  **No Handwriting** are conservative, experimental pixel heuristics, *not*
+  CamScanner's proprietary AI models: they will not remove arbitrary marks
+  reliably and can erase similarly coloured document content. Always check
+  the preview. Filtering writes a separate file and never overwrites the
+  unfiltered capture.
+- On Android 10+, the gallery-save setting writes JPEG copies through
+  MediaStore to `Pictures/DocScanner` without broad storage permissions.
+  Older Android versions do not yet support this option.
+- The separate PDF/file import picker is still outstanding; the existing
+  image picker serves the Scan screen's Import shortcuts. Hardware controls
+  and exact UI spacing require testing on the target HONOR phone.
+
 ## Framed Scan camera — v0.3.9
 
 - Rebuilt the main Scan camera interface around the supplied reference image:

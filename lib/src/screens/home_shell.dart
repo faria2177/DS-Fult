@@ -10,6 +10,7 @@ import '../services/document_export.dart';
 import '../services/docx_export.dart';
 import '../services/image_tool_operations.dart';
 import '../services/pptx_export.dart';
+import '../services/scan_settings_store.dart';
 import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
@@ -44,6 +45,17 @@ class _HomeShellState extends State<HomeShell> {
   String _query = '';
   String _toolQuery = '';
   final _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final settings = await ScanSettingsStore.load();
+      final startCamera = settings.startWithCamera;
+      settings.dispose();
+      if (startCamera && mounted) await _capture();
+    });
+  }
 
   void _message(String message) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -391,7 +403,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.3.9 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.4.0 • Md Jahidul Islam'),
         )),
       ]);
 

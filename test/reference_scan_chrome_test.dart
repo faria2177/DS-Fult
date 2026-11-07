@@ -13,6 +13,8 @@ void main() {
     var captured = 0;
     bool? switchedToBatch;
     var openedIds = 0;
+    final settings = ReferenceScanSettings();
+    addTearDown(settings.dispose);
 
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -23,6 +25,7 @@ void main() {
           pageCount: 0,
           capturing: false,
           accent: const Color(0xFF15BFA9),
+          settings: settings,
           onClose: () {},
           onFlash: () {},
           onCapture: () => captured++,
@@ -55,5 +58,65 @@ void main() {
 
     await tester.tap(find.text('ID Cards'));
     expect(openedIds, 1);
+  });
+
+  testWidgets('video effect, HD and settings menus update real preferences',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = ReferenceScanSettings();
+    addTearDown(settings.dispose);
+    var openedMore = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      ReferenceScanChrome(
+        preview: const ColoredBox(color: Colors.black),
+        flashMode: FlashMode.off,
+        batchMode: false,
+        pageCount: 0,
+        capturing: false,
+        accent: const Color(0xFF00B69B),
+        settings: settings,
+        cameraModes: const [
+          ScanCameraMode(4064, 3048),
+          ScanCameraMode(4032, 3024),
+          ScanCameraMode(3840, 2160),
+          ScanCameraMode(3264, 2448),
+          ScanCameraMode(2560, 1440),
+        ],
+        onClose: () {},
+        onFlash: () {},
+        onCapture: () {},
+        onBatchChanged: (_) {},
+        onFinishBatch: () {},
+        onMoreSettings: () => openedMore++,
+      ),
+    )));
+
+    await tester.tap(find.byTooltip('Effects'));
+    await tester.pump();
+    expect(find.text('Magic Pro'), findsOneWidget);
+    expect(find.text('No Watermark'), findsOneWidget);
+    expect(find.text('No Handwriting'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('scan-effect-invert')));
+    await tester.pump();
+    expect(settings.effect, ScanEffectPreset.invert);
+
+    await tester.tap(find.text('HD'));
+    await tester.pump();
+    expect(find.text('List All Modes ⌄'), findsOneWidget);
+    await tester.tap(find.text('List All Modes ⌄'));
+    await tester.pump();
+    expect(find.text('4M (2560x1440)'), findsOneWidget);
+    await tester.tap(find.text('4M (2560x1440)'));
+    expect(settings.resolution, '2560x1440');
+
+    await tester.tap(find.byTooltip('Scanner Settings'));
+    await tester.pump();
+    expect(find.text('Auto Capture'), findsOneWidget);
+    expect(find.text('Spirit Level'), findsOneWidget);
+    await tester.tap(find.text('More Settings'));
+    expect(openedMore, 1);
   });
 }
