@@ -56,11 +56,13 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
       final aspect = frame.image.width / frame.image.height;
       frame.image.dispose();
       codec.dispose();
-      if (mounted) setState(() {
-        _current = bytes;
-        _original = bytes;
-        _aspect = aspect;
-      });
+      if (mounted) {
+        setState(() {
+          _current = bytes;
+          _original = bytes;
+          _aspect = aspect;
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -98,13 +100,15 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
           normalizedRadius: _strokeRadius,
         );
       }
-      if (mounted) setState(() {
-        _undo.add(current);
-        if (_undo.length > 12) _undo.removeAt(0);
-        _redo.clear();
-        _current = next;
-        _changed = true;
-      });
+      if (mounted) {
+        setState(() {
+          _undo.add(current);
+          if (_undo.length > 12) _undo.removeAt(0);
+          _redo.clear();
+          _current = next;
+          _changed = true;
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -254,7 +258,6 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
           Text(label, style: TextStyle(fontSize: 12,
             color: selected ? VideoToolStyle.teal : Colors.white)),
         ])),
-      ),
     );
   }
 }
