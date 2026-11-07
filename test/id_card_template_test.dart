@@ -3,8 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:docscanner/src/screens/id_card_template_screen.dart';
 import 'package:docscanner/src/screens/id_card_templates.dart';
+import 'package:docscanner/src/screens/camera_screen.dart';
 
 void main() {
+  test('Single, Batch and ID Cards picker share a live camera session', () {
+    final settings = ReferenceScanSettings();
+    final single = CameraScreen.captureConfigKey(settings, batchMode: false);
+    final batch = CameraScreen.captureConfigKey(settings, batchMode: true);
+    expect(single, batch,
+      reason: 'Default mode switching must not unbind CameraX.');
+
+    // Disabling auto border adjustment changes the native warp configuration,
+    // and therefore still requires a controlled rebind for Batch.
+    settings.setFlag('autoAdjustBorders', false);
+    expect(CameraScreen.captureConfigKey(settings, batchMode: false),
+      isNot(CameraScreen.captureConfigKey(settings, batchMode: true)));
+    settings.dispose();
+  });
+
   test('six reference templates map to the right capture modes', () {
     expect(IdCardTemplate.values.length, 6);
     expect(IdCardTemplate.idCard.sideCount, 2);
@@ -34,6 +50,13 @@ void main() {
     expect(find.text('Driver License'), findsOneWidget);
     expect(find.text('Passport'), findsOneWidget);
     expect(find.text('Bank Card'), findsOneWidget);
+    for (final removed in const [
+      'Smart Erase', 'Question Set', 'Translate', 'All Features',
+    ]) {
+      expect(find.text(removed), findsNothing);
+    }
+    expect(find.text('Scan'), findsOneWidget);
+    expect(find.text('ID Cards'), findsOneWidget);
     expect(find.byKey(const Key('id-example-general')), findsOneWidget);
     await tester.tap(find.byKey(const Key('id-template-idCard')));
     await tester.pump();

@@ -156,6 +156,7 @@ class DoclensScreen extends StatefulWidget {
     this.showCloseButton = true,
     this.enableEditCorners = true,
     this.referenceScanChrome = false,
+    this.referencePickerBuilder,
     this.referenceIdCardChrome = false,
     this.referenceCardLabel = 'ID Card',
     this.referenceCardSide = 'Front',
@@ -401,6 +402,10 @@ class DoclensScreen extends StatefulWidget {
   /// Match DocScanner's framed Scan camera without changing the capture,
   /// native detection, manual-crop or multi-page result state machines.
   final bool referenceScanChrome;
+  /// Optional in-place mode picker that shares the existing live CameraX
+  /// session. Switching picker/Scan chrome does not dispose the controller.
+  final Widget Function(BuildContext context, Widget livePreview,
+      VoidCallback cycleFlash)? referencePickerBuilder;
   /// A dedicated capture frame only for ID Card template flows.
   final bool referenceIdCardChrome;
   final String referenceCardLabel;
@@ -1197,16 +1202,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
   Widget _referenceIdCardCameraView() => AnimatedBuilder(
         animation: _controller,
         builder: (context, _) => ReferenceIdCardChrome(
-          preview: DoclensView(
-            controller: _controller,
-            backgroundColor: widget.backgroundColor,
-            overlayBuilder: (context, quad, status) =>
-                const SizedBox.shrink(),
-            captureButtonBuilder: null,
-            flashButtonBuilder: null,
-            lowLightHintBuilder: null,
-            onCapture: _handleCapture,
-          ),
+          preview: _plainCameraView(),
           label: widget.referenceCardLabel,
           side: widget.referenceCardSide,
           portraitGuide: widget.referenceCardPortraitGuide,
@@ -1220,6 +1216,24 @@ class _DoclensScreenState extends State<DoclensScreen> {
           onCapture: widget.onReferenceCaptureOverride ?? _manualCapture,
           onImportImages: widget.onImportImages,
           onMoreSettings: widget.onReferenceMoreSettings,
+        ),
+      );
+
+  Widget _plainCameraView() => DoclensView(
+        controller: _controller,
+        backgroundColor: widget.backgroundColor,
+        overlayBuilder: (context, quad, status) =>
+            const SizedBox.shrink(),
+        captureButtonBuilder: null,
+        flashButtonBuilder: null,
+        lowLightHintBuilder: null,
+        onCapture: _handleCapture,
+      );
+
+  Widget _referencePickerView() => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => widget.referencePickerBuilder!(
+          context, _plainCameraView(), _controller.cycleFlashMode,
         ),
       );
 
@@ -1244,7 +1258,9 @@ class _DoclensScreenState extends State<DoclensScreen> {
       },
       child: Scaffold(
         backgroundColor: widget.backgroundColor,
-        body: widget.referenceIdCardChrome
+        body: widget.referencePickerBuilder != null
+            ? _referencePickerView()
+            : widget.referenceIdCardChrome
             ? _referenceIdCardCameraView()
             : widget.referenceScanChrome ? _referenceCameraView() : SafeArea(
           top: false,

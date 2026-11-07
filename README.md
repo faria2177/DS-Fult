@@ -3,6 +3,24 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Camera mode transition fix — v0.5.1
+
+- **Single ↔ Batch** now switches Flutter UI state without stopping or
+  recreating CameraX. No 350 ms black screen, lens re-open or contour tracker
+  reset on the default configuration. When the uncommon Batch/auto-border
+  setting requires a genuinely different native warp configuration, a safe
+  rebind is still used.
+- The **Scan ↔ ID Cards** tabs now share the *same running scanner preview*.
+  ID Cards is an in-place overlay, not a second Flutter camera session.
+  Native preview is fitted only once to avoid distorted/mirrored appearance.
+- Entering a separate ID capture or external image picker still releases the
+  current camera intentionally to avoid two CameraX owners racing.
+- The ID Cards tab no longer shows **Smart Erase**, **Question Set**,
+  **Translate** or **All Features**, as marked in the supplied screenshot.
+- Transition and unwanted-option regression tests are included. This cannot
+  guarantee zero texture-frame drops on every device until the target HONOR
+  handset is tested, but removes the avoidable camera teardown and black gap.
+
 ## ID Cards reference flow — v0.5.0
 
 - Tapping **ID Cards** in the Scan camera now opens a dedicated live-preview

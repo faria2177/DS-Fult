@@ -14,6 +14,7 @@ import '../services/scan_settings_store.dart';
 import '../theme.dart';
 import 'manual_camera_screen.dart';
 import 'id_card_templates.dart';
+import 'id_card_template_screen.dart';
 import 'scan_more_settings_screen.dart';
 
 /// Live native document contour tracking with manual shutter capture.
@@ -31,7 +32,22 @@ class CameraScreen extends StatefulWidget {
   final bool cardMode;
   final IdCardTemplate? cardTemplate;
   final String? side;
-  final Future<void> Function(BuildContext context)? onOpenIdCards;
+  final Future<void> Function(BuildContext context,
+      IdCardTemplate template)? onOpenIdCards;
+
+  /// Only options that reconfigure the native camera belong in this key.
+  /// Switching Single/Batch or revealing ID Cards changes Flutter chrome,
+  /// not the CameraX session, under the default auto-border policy.
+  static String captureConfigKey(ReferenceScanSettings settings,
+      {required bool batchMode}) => [
+        if (settings.autoCrop && !settings.autoAdjustBorders) batchMode,
+        settings.autoCapture,
+        settings.autoCrop,
+        settings.autoAdjustBorders,
+        settings.adjustAfterEachScan,
+        settings.resolution,
+        settings.orientation.name,
+      ].join('|');
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -42,6 +58,8 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _processingGallery = false;
   bool _cameraSuspended = false;
   bool _batchMode = false;
+  bool _showIdCards = false;
+  IdCardTemplate _idCardTemplate = IdCardTemplate.general;
   bool _ready = false;
   bool _restarting = false;
   Offset _level = Offset.zero;
@@ -52,15 +70,9 @@ class _CameraScreenState extends State<CameraScreen> {
   static const _outlineColor = dsTeal;
   final _picker = ImagePicker();
 
-  String get _cameraIdentity => [
-        _batchMode,
-        _settings.autoCapture,
-        _settings.autoCrop,
-        _settings.autoAdjustBorders,
-        _settings.adjustAfterEachScan,
-        _settings.resolution,
-        _settings.orientation.name,
-      ].join('|');
+  String get _cameraIdentity => CameraScreen.captureConfigKey(
+        _settings, batchMode: _batchMode,
+      );
 
   @override
   void initState() {
@@ -156,9 +168,8 @@ class _CameraScreenState extends State<CameraScreen> {
     Navigator.of(context).pop(paths);
   }
 
-  /// Allow CameraX to release its camera session before a different scanner,
-  /// manual camera, or the system image picker opens. This avoids racing two
-  /// camera owners when switching Single / Batch.
+  /// Release CameraX only before opening another camera owner or file picker.
+  /// Mode-only changes must not pass through this black placeholder.
   Future<void> _suspendCamera() async {
     if (!mounted) return;
     setState(() => _cameraSuspended = true);
@@ -176,13 +187,15 @@ class _CameraScreenState extends State<CameraScreen> {
       ));
       return;
     }
-    await _suspendCamera();
-    if (!mounted || _finished) return;
+    final before = _cameraIdentity;
     setState(() {
       _batchMode = batchMode;
-      _appliedIdentity = _cameraIdentity;
-      _cameraSuspended = false;
     });
+    if (before != _cameraIdentity) {
+      // Auto-adjust off changes native perspective-warp configuration.
+      // That setting still requires a controlled rebind.
+      await _restartCamera();
+    }
   }
 
   ScanFilter get _selectedFilter => switch (_settings.effect) {
@@ -331,15 +344,95 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _openIdCards() async {
+    if (widget.onOpenIdCards == null || widget.cardMode ||
+        _finished || _cameraSuspended) return;
+    _settings.closePanel();
+    setState(() => _showIdCards = true);
+  }
+
+  void _returnToScan() {
+    if (_finished || !mounted) return;
+    _settings.closePanel();
+    setState(() => _showIdCards = false);
+  }
+
+  Future<void> _makeSelectedCard() async {
     final open = widget.onOpenIdCards;
-    if (open == null || widget.cardMode || _finished || _cameraSuspended) return;
+    if (open == null || _finished || _cameraSuspended) return;
     await _suspendCamera();
-    if (!mounted) return;
+    if (!mounted || _finished) return;
     try {
-      await open(context);
+      await open(context, _idCardTemplate);
     } finally {
       if (mounted && !_finished) setState(() => _cameraSuspended = false);
     }
+  }
+
+  Future<void> _idCardsHd() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF121212),
+      builder: (sheetContext) => SafeArea(child: SizedBox(height: 325,
+        child: Column(children: [
+          const Padding(padding: EdgeInsets.all(13), child: Text('HD Resolution',
+            style: TextStyle(color: Colors.white, fontSize: 17))),
+          Expanded(child: _cameraModes.isEmpty
+            ? const Center(child: Text('Automatic (device default)',
+                style: TextStyle(color: Colors.white70)))
+            : ListView.builder(itemCount: _cameraModes.length,
+                itemBuilder: (context, index) {
+                  final mode = _cameraModes[index];
+                  return ListTile(
+                    title: Text(mode.label,
+                      style: const TextStyle(color: Colors.white)),
+                    trailing: _settings.resolution == mode.id
+                      ? const Icon(Icons.check, color: dsTeal) : null,
+                    onTap: () {
+                      _settings.selectResolution(mode.id);
+                      Navigator.pop(sheetContext);
+                    },
+                  );
+                })),
+        ]),
+      )),
+    );
+  }
+
+  Future<void> _idCardsSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF121212),
+      builder: (sheetContext) => SafeArea(child: AnimatedBuilder(
+        animation: _settings,
+        builder: (context, _) => ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          children: [
+            const Text('Settings', style: TextStyle(
+              color: Colors.white, fontSize: 19,
+              fontWeight: FontWeight.bold)),
+            for (final item in const [
+              ('Auto Capture', 'autoCapture'), ('Grid', 'grid'),
+              ('Sound', 'sound'), ('Spirit Level', 'spiritLevel'),
+              ('Auto Crop', 'autoCrop'),
+            ])
+              SwitchListTile(
+                dense: true,
+                title: Text(item.$1,
+                  style: const TextStyle(color: Colors.white)),
+                value: _settings.flag(item.$2),
+                onChanged: (v) => _settings.setFlag(item.$2, v),
+              ),
+            TextButton(onPressed: () {
+              Navigator.pop(sheetContext);
+              unawaited(_openMoreSettings());
+            }, child: const Text('More Settings',
+              style: TextStyle(color: dsTeal))),
+          ],
+        ),
+      )),
+    );
   }
 
   Future<void> _confirmDiscardCard() async {
@@ -375,6 +468,20 @@ class _CameraScreenState extends State<CameraScreen> {
                   key: ValueKey(_cameraIdentity),
                   multiPage: _batchMode,
                   referenceScanChrome: !widget.cardMode,
+                  referencePickerBuilder: _showIdCards && !widget.cardMode
+                      ? (context, livePreview, cycleFlash) =>
+                          IdCardTemplateChooserContent(
+                            selected: _idCardTemplate,
+                            onSelect: (type) => setState(() => _idCardTemplate = type),
+                            onClose: _returnToScan,
+                            onFlash: cycleFlash,
+                            onHd: _idCardsHd,
+                            onSettings: _idCardsSettings,
+                            onMakeItNow: _makeSelectedCard,
+                            preview: livePreview,
+                            nativePreview: true,
+                            busy: _cameraSuspended,
+                          ) : null,
                   referenceIdCardChrome: widget.cardMode,
                   referenceCardLabel: widget.cardTemplate?.label ?? 'ID Card',
                   referenceCardSide: widget.side ?? 'Front',

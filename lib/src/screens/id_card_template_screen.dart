@@ -234,6 +234,7 @@ class IdCardTemplateChooserContent extends StatelessWidget {
     required this.onSettings,
     required this.onMakeItNow,
     this.preview,
+    this.nativePreview = false,
     this.busy = false,
   });
 
@@ -245,6 +246,9 @@ class IdCardTemplateChooserContent extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onMakeItNow;
   final Widget? preview;
+  /// DoclensView already applies BoxFit.cover internally; scaling it again
+  /// makes the ID Cards preview jump or look stretched on mode changes.
+  final bool nativePreview;
   final bool busy;
 
   @override
@@ -266,7 +270,8 @@ class IdCardTemplateChooserContent extends StatelessWidget {
       Expanded(child: LayoutBuilder(builder: (context, constraints) {
         final height = constraints.maxHeight;
         return Stack(fit: StackFit.expand, children: [
-          preview == null ? const _CameraFallback() : ClipRect(
+          preview == null ? const _CameraFallback() : nativePreview
+            ? ClipRect(child: preview!) : ClipRect(
             child: FittedBox(fit: BoxFit.cover, child: SizedBox(
               width: 300, height: 560, child: preview,
             )),
@@ -335,28 +340,17 @@ class IdCardTemplateChooserContent extends StatelessWidget {
           ),
         ]);
       })),
-      SizedBox(height: 42, child: Row(children: [
+      SizedBox(height: 48, child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
         _nav('Scan', false, onClose),
-        _nav('Smart Erase', false, null),
         _nav('ID Cards', true, null),
-        _nav('Question Set', false, null),
-        _nav('Translate', false, null),
       ])),
-      SizedBox(height: 120, child: Align(alignment: Alignment.topLeft,
-        child: InkWell(onTap: onClose,
-          child: const Padding(padding: EdgeInsets.fromLTRB(43, 27, 20, 5),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.apps, color: Colors.white, size: 29),
-              Text('All Features', style: TextStyle(
-                color: Colors.white, fontSize: 10)),
-            ]),
-          ),
-        ),
-      )),
     ])),
   );
 
-  Widget _nav(String label, bool active, VoidCallback? action) => Expanded(
+  Widget _nav(String label, bool active, VoidCallback? action) => SizedBox(
+    width: 134,
     child: InkWell(onTap: action,
       child: Column(children: [
         Container(width: 24, height: 3,

@@ -65,9 +65,13 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _capture() async {
     final paths = await Navigator.push<List<String>>(context,
         MaterialPageRoute(builder: (_) => CameraScreen(
-          onOpenIdCards: (scannerContext) => Navigator.of(scannerContext).push<void>(
-            MaterialPageRoute(builder: (_) => IdCardTemplateScreen(
+          onOpenIdCards: (scannerContext, template) =>
+              Navigator.of(scannerContext).push<void>(
+            MaterialPageRoute(builder: (_) => IdCardScreen(
               store: widget.store,
+              kind: template.documentKind,
+              template: template,
+              openCameraInitially: true,
             )),
           ),
         )));
