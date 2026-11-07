@@ -24,3 +24,4 @@ export 'src/widgets/edit_corners_screen.dart';
 export 'src/widgets/quad_overlay.dart';
 export 'src/widgets/reference_scan_chrome.dart';
 export 'src/widgets/reference_scan_settings.dart';
+export 'src/widgets/reference_id_card_chrome.dart';

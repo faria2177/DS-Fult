@@ -17,6 +17,7 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'document_screen.dart';
 import 'id_card_screen.dart';
+import 'id_card_template_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'qr_code_screen.dart';
@@ -65,9 +66,8 @@ class _HomeShellState extends State<HomeShell> {
     final paths = await Navigator.push<List<String>>(context,
         MaterialPageRoute(builder: (_) => CameraScreen(
           onOpenIdCards: (scannerContext) => Navigator.of(scannerContext).push<void>(
-            MaterialPageRoute(builder: (_) => IdCardScreen(
+            MaterialPageRoute(builder: (_) => IdCardTemplateScreen(
               store: widget.store,
-              kind: DocumentKind.idCard,
             )),
           ),
         )));
@@ -145,7 +145,9 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _openCard(DocumentKind kind) async {
     await Navigator.push<void>(context, MaterialPageRoute(
-      builder: (_) => IdCardScreen(store: widget.store, kind: kind),
+      builder: (_) => kind == DocumentKind.idCard
+          ? IdCardTemplateScreen(store: widget.store)
+          : IdCardScreen(store: widget.store, kind: kind),
     ));
   }
 

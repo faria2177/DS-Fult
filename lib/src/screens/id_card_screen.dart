@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,12 +13,16 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'crop_screen.dart';
 import 'document_screen.dart';
+import 'id_card_templates.dart';
 
 class IdCardScreen extends StatefulWidget {
-  const IdCardScreen({super.key, required this.store, required this.kind});
+  const IdCardScreen({super.key, required this.store, required this.kind,
+      this.template, this.openCameraInitially = false});
 
   final DocumentStore store;
   final DocumentKind kind;
+  final IdCardTemplate? template;
+  final bool openCameraInitially;
 
   @override
   State<IdCardScreen> createState() => _IdCardScreenState();
@@ -29,15 +34,30 @@ class _IdCardScreenState extends State<IdCardScreen> {
   bool _saving = false;
   bool _importing = false;
 
+  int get _sideCount => widget.template?.sideCount ?? 2;
+
+  String _sideLabel(int index) =>
+      widget.template?.sideName(index) ?? (index == 0 ? 'Front' : 'Back');
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openCameraInitially) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_capture());
+      });
+    }
+  }
+
   void _warn(String message) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _import() async {
     if (_importing) return;
-    final remaining = 2 - _selected.length;
+    final remaining = _sideCount - _selected.length;
     if (remaining <= 0) {
-      _warn('Only 2 images are allowed: front and back.');
+      _warn('Only $_sideCount image(s) are allowed for this template.');
       return;
     }
     try {
@@ -72,18 +92,25 @@ class _IdCardScreenState extends State<IdCardScreen> {
   }
 
   Future<void> _capture() async {
-    if (_selected.length >= 2) {
+    if (_selected.length >= _sideCount) {
       _warn('You already have front and back photos.');
       return;
     }
     final paths = await Navigator.push<List<String>>(context, MaterialPageRoute(
       builder: (_) => CameraScreen(
         cardMode: true,
-        side: _selected.isEmpty ? 'Front' : 'Back',
+        cardTemplate: widget.template,
+        side: _sideLabel(_selected.length),
       ),
     ));
-    if (paths == null || !mounted) return;
-    final remaining = 2 - _selected.length;
+    if (!mounted) return;
+    if (paths == null) {
+      if (widget.openCameraInitially && _selected.isEmpty) {
+        Navigator.pop(context);
+      }
+      return;
+    }
+    final remaining = _sideCount - _selected.length;
     if (paths.length > remaining) {
       _warn('Only $remaining more image(s) allowed.');
       return;
@@ -129,28 +156,28 @@ class _IdCardScreenState extends State<IdCardScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.kind.label), actions: [
+        appBar: AppBar(title: Text(widget.template?.label ?? widget.kind.label), actions: [
           TextButton(onPressed: _selected.isEmpty ? null : _finish, child: const Text('Done',
               style: TextStyle(color: dsTeal, fontWeight: FontWeight.bold))),
         ]),
         body: SafeArea(child: Column(children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 10, 20, 6),
-            child: Text('Capture or import the two sides of your card',
+            child: Text('Capture or import your ${widget.template?.label ?? 'card'}',
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
           ),
           const SizedBox(height: 8),
           Expanded(child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 22),
             children: [
-              for (var i = 0; i < 2; i++) ...[
+              for (var i = 0; i < _sideCount; i++) ...[
                 _side(i),
                 const SizedBox(height: 17),
               ],
               Row(children: [
                 const Icon(Icons.info_outline, size: 18, color: dsMuted),
                 const SizedBox(width: 8),
-                Expanded(child: Text('Gallery selection limit: 2 images total. ${_selected.length}/2 selected.',
+                Expanded(child: Text('Gallery selection limit: $_sideCount image(s). ${_selected.length}/$_sideCount selected.',
                   style: const TextStyle(fontSize: 12, color: dsMuted))),
               ]),
             ],
@@ -160,7 +187,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
             child: Row(children: [
               Expanded(child: OutlinedButton.icon(
-                onPressed: _selected.length >= 2 ? null : _import,
+                onPressed: _selected.length >= _sideCount ? null : _import,
                 icon: const Icon(Icons.photo_library_outlined), label: const Text('Import Gallery'),
               )),
               const SizedBox(width: 14),
@@ -194,14 +221,14 @@ class _IdCardScreenState extends State<IdCardScreen> {
             Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.add_a_photo_outlined, color: dsTeal, size: 38),
               const SizedBox(height: 8),
-              Text(index == 0 ? 'Front' : 'Back',
+              Text(_sideLabel(index),
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const Text('Tap to scan', style: TextStyle(color: dsMuted)),
             ])),
           Positioned(left: 11, top: 11, child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-            child: Text(index == 0 ? 'Front' : 'Back',
+            child: Text(_sideLabel(index),
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           )),
           if (filled)

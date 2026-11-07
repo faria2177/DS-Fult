@@ -13,6 +13,7 @@ import '../services/image_processor.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
 import 'manual_camera_screen.dart';
+import 'id_card_templates.dart';
 import 'scan_more_settings_screen.dart';
 
 /// Live native document contour tracking with manual shutter capture.
@@ -22,11 +23,13 @@ class CameraScreen extends StatefulWidget {
   const CameraScreen({
     super.key,
     this.cardMode = false,
+    this.cardTemplate,
     this.side,
     this.onOpenIdCards,
   });
 
   final bool cardMode;
+  final IdCardTemplate? cardTemplate;
   final String? side;
   final Future<void> Function(BuildContext context)? onOpenIdCards;
 
@@ -339,6 +342,29 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  Future<void> _confirmDiscardCard() async {
+    if (_finished || !mounted) return;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF28282A),
+        title: const Text('Discard your scans?',
+          style: TextStyle(color: Colors.white, fontSize: 18)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard', style: TextStyle(
+              color: Colors.deepOrange))),
+        ],
+      ),
+    );
+    if (discard == true && mounted && !_finished) {
+      _finished = true;
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Colors.black,
@@ -349,6 +375,12 @@ class _CameraScreenState extends State<CameraScreen> {
                   key: ValueKey(_cameraIdentity),
                   multiPage: _batchMode,
                   referenceScanChrome: !widget.cardMode,
+                  referenceIdCardChrome: widget.cardMode,
+                  referenceCardLabel: widget.cardTemplate?.label ?? 'ID Card',
+                  referenceCardSide: widget.side ?? 'Front',
+                  referenceCardPortraitGuide:
+                      widget.cardTemplate?.portraitGuide ?? false,
+                  onReferenceCardClose: _confirmDiscardCard,
                   referenceSettings: _settings,
                   referenceCameraModes: _cameraModes,
                   referenceLevel: _level,
@@ -401,20 +433,6 @@ class _CameraScreenState extends State<CameraScreen> {
                     if (path.isNotEmpty) unawaited(_finishProcessed([path]));
                   },
                 )),
-          if (widget.cardMode && !_cameraSuspended)
-            Positioned(
-              bottom: 112,
-              left: 12,
-              right: 12,
-              child: SafeArea(
-                top: false,
-                child: Row(children: [
-                  _shortcut(Icons.photo_library_outlined, 'Gallery', _gallery),
-                  const Spacer(),
-                  _shortcut(Icons.camera_outlined, 'Manual', _manual),
-                ]),
-              ),
-            ),
           if (_processingGallery)
             const Positioned.fill(
               child: ColoredBox(
@@ -430,24 +448,6 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
         ]),
-      );
-
-  Widget _shortcut(IconData icon, String label, VoidCallback action) =>
-      Material(
-        color: const Color(0xBB111D22),
-        borderRadius: BorderRadius.circular(28),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: action,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 20, color: Colors.white),
-              const SizedBox(width: 6),
-              Text(label, style: const TextStyle(color: Colors.white)),
-            ]),
-          ),
-        ),
       );
 
 }

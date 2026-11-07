@@ -3,6 +3,26 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## ID Cards reference flow — v0.5.0
+
+- Tapping **ID Cards** in the Scan camera now opens a dedicated live-preview
+  template chooser. The Home **ID Card** shortcut opens the same chooser.
+- The six swipeable choices follow the supplied video: **General, ID Card,
+  Driver License, Passport, Bank Card, Certificate**. Each choice changes
+  the A4-copy illustration and the **Make it now** button launches that mode.
+- The ID capture screen alone has the reference's white four-corner card
+  brackets, Front/Back or document label, flash, HD, settings, undo/back,
+  shutter and Import Images. Regular document scanning is unaffected.
+- Wide ID/driver/bank cards use landscape guides; passport and certificate
+  use a tall guide. One-sided modes accept one image; two-sided modes retain
+  the existing per-side crop/rotate and final document flow.
+- Back/close shows a discard confirmation. Cameras are released before
+  opening a second capture screen to avoid Android camera ownership races.
+- No sample photo or proprietary illustration from the reference app is
+  redistributed; the A4 illustration is generated from Flutter widgets.
+  The template guides, capture and on-device processing still need physical
+  testing on the target HONOR Android device.
+
 ## Scan Effects, HD and Settings — v0.4.0
 
 - The live Scan toolbar now opens the supplied reference's **11-item Effects
