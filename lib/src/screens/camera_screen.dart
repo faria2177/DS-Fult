@@ -345,7 +345,9 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _openIdCards() async {
     if (widget.onOpenIdCards == null || widget.cardMode ||
-        _finished || _cameraSuspended) return;
+        _finished || _cameraSuspended) {
+      return;
+    }
     _settings.closePanel();
     setState(() => _showIdCards = true);
   }
