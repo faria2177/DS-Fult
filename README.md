@@ -3,6 +3,28 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Files multi-selection and management — v0.5.5
+
+- **Files** now has the video-reference list/grid toggle, date/name/page-count
+  sorting, search, folder picker, folder create/rename/remove, long-press
+  selection, select-all, and checkboxes. The app bottom navigation is hidden
+  while selecting so all bottom actions remain accessible above system bars.
+- Single selection offers **Share, Move/Copy, Rename, Delete, More**. Multiple
+  selections enable **Merge** and batch sharing, moving, copying, deletion,
+  tags, and app-level locking. Move and Copy offer local folder destinations.
+- **Share** exports real PDFs, offline OCR Word (one document), long image
+  (one document), individual page images, or saves pages to Android Gallery.
+  **Share Link** explains why an offline-only app cannot make a hosted URL.
+- **Merge Documents** lets you add/remove source documents, drag to reorder,
+  preview all pages, choose **Keep originals**, and save a named new document.
+- **More** contains Send to PC (Android sharing), Print, PDF to Images,
+  Add to Home Screen (Android launcher pin shortcut), Tags and Lock. A pinned
+  shortcut reopens its chosen local document; shortcuts depend on launcher
+  support. Locks use the same per-document app PIN format as Document Detail.
+- Deleting a document removes its library entry, while source images are
+  retained for technical recovery; there is no in-app seven-day Trash yet.
+  No Ask AI or cloud integration is added.
+
 ## Watermark and Brush editing — v0.5.4
 
 - **Edit → Images → Add Watermark** opens a dedicated image editing screen,

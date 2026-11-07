@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
@@ -15,6 +16,7 @@ import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
 import 'document_detail_screen.dart';
+import 'files_workspace.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'image_text_editor_screen.dart';
@@ -41,20 +43,45 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  static const _doclensChannel = MethodChannel('doclens/methods');
   int _tab = 0;
   String _query = '';
   String _toolQuery = '';
+  bool _filesSelecting = false;
   final _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
+    _doclensChannel.setMethodCallHandler((call) async {
+      if (call.method == 'openPinnedDocument' && mounted &&
+          call.arguments is String) {
+        final id = call.arguments as String;
+        if (widget.store.byId(id) != null) await _open(id);
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final pinnedId = await _doclensChannel.invokeMethod<String>(
+            'consumeLaunchDocumentShortcut');
+        if (pinnedId != null && widget.store.byId(pinnedId) != null && mounted) {
+          await _open(pinnedId);
+          return;
+        }
+      } catch (_) {
+        // The shortcut bridge is optional on non-Android platforms.
+      }
       final settings = await ScanSettingsStore.load();
       final startCamera = settings.startWithCamera;
       settings.dispose();
       if (startCamera && mounted) await _capture();
     });
+  }
+
+  @override
+  void dispose() {
+    _doclensChannel.setMethodCallHandler(null);
+    super.dispose();
   }
 
   void _message(String message) {
@@ -159,7 +186,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _tab == 1 && _filesSelecting ? null : NavigationBar(
         selectedIndex: _tab,
         height: 72,
         indicatorColor: dsTeal.withValues(alpha: .12),
@@ -247,29 +274,16 @@ class _HomeShellState extends State<HomeShell> {
       .where((doc) => doc.name.toLowerCase().contains(_query))
       .toList(growable: false);
 
-  Widget _filesTab() => ListView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-        children: [
-          Row(children: [
-            const Expanded(child: Text('Files', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
-            IconButton(onPressed: _createFolder, icon: const Icon(Icons.create_new_folder_outlined), tooltip: 'New folder'),
-          ]),
-          const SizedBox(height: 12),
-          _sectionTitle('My folders'),
-          const SizedBox(height: 8),
-          for (final folder in widget.store.folders)
-            Card(child: ListTile(
-              leading: const Icon(Icons.folder_rounded, color: dsTeal, size: 32),
-              title: Text(folder.name),
-              subtitle: Text('${widget.store.documents.where((d) => d.folderId == folder.id).length} documents'),
-              trailing: IconButton(icon: const Icon(Icons.more_vert), onPressed: () => _folderActions(folder)),
-              onTap: () => _openFolder(folder),
-            )),
-          const SizedBox(height: 22),
-          _sectionTitle('All documents'),
-          ...widget.store.documents.map(_documentTile),
-          if (widget.store.documents.isEmpty) _emptyDocuments(),
-        ],
+  Widget _filesTab() => FilesWorkspace(
+        store: widget.store,
+        onOpen: (id) => _open(id),
+        onImport: () => _import(),
+        onScan: () => _capture(),
+        onSelectionChanged: (selected) {
+          if (mounted && _filesSelecting != selected) {
+            setState(() => _filesSelecting = selected);
+          }
+        },
       );
 
   Widget _toolsTab() {
@@ -671,13 +685,6 @@ class _HomeShellState extends State<HomeShell> {
 
   void _notReady(String feature) => _message('$feature is planned; this tool is not yet implemented.');
 
-  Future<void> _createFolder() async {
-    final name = await _inputDialog('New folder', 'Folder name');
-    if (name != null && name.trim().isNotEmpty) {
-      await widget.store.createFolder(name);
-    }
-  }
-
   Future<String?> _inputDialog(String title, String hint, {String initial = ''}) {
     final controller = TextEditingController(text: initial);
     return showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
@@ -724,32 +731,6 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  Future<void> _folderActions(DocumentFolder folder) async {
-    final choice = await showModalBottomSheet<String>(context: context, builder: (context) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(title: const Text('Rename folder'), onTap: () => Navigator.pop(context, 'rename')),
-        ListTile(title: const Text('Remove folder'), onTap: () => Navigator.pop(context, 'delete')),
-      ]),
-    ));
-    if (choice == 'rename') {
-      final name = await _inputDialog('Rename folder', 'Name', initial: folder.name);
-      if (name != null) await widget.store.renameFolder(folder.id, name);
-    } else if (choice == 'delete') {
-      await widget.store.deleteFolder(folder.id);
-    }
-  }
-
-  Future<void> _openFolder(DocumentFolder folder) async {
-    await Navigator.push<void>(context, MaterialPageRoute(builder: (_) => Scaffold(
-      appBar: AppBar(title: Text(folder.name)),
-      body: AnimatedBuilder(animation: widget.store, builder: (_, _) {
-        final docs = widget.store.documents.where((doc) => doc.folderId == folder.id).toList();
-        return docs.isEmpty
-            ? const Center(child: Text('Folder is empty'))
-            : ListView(padding: const EdgeInsets.all(14), children: docs.map(_documentTile).toList());
-      }),
-    )));
-  }
 }
 
 class _Tool {

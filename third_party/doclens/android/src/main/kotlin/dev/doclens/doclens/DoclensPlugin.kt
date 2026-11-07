@@ -4,7 +4,11 @@ import android.Manifest
 import android.content.ContentValues
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
+import android.graphics.drawable.Icon
 import android.graphics.ImageFormat
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -32,7 +36,8 @@ class DoclensPlugin :
     FlutterPlugin,
     ActivityAware,
     MethodChannel.MethodCallHandler,
-    PluginRegistry.RequestPermissionsResultListener {
+    PluginRegistry.RequestPermissionsResultListener,
+    PluginRegistry.NewIntentListener {
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
@@ -78,6 +83,7 @@ class DoclensPlugin :
         activity = binding.activity
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
+        binding.addOnNewIntentListener(this)
         val ui = NativeUIScanner(context).also { nativeUIScanner = it }
         binding.addActivityResultListener(ui)
     }
@@ -87,6 +93,7 @@ class DoclensPlugin :
 
     override fun onDetachedFromActivity() {
         activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding?.removeOnNewIntentListener(this)
         nativeUIScanner?.let { activityBinding?.removeActivityResultListener(it) }
         nativeUIScanner = null
         activity = null
@@ -154,10 +161,53 @@ class DoclensPlugin :
                     }
                 }
             }
+            "pinDocumentShortcut" -> {
+                val id = call.argument<String>("documentId")
+                val title = call.argument<String>("title")
+                if (id.isNullOrBlank() || title.isNullOrBlank()) {
+                    result.error("invalid_document", "Missing document shortcut data", null)
+                } else {
+                    result.success(pinDocumentShortcut(id, title))
+                }
+            }
+            "consumeLaunchDocumentShortcut" -> {
+                val intent = activity?.intent
+                val id = intent?.getStringExtra("docscanner_document_id")
+                intent?.removeExtra("docscanner_document_id")
+                result.success(id)
+            }
             "scanWithNativeUI" -> handleNativeUIScan(call, result)
             "detectInImage" -> handleDetectInImage(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    override fun onNewIntent(intent: Intent): Boolean {
+        val documentId = intent.getStringExtra("docscanner_document_id") ?: return false
+        activity?.intent = intent
+        intent.removeExtra("docscanner_document_id")
+        methodChannel.invokeMethod("openPinnedDocument", documentId)
+        return true
+    }
+
+    private fun pinDocumentShortcut(documentId: String, title: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val shortcuts = context.getSystemService(ShortcutManager::class.java)
+            ?: return false
+        if (!shortcuts.isRequestPinShortcutSupported) return false
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?: return false
+        launch.action = "dev.doclens.docscanner.OPEN_DOCUMENT"
+        launch.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP
+        launch.putExtra("docscanner_document_id", documentId)
+        val shortcut = ShortcutInfo.Builder(context, "docscanner_$documentId")
+            .setShortLabel(title.take(30))
+            .setLongLabel(title.take(90))
+            .setIcon(Icon.createWithResource(context, android.R.drawable.ic_menu_gallery))
+            .setIntent(launch)
+            .build()
+        return shortcuts.requestPinShortcut(shortcut, null)
     }
 
     private fun handleNativeUIScan(call: MethodCall, result: MethodChannel.Result) {

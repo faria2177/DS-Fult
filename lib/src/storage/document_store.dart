@@ -188,7 +188,10 @@ class DocumentStore extends ChangeNotifier {
   }
 
   /// Merge image pages from local documents; source documents remain unchanged.
-  Future<ScanDocument> mergeDocuments(List<String> ids, String name) async {
+  Future<ScanDocument> mergeDocuments(List<String> ids, String name, {
+    bool keepOriginals = true,
+    String? folderId,
+  }) async {
     if (ids.length < 2 || ids.toSet().length != ids.length) {
       throw ArgumentError('Select two or more different documents');
     }
@@ -196,9 +199,31 @@ class DocumentStore extends ChangeNotifier {
     for (final id in ids) {
       final document = byId(id);
       if (document == null) throw ArgumentError('Document not found: $id');
+      if (document.lockHash != null) {
+        throw StateError('Unlock all selected documents before merging.');
+      }
       paths.addAll(document.pages.map((page) => page.path));
     }
-    return createFromPaths(paths, name: name);
+    final merged = await createFromPaths(paths, name: name, folderId: folderId);
+    if (!keepOriginals) {
+      _documents.removeWhere((doc) => ids.contains(doc.id));
+      await _persist();
+    }
+    return merged;
+  }
+
+  /// Copies all document pages into independent local files; no file sharing
+  /// between the two editable documents.
+  Future<ScanDocument> copyDocument(String id, {String? folderId}) async {
+    final doc = byId(id);
+    if (doc == null) throw StateError('Document not found');
+    if (doc.lockHash != null) throw StateError('Unlock the document first');
+    return createFromPaths(
+      doc.pages.map((page) => page.path).toList(growable: false),
+      name: '${doc.name} - Copy',
+      folderId: folderId,
+      kind: doc.kind,
+    );
   }
 
   Future<void> renameDocument(String id, String name) async {
