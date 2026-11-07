@@ -3,6 +3,23 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Me → Scan preferences and Tools cleanup — v0.5.2
+
+- **Me → Scan** opens the same seven-preference page as the camera's
+  **three-dot menu → More Settings**: Auto Adjust Borders, Adjust After Each
+  Scan, Start with Camera, Use System Camera, Import from Gallery, Save Scans
+  to Gallery After Scanning, and Double-Focus.
+- All switches edit the live scanner preferences and are saved to the same
+  on-device record. Rapid consecutive saves are ordered so the last change
+  survives leaving Me, reopening the scanner, and restarting the app.
+- Removed these nine entries from the **Tools grid**: Mega Scan, Long
+  Document, Driver License, Bank Card, Photo Translation, Scan Code, To PPT,
+  Erase Marks, and Restore Photo. ID Card templates and the Home quick
+  actions are unchanged; underlying service code remains available if needed.
+- System Camera only overrides **Single** capture; Batch continues to use
+  the in-app camera. Gallery filter preference likewise only applies in
+  Single mode, matching the settings page's explanations.
+
 ## Camera mode transition fix — v0.5.1
 
 - **Single ↔ Batch** now switches Flutter UI state without stopping or

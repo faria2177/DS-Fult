@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:io';
 
-import 'package:doclens/doclens.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -9,7 +9,6 @@ import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/docx_export.dart';
 import '../services/image_tool_operations.dart';
-import '../services/pptx_export.dart';
 import '../services/scan_settings_store.dart';
 import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
@@ -21,7 +20,7 @@ import 'id_card_template_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'qr_code_screen.dart';
-import 'scan_code_screen.dart';
+import 'scan_more_settings_screen.dart';
 import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
 
@@ -79,40 +78,6 @@ class _HomeShellState extends State<HomeShell> {
     await _create(paths);
   }
 
-  Future<void> _megaScan() async {
-    try {
-      final pages = await DoclensMultiScreen.scan(
-        context,
-        appBarTitle: 'Mega Scan',
-        captureHintText: 'Align all four corners • Hold steady',
-        accentColor: const Color(0xFF28C78A),
-        overlayStyle: QuadOverlayStyle.outline,
-        enableAutoCapture: false,
-        imageEnhancement: ImageEnhancement.enhanced,
-        config: DocumentEdges.scannerConfig,
-      );
-      if (!mounted || pages == null || pages.isEmpty) return;
-      await _create(pages
-          .map((page) => page.croppedImagePath ?? page.rawImagePath)
-          .where((path) => path.isNotEmpty)
-          .toList());
-    } catch (error) {
-      _message('Batch scan failed: $error');
-    }
-  }
-
-  Future<void> _longScan() async {
-    try {
-      final path = await DoclensLargeDocScreen.scan(
-        context,
-        accentColor: dsTeal,
-      );
-      if (path != null && path.isNotEmpty && mounted) await _create([path]);
-    } catch (error) {
-      _message('Long document scan failed: $error');
-    }
-  }
-
   Future<void> _import() async {
     try {
       final files = await _picker.pickMultiImage(requestFullMetadata: false);
@@ -153,6 +118,27 @@ class _HomeShellState extends State<HomeShell> {
           ? IdCardTemplateScreen(store: widget.store)
           : IdCardScreen(store: widget.store, kind: kind),
     ));
+  }
+
+  Future<void> _openScanSettings() async {
+    final settings = await ScanSettingsStore.load();
+    if (!mounted) {
+      settings.dispose();
+      return;
+    }
+    void persist() => unawaited(ScanSettingsStore.save(settings));
+    settings.addListener(persist);
+    try {
+      await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => ScanMoreSettingsScreen(settings: settings),
+      ));
+      // Flush the final state before returning to Me. The camera loads these
+      // same persisted values the next time it is opened.
+      await ScanSettingsStore.save(settings);
+    } finally {
+      settings.removeListener(persist);
+      settings.dispose();
+    }
   }
 
   @override
@@ -289,19 +275,12 @@ class _HomeShellState extends State<HomeShell> {
     final groups = <String, List<_Tool>>{
       'Scan': [
         _Tool('Scan', Icons.document_scanner_outlined, _capture),
-        _Tool('Mega Scan', Icons.auto_awesome_motion_outlined, _megaScan),
-        _Tool('Long Document', Icons.view_agenda_outlined, _longScan),
         _Tool('ID Cards', Icons.badge_outlined, () => _openCard(DocumentKind.idCard)),
-        _Tool('Driver License', Icons.airport_shuttle_outlined, () => _openCard(DocumentKind.driverLicense)),
-        _Tool('Bank Card', Icons.credit_card, () => _openCard(DocumentKind.bankCard)),
         _Tool('Import Images', Icons.photo_library_outlined, _import),
         _Tool('Import File', Icons.upload_file_outlined, () => _notReady('Import File')),
         _Tool('Extract Text', Icons.text_fields, _startOcr),
         _Tool('Passport Photo Maker', Icons.portrait_outlined,
             () => _notReady('Passport Photo Maker')),
-        _Tool('Photo Translation', Icons.translate_outlined,
-            () => _notReady('Photo Translation')),
-        _Tool('Scan Code', Icons.qr_code_scanner_outlined, _scanCode),
       ],
       'Convert': [
         _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
@@ -309,7 +288,6 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Text to PDF', Icons.text_snippet_outlined, _textToPdf),
         _Tool('To Word', Icons.description_outlined, _exportWord),
         _Tool('To Excel', Icons.table_chart_outlined, _exportExcel),
-        _Tool('To PPT', Icons.slideshow_outlined, _exportPptx),
         _Tool('PDF to Images', Icons.collections_outlined, _shareDocumentImages),
         _Tool('PDF to Long Image', Icons.panorama_vertical_outlined, _shareLongImage),
       ],
@@ -322,8 +300,6 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Sign', Icons.draw_outlined, _startSign),
         _Tool('Add Watermark', Icons.branding_watermark_outlined, () => _openExisting('pdf')),
         _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startErase),
-        _Tool('Erase Marks', Icons.auto_fix_normal_outlined, _startErase),
-        _Tool('Restore Photo', Icons.restore_outlined, () => _notReady('Restore Photo')),
         _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('pdf')),
         _Tool('Extract PDF Pages', Icons.content_copy_outlined, () => _openExisting('pdf')),
         _Tool('Rotate PDF', Icons.rotate_90_degrees_ccw_outlined,
@@ -401,6 +377,14 @@ class _HomeShellState extends State<HomeShell> {
           value: widget.darkTheme,
           onChanged: widget.onThemeChanged,
         )),
+        Card(child: ListTile(
+          key: const Key('me-scan-settings'),
+          leading: const Icon(Icons.document_scanner_outlined, color: dsTeal),
+          title: const Text('Scan'),
+          subtitle: const Text('Camera and document scan preferences'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _openScanSettings,
+        )),
         const Card(child: ListTile(
           leading: Icon(Icons.shield_outlined, color: dsTeal),
           title: Text('Private, on-device storage'),
@@ -409,7 +393,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.4.0 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.2 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -544,45 +528,6 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _exportWord() => _exportOffice(toExcel: false);
 
   Future<void> _exportExcel() => _exportOffice(toExcel: true);
-
-  Future<void> _scanCode() async {
-    await Navigator.push<void>(context,
-        MaterialPageRoute(builder: (_) => const ScanCodeScreen()));
-  }
-
-  Future<void> _exportPptx() async {
-    final document = await _chooseDocument();
-    if (document == null || !mounted) return;
-    showDialog<void>(context: context, barrierDismissible: false,
-      builder: (_) => const PopScope(canPop: false, child: AlertDialog(
-        title: Text('Creating PowerPoint'),
-        content: Row(children: [
-          CircularProgressIndicator(),
-          SizedBox(width: 18),
-          Expanded(child: Text('Adding scanned pages to slides…')),
-        ]),
-      )),
-    );
-    File? file;
-    Object? failure;
-    try {
-      file = await PptxExport.createFile(document);
-    } catch (error) {
-      failure = error;
-    } finally {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    }
-    if (!mounted) return;
-    if (failure != null) {
-      _message('To PPT failed: $failure');
-    } else if (file != null) {
-      try {
-        await PptxExport.shareFile(file, document.name);
-      } catch (error) {
-        _message('Could not share PowerPoint: $error');
-      }
-    }
-  }
 
   Future<void> _exportOffice({required bool toExcel}) async {
     final document = await _chooseDocument();

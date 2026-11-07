@@ -268,7 +268,7 @@ class _CameraScreenState extends State<CameraScreen> {
       );
       if (!mounted) return;
       await _finishProcessed(cropped.paths,
-        applySelectedEffect: _settings.importFromGallery);
+        applySelectedEffect: _settings.importFromGallery && !_batchMode);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -501,7 +501,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     }
                   },
                   onReferenceCaptureOverride:
-                      _settings.useSystemCamera && !widget.cardMode
+                      _settings.useSystemCamera && !widget.cardMode && !_batchMode
                           ? _systemCamera : null,
                   onBatchModeChanged: _switchMode,
                   onImportFiles: _gallery,
