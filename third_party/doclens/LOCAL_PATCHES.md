@@ -18,6 +18,14 @@ The original license is preserved in `LICENSE`.
   reject brief competing document quads and require consecutive candidate
   matches before changing the green outline. Hide a stale outline if the
   detector continues to disagree. Tested in host `test/quad_smoother_test.dart`.
+- `android/src/main/kotlin/dev/doclens/doclens/YuvUtils.kt` and
+  `OpenCvBoundaryAdapter.kt`: reconstruct sampled RGB colour from YUV420 with
+  padded/interleaved chroma stride support. The colour/saturation branch of
+  the Kotlin OpenCV detector is now available in live preview. Grayscale and
+  luma-based fallback remains available; tested in `YuvUtilsColorTest.kt`.
+- `android/src/main/kotlin/dev/doclens/doclens/ScannerSession.kt`:
+  retain the complete still capture when still-photo edge detection fails;
+  never apply a potentially mismatched or stale preview quad to it.
 
 The host app disables auto capture explicitly in its `ScannerConfig` and in
 both single-page and batch scanner widgets. Edge detection, corner adjustment,

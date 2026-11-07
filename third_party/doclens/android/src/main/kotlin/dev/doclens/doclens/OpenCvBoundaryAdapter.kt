@@ -45,6 +45,27 @@ internal class OpenCvBoundaryAdapter {
         }
     }
 
+    /**
+     * Live YUV preview converted to a small RGBA frame. Unlike grayscale
+     * replication, this lets the detector use its HSV/saturation edge pass
+     * when paper and background have similar brightness but different hues.
+     */
+    fun detectRgba(pixels: ByteArray, width: Int, height: Int): Quad? {
+        if (width < 32 || height < 32 || pixels.size != width * height * 4) {
+            return null
+        }
+        val boundaryDetector = try { engine() } catch (_: Throwable) { null } ?: return null
+        val rgba = Mat(height, width, CvType.CV_8UC4)
+        return try {
+            rgba.put(0, 0, pixels)
+            toNormalizedQuad(boundaryDetector.detectBoundary(rgba), width, height)
+        } catch (_: Exception) {
+            null
+        } finally {
+            rgba.release()
+        }
+    }
+
     /** Captured still bitmap; preserves colour-dependent edge detection. */
     fun detectBitmap(bitmap: Bitmap): Quad? {
         val boundaryDetector = try { engine() } catch (_: Throwable) { null } ?: return null

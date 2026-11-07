@@ -384,7 +384,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-          subtitle: Text('Version 0.1.0 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.3.7 • Md Jahidul Islam'),
         )),
       ]);
 

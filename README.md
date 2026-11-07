@@ -3,7 +3,23 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
-## Implemented in v0.3.4 (work in progress)
+## Scanner stability update — v0.3.7 (work in progress)
+
+- Live CameraX YUV preview now supplies sampled **colour** (RGBA) as well as
+  luminance to the multi-stage OpenCV detector. Its saturation-edge stage can
+  distinguish similarly bright paper and backgrounds with different colours.
+  Stride-aware YUV420 sampling supports padded and interleaved chroma planes;
+  a malformed chroma plane retains the existing grayscale fallback. Added
+  regression tests for colour contrast, pixel strides and downscaling.
+- Full-resolution capture **never reuses a stale preview quad** when still-image
+  detection fails. It preserves the complete upright photo for four-corner
+  manual review instead of risking an irreversible wrong crop. A failed warp
+  also retains the original capture for recovery.
+- Auto Capture remains disabled in Single and Batch. Native detector performance,
+  portrait preview mapping and scan accuracy still require physical-device
+  testing in varied lighting and backgrounds.
+
+## Earlier scanner milestones
 
 - **Green edge stability (v0.3.4):** the live quad tracker now compares the
   size and position of consecutive candidate documents before moving its

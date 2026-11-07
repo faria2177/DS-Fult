@@ -47,7 +47,6 @@ class ScannerSession(
     private var flashMode: Int = ImageCapture.FLASH_MODE_AUTO
     private var torch: Boolean = false
 
-    @Volatile private var lastQuad: Quad? = null
     @Volatile private var lastFrameWidth: Int = 0
     @Volatile private var lastFrameHeight: Int = 0
     @Volatile private var lastDetectionMs: Long = 0L
@@ -185,10 +184,20 @@ class ScannerSession(
             val rotation = proxy.imageInfo.rotationDegrees
             // The reference detector needs enough pixels to resolve the page
             // outline, particularly for ID cards and textured backgrounds.
-            val (luma, width, height) = YuvUtils.extractLuma(image, downscaleTo = 384)
+            val downscaleTo = 384
+            val (luma, width, height) = YuvUtils.extractLuma(image, downscaleTo)
             lastFrameWidth = width
             lastFrameHeight = height
-            val quad = openCvDetector.detectLuma(luma, width, height)
+            // Keep the chroma information: a similarly bright card and desk
+            // can be separated by saturation edges that luma alone misses.
+            // If a device supplies an invalid chroma plane, preserve the
+            // existing grayscale and connected-component fallbacks.
+            val rgba = YuvUtils.extractRgba(image, YuvUtils.Luma(luma, width, height), downscaleTo)
+            val quad = (if (rgba != null) {
+                openCvDetector.detectRgba(rgba, width, height)
+            } else {
+                openCvDetector.detectLuma(luma, width, height)
+            })
                 ?: QuadDetector.detect(
                 luma, width, height,
                 config.detectionPolarity, config.detectionThresholdOffset,
@@ -196,7 +205,6 @@ class ScannerSession(
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
-            lastQuad = rotated
 
             val lowLight = config.enableLowLightDetection && LumaEstimator.isLowLight(luma)
 
@@ -329,12 +337,15 @@ class ScannerSession(
                     // stream and can drift if a phone uses a different sensor
                     // crop for still capture. Re-detect against the actual
                     // upright captured pixels before the irreversible warp.
-                    // Only reuse the preview quad if still detection fails.
+                    // Do NOT apply a stale preview quad if still detection
+                    // fails. CameraX stills can have a different crop/zoom;
+                    // preserving the whole original lets the user adjust
+                    // all four corners without irreversible mis-cropping.
                     val q = QuadDetector.detectInBitmap(
                         rotated,
                         config.detectionPolarity,
                         config.detectionThresholdOffset,
-                    ) ?: lastQuad
+                    )
                     val pixelQuad = q?.let {
                         Quad(
                             PointF(it.topLeft.x * rawSize.width, it.topLeft.y * rawSize.height),
@@ -344,8 +355,15 @@ class ScannerSession(
                         )
                     }
                     var croppedPath: String? = null
+                    var warpError: String? = null
                     if (config.enablePerspectiveWarp && pixelQuad != null) {
-                        croppedPath = ImageWarper.warp(rotated, pixelQuad, config.jpegQuality, config.imageEnhancement, config.autoOrientation)
+                        try {
+                            croppedPath = ImageWarper.warp(rotated, pixelQuad,
+                                config.jpegQuality, config.imageEnhancement, config.autoOrientation)
+                        } catch (e: Exception) {
+                            // The raw capture remains usable for manual crop.
+                            warpError = e.message ?: "Perspective crop failed"
+                        }
                     }
                     // Always persist the upright bitmap we actually measured
                     // (`rotated`) so the returned rawImagePath's pixel
@@ -369,6 +387,7 @@ class ScannerSession(
                     val payload = mapOf(
                         "croppedImagePath" to croppedPath,
                         "rawImagePath" to rawPathToReturn,
+                        "warpError" to warpError,
                         "quad" to (pixelQuad ?: Quad(
                             PointF(0f, 0f),
                             PointF(rawSize.width.toFloat(), 0f),
