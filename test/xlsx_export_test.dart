@@ -11,9 +11,9 @@ void main() {
       'Name  City\nJahid  Dhaka',
     ]);
     final archive = ZipDecoder().decodeBytes(bytes, verify: true);
-    final workbook = utf8.decode(archive.findFile('xl/workbook.xml')!.readBytes());
-    final sheet1 = utf8.decode(archive.findFile('xl/worksheets/sheet1.xml')!.readBytes());
-    final sheet2 = utf8.decode(archive.findFile('xl/worksheets/sheet2.xml')!.readBytes());
+    final workbook = utf8.decode(archive.findFile('xl/workbook.xml')!.readBytes()!);
+    final sheet1 = utf8.decode(archive.findFile('xl/worksheets/sheet1.xml')!.readBytes()!);
+    final sheet2 = utf8.decode(archive.findFile('xl/worksheets/sheet2.xml')!.readBytes()!);
 
     expect(workbook, contains('name="Page 1"'));
     expect(workbook, contains('name="Page 2"'));
@@ -28,7 +28,7 @@ void main() {
       XlsxExport.buildXlsxBytes(['বাংলা\tA&B\n<cell>\tYes']),
       verify: true,
     );
-    final xml = utf8.decode(zip.findFile('xl/worksheets/sheet1.xml')!.readBytes());
+    final xml = utf8.decode(zip.findFile('xl/worksheets/sheet1.xml')!.readBytes()!);
     expect(xml, contains('বাংলা'));
     expect(xml, contains('A&amp;B'));
     expect(xml, contains('&lt;cell&gt;'));

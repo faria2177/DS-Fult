@@ -16,7 +16,7 @@ void main() {
     expect(zip.findFile('word/styles.xml'), isNotNull);
     final document = zip.findFile('word/document.xml');
     expect(document, isNotNull);
-    final xml = utf8.decode(document!.readBytes());
+    final xml = utf8.decode(document!.readBytes()!);
     expect(xml, contains('First line'));
     expect(xml, contains('Second &amp; &lt;third&gt;'));
     expect(xml, contains('বাংলা লেখাও থাকবে'));
@@ -27,7 +27,7 @@ void main() {
   test('Word export removes invalid control characters safely', () {
     final bytes = DocxExport.buildDocxBytes('Title', ['A\u0000B\u0007C']);
     final zip = ZipDecoder().decodeBytes(bytes, verify: true);
-    final xml = utf8.decode(zip.findFile('word/document.xml')!.readBytes());
+    final xml = utf8.decode(zip.findFile('word/document.xml')!.readBytes()!);
     expect(xml, contains('ABC'));
     expect(xml, isNot(contains('\u0000')));
   });

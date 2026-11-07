@@ -130,7 +130,7 @@ class DocxExport {
         out.write('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
       }
     }
-    out.write('<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>')
+    out..write('<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>')
       ..write('<w:pgMar w:top="1100" w:right="1100" w:bottom="1100" w:left="1100"/></w:sectPr>')
       ..write('</w:body></w:document>');
     return out.toString();

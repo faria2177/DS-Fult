@@ -156,7 +156,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
                   child: Stack(fit: StackFit.expand, children: [
                     Image.file(File(_path!), fit: BoxFit.fill),
                     CustomPaint(painter: SignaturePainter(
-                      strokes: [..._strokes, if (_activeStroke != null) _activeStroke!],
+                      strokes: [..._strokes, ?_activeStroke],
                       inkColor: _ink,
                     )),
                   ]),
