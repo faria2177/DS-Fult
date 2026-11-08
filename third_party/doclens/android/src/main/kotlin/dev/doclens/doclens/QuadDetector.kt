@@ -142,6 +142,100 @@ object QuadDetector {
     }
 
     /**
+     * Still-only page segmentation for neutral desks, wood and dark backgrounds.
+     *
+     * A dense printed letter has much stronger lines *inside* its page than at
+     * the true sheet boundary. The regular edge detector can therefore return
+     * a narrow text/table rectangle. This independent cue compares the image
+     * with the background visible in the four corner patches, then finds a
+     * large, closed and document-shaped component in that colour difference.
+     *
+     * Per-channel corner medians tolerate one finger or cluttered corner;
+     * badly varying corner backgrounds raise the threshold or disable this
+     * cue. Unlike a global brightness threshold, this can also find grey paper
+     * on a grey desk when their relative lightness differs. It requires the
+     * *entire* page to be framed and never fabricates an off-screen corner.
+     */
+    internal fun detectBackgroundContrastPage(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+    ): Quad? {
+        if (width < 64 || height < 64 || pixels.size != width * height) return null
+
+        // Keep the sample patches smaller than the minimum corner inset. A
+        // centred document may take almost the whole preview; the first 3%
+        // of each frame corner should still show its background.
+        val patchW = (width * .028).toInt().coerceAtLeast(3)
+        val patchH = (height * .028).toInt().coerceAtLeast(3)
+        val cornerMeans = Array(4) { IntArray(3) }
+        for (corner in 0..3) {
+            val startX = if (corner % 2 == 0) 0 else width - patchW
+            val startY = if (corner < 2) 0 else height - patchH
+            var r = 0L
+            var g = 0L
+            var b = 0L
+            for (y in startY until startY + patchH) {
+                for (x in startX until startX + patchW) {
+                    val pixel = pixels[y * width + x]
+                    r += (pixel shr 16) and 0xFF
+                    g += (pixel shr 8) and 0xFF
+                    b += pixel and 0xFF
+                }
+            }
+            val count = (patchW * patchH).toLong()
+            cornerMeans[corner][0] = (r / count).toInt()
+            cornerMeans[corner][1] = (g / count).toInt()
+            cornerMeans[corner][2] = (b / count).toInt()
+        }
+
+        // Median from four corners is resilient to one mismatched patch.
+        val background = IntArray(3) { channel ->
+            val values = cornerMeans.map { it[channel] }.sorted()
+            (values[1] + values[2]) / 2
+        }
+        val deviations = cornerMeans.map { corner ->
+            (0..2).sumOf { channel ->
+                kotlin.math.abs(corner[channel] - background[channel])
+            } / 3.0
+        }.sorted()
+        val backgroundVariation = deviations[2] // three agreeing corners
+        if (backgroundVariation > 38.0) return null
+
+        val threshold = (14.0 + backgroundVariation * 2.25).coerceIn(14.0, 72.0)
+        val mask = BooleanArray(pixels.size)
+        var foregroundCount = 0
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val difference = (
+                kotlin.math.abs(((pixel shr 16) and 0xFF) - background[0]) +
+                kotlin.math.abs(((pixel shr 8) and 0xFF) - background[1]) +
+                kotlin.math.abs((pixel and 0xFF) - background[2])
+            ) / 3.0
+            if (difference >= threshold) {
+                mask[i] = true
+                foregroundCount++
+            }
+        }
+        val foregroundFraction = foregroundCount.toDouble() / pixels.size
+        if (foregroundFraction !in .11..0.90) return null
+        val candidate = analyzeMask(mask, width, height)?.quad ?: return null
+        val area = StillCaptureCropSafety.area(candidate)
+        if (area !in .15..0.90) return null
+        val horizontal = kotlin.math.hypot(
+            (candidate.topRight.x - candidate.topLeft.x).toDouble() * width,
+            (candidate.topRight.y - candidate.topLeft.y).toDouble() * height,
+        )
+        val vertical = kotlin.math.hypot(
+            (candidate.bottomLeft.x - candidate.topLeft.x).toDouble() * width,
+            (candidate.bottomLeft.y - candidate.topLeft.y).toDouble() * height,
+        )
+        val longRatio = kotlin.math.max(horizontal, vertical) /
+            kotlin.math.min(horizontal, vertical).coerceAtLeast(1.0)
+        return candidate.takeIf { longRatio in 1.08..2.80 }
+    }
+
+    /**
      * Give a central, closed card a chance against a larger bright background.
      *
      * - **solidity** — component pixels over its own quad's area. A document
@@ -293,22 +387,31 @@ object QuadDetector {
         } finally {
             if (small !== bitmap) small.recycle()
         }
+        // The independently segmented outside sheet must outweigh any inner
+        // text rectangle, but cannot displace an equally sized strong CV page.
         val neutralQuad = detectNeutralPaper(pixels, dw, dh)
+        val contrastQuad = if (cvQuad == null ||
+            StillCaptureCropSafety.area(cvQuad) < .48 ||
+            StillCaptureCropSafety.isSuspiciousInteriorStrip(cvQuad, dw, dh)) {
+            detectBackgroundContrastPage(pixels, dw, dh)
+        } else null
+        val wholePage = listOfNotNull(neutralQuad, contrastQuad)
+            .filter { StillCaptureCropSafety.isCrediblePage(it, dw, dh) }
+            .maxByOrNull { StillCaptureCropSafety.area(it) }
         if (cvQuad != null) {
-            if (neutralQuad != null) {
-                fun area(quad: Quad): Float {
-                    val pts = listOf(quad.topLeft, quad.topRight,
-                        quad.bottomRight, quad.bottomLeft)
-                    return polygonArea(pts)
-                }
-                // An inward contour on a crumpled/stacked sheet can clip the
-                // outside page. Only replace it when the colour-separated
-                // page is substantially larger; normal accurate CV crops win.
-                if (area(neutralQuad) > area(cvQuad) * 1.30f) return neutralQuad
-            }
+            // Mask segmentations are boundary *proposals*, not a replacement
+            // for good contour corners. Promote only a credible outer page
+            // substantially larger than the existing CV quad.
+            if (wholePage != null &&
+                StillCaptureCropSafety.shouldPreferPaperMask(
+                    cvQuad, wholePage, dw, dh)) return wholePage
             return cvQuad
         }
+        if (wholePage != null) return wholePage
+        // Retain the older small-card/receipt fallback when there is no CV
+        // result; the page-only preference above must not remove that option.
         if (neutralQuad != null) return neutralQuad
+        if (contrastQuad != null) return contrastQuad
         val luma = ByteArray(dw * dh)
         for (i in pixels.indices) {
             val p = pixels[i]

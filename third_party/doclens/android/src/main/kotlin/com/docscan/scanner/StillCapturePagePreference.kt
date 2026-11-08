@@ -27,12 +27,14 @@ internal object StillCapturePagePreference {
                 val coverage = area / imageArea
                 // A small ID card is not a 20%-of-frame A4 page. Constrain
                 // this preference to large, fully visible paper candidates.
-                coverage in 0.20..0.86 && area >= bestArea * 1.85 &&
+                coverage in 0.20..0.92 && area >= bestArea * 1.60 &&
                     outer.totalConfidence >= .46 &&
-                    outer.totalConfidence >= best.totalConfidence - .18 &&
-                    outer.geometryScore >= .50 &&
-                    outer.edgeScore >= .28 &&
-                    outer.boundaryContrast >= 11.0 &&
+                    outer.totalConfidence >= best.totalConfidence - .26 &&
+                    outer.geometryScore >= .55 &&
+                    outer.edgeScore >= .25 &&
+                    outer.boundaryContrast >= 8.0 &&
+                    ScannerTuning.paperRatioScore(
+                        ScannerTuning.normalizedLongRatio(outer.corners)) >= .58 &&
                     isInside(outer.corners, best.corners)
             }
             .maxByOrNull { ContourDetector.calculatePolygonArea(it.corners) }

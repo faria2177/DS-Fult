@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-08  
-**Current candidate release:** `0.5.12+26`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42454738856](https://github.com/faria2177/DS-Fult/actions/runs/42454738856)
-**Baseline commit:** [`d65478e`](https://github.com/faria2177/DS-Fult/commit/d65478e8d17cef07c6f4e179396fbcb6aa9010a1)
+**Current candidate release:** `0.5.13+27`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42458973854](https://github.com/faria2177/DS-Fult/actions/runs/42458973854)
+**Baseline commit:** [`708589f`](https://github.com/faria2177/DS-Fult/commit/708589f3b16cddbcc3fd5bb5f1ec74169fbceb0a)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -28,8 +28,9 @@
 | `0.5.7`–`0.5.8` | More video-style Tools screens; watermark, reorder, compress, lock and Smart Erase UI | Implemented with documented non-AI limitations |
 | `0.5.9` | Still-image detector prefers complete visible A4 sheet over a strong inner table when evidence supports it | Native regression tests passed; field check needed |
 | `0.5.10` | Same-session Front→Back capture, General multi-page mode, A4 composite ID review/save/PDF, add paired pages | Implemented / native + Flutter CI passed; field check needed |
-| `0.5.11` | Card-specific OpenCV quad ranking, source-image re-crop recovery, improved true-size A4 card layout | Implemented / CI + physical device verification pending |
-| `0.5.12` | Single Scan crop guard against internal horizontal text bands; recent credible live outline seeds manual review, full original preserved; Adjust corners actions respect navigation safe-area | Native regression tests added; CI and device verification pending |
+| `0.5.11` | Card-specific OpenCV quad ranking, source-image re-crop recovery, improved true-size A4 card layout | Implemented / CI-tested; physical device verification pending |
+| `0.5.12` | Single Scan crop guard against internal horizontal text bands; recent credible live outline seeds manual review, full original preserved; Adjust corners actions respect navigation safe-area | Native/Flutter CI passed in run #42458973854; device verification pending |
+| `0.5.13` | More capable still-image Auto Crop: background-versus-paper contrast mask, thorough still-only edge/line candidate search and safer outer-page preference | Regression tests added; CI/device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -66,7 +67,7 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - When no credible card quad exists, review must allow adjusting the original image instead of saving a guessed form crop.
 - Full-size originals survive the Front/Back capture flow; reopening Crop uses the source, not an already clipped crop.
 - Card-size A4 placement is closer to physical ID-1 proportions, and the on-screen preview matches the saved composer.
-- New native candidate-selection and Dart page-scale regression tests are included. **Passing tests and a real-device retest are not yet recorded.**
+- New native candidate-selection and Dart page-scale regression tests are included. CI passed in the `0.5.11` run; **a real-device retest is not yet recorded.**
 
 ### 0.5.12 candidate — Single Scan video regression (381360.mp4, 381362.jpg)
 
@@ -74,7 +75,15 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - If the current live frame has a credible page-like quadrilateral and the still framing matches, that recent outline seeds the editable **Adjust corners** screen, not an automatic warp. Otherwise the full upright capture opens for manual crop.
 - The existing ID Card crop strategy remains separate and unchanged.
 - **Adjust corners** actions now sit inside the Android bottom safe area; the full photograph remains available for correction.
-- Native geometric unit tests cover credible page, suspicious horizontal strip, sudden shrink, orientation mismatch and malformed quadrilaterals. **CI/device confirmation not yet recorded.**
+- Native geometric unit tests cover credible page, suspicious horizontal strip, sudden shrink, orientation mismatch and malformed quadrilaterals. **CI passed in run #42458973854; device confirmation not yet recorded.**
+
+### 0.5.13 candidate — improved Auto Crop after scan
+
+- Still scans now compare neutral/coloured paper against the background in the frame corners as a separate, offline page-boundary signal. The method works when paper and desk have similar saturation but visibly different brightness, even with bold internal text lines.
+- Shutter stills search more contour candidates and run line/texture fallbacks when the only strong rectangle seems to be content rather than a whole page; live preview retains the existing lighter path.
+- Outer-sheet selection tolerates a more subdued page boundary only if its polygon encloses the inner rectangle, has credible paper geometry and independently supported edges/contrast.
+- A new colour-mask candidate replaces an existing CV crop only if the page is credible and substantially larger; otherwise the original still/crop behavior remains. Card-specific ranking, manual shutter, original-image preservation and reversible four-corner editing remain intact.
+- Native regression tests cover dense printed letters, light-grey paper on a grey desk, uniformly blank scenes, cut-off background panels, subdued outer page borders and square false positives. **CI and physical device confirmation not yet recorded.**
 
 ## Recent CI note
 

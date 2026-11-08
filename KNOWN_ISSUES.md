@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.10+24`  
+**Baseline:** `0.5.13+27` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -24,7 +24,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 | ID | Area | What still needs checking |
 | --- | --- | --- |
-| R-001 | Real-time contours | Camera resolution, lighting, glare, nested rectangles and contrast can change live/still candidate selection. Test A4 and Legal with real sample sets. |
+| R-001 | Auto Crop accuracy | `0.5.13` adds still-only contrast segmentation and more outer-page candidates, but patterned backgrounds, glare, low-contrast paper edges, partially off-frame sheets and different camera framing can still defeat automatic detection. The original image and manual four-corner review remain the fallback. Validate A4/Letter/Legal, ID Card and receipts with real sample sets. |
 | R-002 | Mode switching | Some configuration changes intentionally rebind the native camera. Verify no unwanted reflection/black flash on the target HONOR Android 16 device. |
 | R-003 | Reference video fidelity | Similar Flutter UI and interaction flow do **not** guarantee pixel-identical colors, typography, motion, overlays or native processing output across screen sizes. |
 | R-004 | Navigation/safe areas | Verify toolbar and dialog positioning with Android gesture navigation and three-button navigation. |
@@ -42,7 +42,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The `0.5.10+24` baseline completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42440988584](https://github.com/faria2177/DS-Fult/actions/runs/42440988584). These tests verify compile-time and covered automated behavior; they **do not** prove live CameraX behavior or screenshot identity on a physical phone.
+The latest verified baseline `0.5.12+26` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42458973854](https://github.com/faria2177/DS-Fult/actions/runs/42458973854). The `0.5.13+27` enhancement requires a fresh CI run. Such automated checks **do not** prove live CameraX behavior, corner accuracy or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

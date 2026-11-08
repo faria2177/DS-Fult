@@ -83,6 +83,15 @@
 **Consequences:** A fresh local build must follow the documented setup order. If dependency sources change or fail to download, CI may fail even when Dart code is unchanged.  
 **Related:** `.github/workflows/android-apk.yml`, `tool/`.
 
+## ADR-011 — Offline still-image Auto Crop combines independent boundary evidence
+
+**Status:** Accepted for `0.5.13` candidate; device quality requires verification.
+**Decision:** Retain fast real-time OpenCV detection. After a manual shutter/import, additionally search beyond the strongest text/table contour using deeper still-image candidates, geometric paper preferences and a page-versus-background colour mask. Promote an outer-mask region over an existing crop only when it is a credible, substantially larger paper quadrilateral. Preserve the original upright image and require manual corner adjustment if confidence or framing is uncertain. ID Card selection stays separate.
+**Why:** Thin/low-contrast outside page edges can lose to printed inner boxes in captured high-resolution stills, especially on neutral desktops. Independent colour and geometry cues increase full-sheet recall without depending on CamScanner proprietary code or cloud processing.
+**Consequences:** Hard scenes may need an additional still-only processing pass, and no camera-independent confidence threshold can guarantee accurate corners. Regressions must be tested on device for false page/background selection, latency and preserved text.
+**Alternatives:** Always applying the most recent live quad (rejected due preview/still crop mismatch); always promoting the largest rectangle (rejected due desktop/background false positives); proprietary scanner binaries or online APIs (excluded).
+**Related:** `DocumentBoundaryDetector.kt`, `StillCapturePagePreference.kt`, `QuadDetector.kt`, `ScannerSession.kt` and native regression tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

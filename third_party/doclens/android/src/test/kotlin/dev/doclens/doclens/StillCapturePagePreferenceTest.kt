@@ -50,4 +50,24 @@ class StillCapturePagePreferenceTest {
         assertSame(document, StillCapturePagePreference.select(
             listOf(document, elsewhere), document, 1_000_000.0))
     }
+
+    @Test
+    fun lowContrastOutsideLetterCanBeatStrongInnerTable() {
+        val innerText = candidate(260.0, 325.0, 735.0, 590.0, .73)
+        // The outer sheet is real but faded: its confidence trails the
+        // sharply printed table by .23, outside the old .18 tie-breaker.
+        val paper = candidate(180.0, 80.0, 840.0, 955.0,
+            .50, contrast = 12.0)
+        assertSame(paper, StillCapturePagePreference.select(
+            listOf(innerText, paper), innerText, 1_000_000.0))
+    }
+
+    @Test
+    fun largeSquareBackgroundDoesNotReplaceActualPage() {
+        val document = candidate(330.0, 280.0, 655.0, 725.0, .74)
+        val squareTable = candidate(60.0, 50.0, 950.0, 940.0,
+            .58, contrast = 25.0)
+        assertSame(document, StillCapturePagePreference.select(
+            listOf(document, squareTable), document, 1_000_000.0))
+    }
 }

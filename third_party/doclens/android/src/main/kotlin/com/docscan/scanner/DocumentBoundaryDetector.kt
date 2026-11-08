@@ -121,8 +121,16 @@ class DocumentBoundaryDetector(
         val candidates = mutableListOf<CandidateScore>()
         fun collectFromCurrentEdges(stage: DetectionStage, maxCandidates: Int = 8) {
             val quads = ContourDetector.findQuadrilaterals(morphMat,
-                maxCandidates = if (preferIdCardBounds) 24 else maxCandidates,
-                contourLimit = if (preferIdCardBounds) 32 else 10)
+                maxCandidates = when {
+                    preferIdCardBounds -> 24
+                    preferOuterPageInStill -> 16
+                    else -> maxCandidates
+                },
+                contourLimit = when {
+                    preferIdCardBounds -> 32
+                    preferOuterPageInStill -> 24
+                    else -> 10
+                })
             for (cand in quads) {
                 val score = scoreCandidate(
                     cand.corners, grayMat, morphMat, width, height, totalImageArea,
@@ -130,6 +138,19 @@ class DocumentBoundaryDetector(
                 )
                 if (score != null) candidates.add(score)
             }
+        }
+
+        // Shutter stills can include a crisp inner table and a faint sheet
+        // border. Keep searching when we only have plausible *contents*;
+        // otherwise the first strong table prematurely skips the line and
+        // texture passes, which are often where the outer page appears.
+        fun hasSupportedPaperCandidate(): Boolean = candidates.any { candidate ->
+            val coverage = ContourDetector.calculatePolygonArea(candidate.corners) /
+                totalImageArea
+            coverage in .30..0.92 && candidate.edgeScore >= .22 &&
+                candidate.boundaryContrast >= 7.5 &&
+                ScannerTuning.paperRatioScore(
+                    ScannerTuning.normalizedLongRatio(candidate.corners)) >= .58
         }
 
         collectFromCurrentEdges(DetectionStage.CONTOUR_QUAD, 8)
@@ -167,7 +188,8 @@ class DocumentBoundaryDetector(
         // map: this keeps segment-length/gap thresholds meaningful (they'd otherwise
         // behave very differently on a 720p preview vs a 12MP still) and reduces
         // spurious short segments from high-res texture noise.
-        if (topScore < 0.56 || (preferIdCardBounds &&
+        if (topScore < 0.56 || (preferOuterPageInStill &&
+                !hasSupportedPaperCandidate()) || (preferIdCardBounds &&
                 CardBoundaryPreference.select(candidates, width, height) == null)) {
             val maxDim = max(width, height)
             val houghScale = if (maxDim > 900) 900.0 / maxDim else 1.0
@@ -218,7 +240,8 @@ class DocumentBoundaryDetector(
 
         // STAGE 3: If still no good candidate, try Morphological Gradient fallback
         val topScoreAfterStage2 = candidates.maxByOrNull { it.totalConfidence }?.totalConfidence ?: 0.0
-        if (topScoreAfterStage2 < 0.46 || (preferIdCardBounds &&
+        if (topScoreAfterStage2 < 0.46 || (preferOuterPageInStill &&
+                !hasSupportedPaperCandidate()) || (preferIdCardBounds &&
                 CardBoundaryPreference.select(candidates, width, height) == null)) {
             val gradMat = Mat()
             val largeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))

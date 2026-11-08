@@ -105,6 +105,63 @@ class QuadDetectorTest {
         assertNull(QuadDetector.detectNeutralPaper(pixels, 320, 240))
     }
 
+    @Test
+    fun contrastMaskFindsCompletePageOnNeutralDeskDespitePrintedTable() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFF777571.toInt() }
+        fillRgb(pixels, width, 60, 48, 267, 351, 0xFFEDEAE6.toInt())
+        // Dense letters/table lines can overpower the true outside edge in
+        // Canny. The page mask must still cover the header and signature.
+        for (y in 92 until 316 step 15) {
+            fillRgb(pixels, width, 94, y, 230, y + 3, 0xFF343433.toInt())
+        }
+        val quad = assertNotNull(
+            QuadDetector.detectBackgroundContrastPage(pixels, width, height),
+        )
+        assertTrue(abs(quad.topLeft.x - 60f / width) < .045f)
+        assertTrue(abs(quad.topLeft.y - 48f / height) < .045f)
+        assertTrue(abs(quad.bottomRight.x - 266f / width) < .045f)
+        assertTrue(abs(quad.bottomRight.y - 350f / height) < .045f)
+    }
+
+    @Test
+    fun contrastMaskDetectsSubtleGreyPaperOnGreyDesk() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFFBBB9B7.toInt() }
+        fillRgb(pixels, width, 65, 62, 258, 345, 0xFFD8D7D4.toInt())
+        val quad = assertNotNull(
+            QuadDetector.detectBackgroundContrastPage(pixels, width, height),
+        )
+        assertTrue(abs(quad.topLeft.x - 65f / width) < .045f)
+        assertTrue(abs(quad.bottomRight.y - 344f / height) < .045f)
+    }
+
+    @Test
+    fun contrastMaskDoesNotInventPageOnUniformSurface() {
+        val pixels = IntArray(320 * 400) { 0xFFD0CFCC.toInt() }
+        assertNull(QuadDetector.detectBackgroundContrastPage(pixels, 320, 400))
+    }
+
+    @Test
+    fun contrastMaskRejectsBrightObjectCutOffAtFrameEdge() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFF555555.toInt() }
+        fillRgb(pixels, width, 0, 60, 123, 340, 0xFFE9E9E9.toInt())
+        assertNull(QuadDetector.detectBackgroundContrastPage(pixels, width, height))
+    }
+
+    private fun fillRgb(
+        image: IntArray, width: Int, left: Int, top: Int,
+        right: Int, bottom: Int, color: Int,
+    ) {
+        for (y in top until bottom) for (x in left until right) {
+            image[y * width + x] = color
+        }
+    }
+
     private fun fill(
         image: ByteArray,
         width: Int,

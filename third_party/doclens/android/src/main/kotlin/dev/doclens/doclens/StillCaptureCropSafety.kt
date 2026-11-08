@@ -63,4 +63,17 @@ internal object StillCaptureCropSafety {
 
     fun significantlySmallerThan(still: Quad, preview: Quad): Boolean =
         area(still) < area(preview) * .64
+
+    /** Keep accurate CV corners unless the independent mask clearly recovers a page. */
+    fun shouldPreferPaperMask(
+        still: Quad, mask: Quad, width: Int, height: Int,
+    ): Boolean {
+        if (!isCrediblePage(mask, width, height)) return false
+        val stillArea = area(still)
+        val needsRecovery = stillArea < .28 ||
+            isSuspiciousInteriorStrip(still, width, height) ||
+            !isCrediblePage(still, width, height)
+        val minimumGrowth = if (needsRecovery) 1.35 else 1.85
+        return area(mask) > stillArea * minimumGrowth
+    }
 }
