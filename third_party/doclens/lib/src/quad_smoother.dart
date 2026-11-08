@@ -108,7 +108,9 @@ class QuadSmoother {
 
     // Rapid camera movement can produce a different candidate each frame.
     // In that case a stale outline is worse than displaying no outline.
-    if (_unmatchedFrames >= maxUnmatchedFrames) return null;
+    if (_unmatchedFrames >= maxUnmatchedFrames) {
+      return null;
+    }
     return _tracked;
   }
 
