@@ -163,10 +163,12 @@ class _IdCardScreenState extends State<IdCardScreen> {
       final file = File('${temporaryDirectory.path}/ds_card_'
           '${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
       await file.writeAsBytes(result, flush: true);
-      if (mounted) setState(() {
-        _selected[index] = file.path;
-        _originals[index] = file.path;
-      });
+      if (mounted) {
+        setState(() {
+          _selected[index] = file.path;
+          _originals[index] = file.path;
+        });
+      }
     } catch (error) {
       _warn('Could not save adjusted card: $error');
     }
