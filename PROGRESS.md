@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-08  
-**Current candidate release:** `0.5.15+29`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42486007998](https://github.com/faria2177/DS-Fult/actions/runs/42486007998)
-**Baseline commit:** [`1557943`](https://github.com/faria2177/DS-Fult/commit/1557943b06fb90410ff6bfe49b07455c409bec79)
+**Current candidate release:** `0.5.16+30`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42488745515](https://github.com/faria2177/DS-Fult/actions/runs/42488745515)
+**Baseline commit:** [`bcdcc72`](https://github.com/faria2177/DS-Fult/commit/bcdcc72db595d3f4ec232ba011fa1d51bf74bd58)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -33,7 +33,8 @@
 | `0.5.13` | More capable still-image Auto Crop: background-versus-paper contrast mask, thorough still-only edge/line candidate search and safer outer-page preference | Regression tests added; CI/device verification pending |
 | Post-`0.5.13` | Video `381526.mp4` regression: try still-only saturated outer-panel recovery on mixed backgrounds; reject small, centred inner title/label quads in either JPEG orientation; retain full-original review if uncertain | Code + synthetic native regressions added; CI and physical-device verification pending |
 | `0.5.14` | Video `381530.mp4`: prefer a coherent coloured document over an elongated chair-frame false detection, adaptive jitter damping with stronger switch confirmation, reset tracking after camera lifecycle changes, remove permanent preview border | Kotlin/Dart tests and complete GitHub CI passed in #42486007998; physical-camera confirmation pending |
-| `0.5.15` | Video `381536.mp4`: fix controller's raw-quad fallback that resurrected rejected detections; reject camera-border contenders, delay abrupt border takeovers, add tiny-motion deadband and persistent pale-green fill inside accepted quad | Native/Dart regressions added; CI and same-scene physical-device confirmation pending |
+| `0.5.15` | Video `381536.mp4`: fix controller's raw-quad fallback that resurrected rejected detections; reject camera-border contenders, delay abrupt border takeovers, add tiny-motion deadband and persistent pale-green fill inside accepted quad | Native/Flutter CI passed in #42488745515; physical-device confirmation pending |
+| `0.5.16` | Three functional on-device image tools: Passport Photo Maker (standard sizes, positioning, background colours, 4×6 print sheets), BG Remover (uniform-background flood fill, transparent/coloured PNG), Image Resizer (custom dimensions, ratio lock, quality and format); removed Edit Text and Split PDF from Tools only | Unit/widget regressions added; CI and real-photo verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -57,12 +58,22 @@
 | PDF/image share and print | Implemented | Verify receivers and Android permissions |
 | DOCX/XLSX/PPTX export | Implemented with conversion limits | Open output in office viewers; compare fidelity |
 | Smart Erase | Local pixel processing | Complex backgrounds can show artifacts |
+| Passport / Background / Resize tools | Local image processing and Save as New/Share | Check head framing, uniform/uneven backgrounds, large images and precise print dimensions on phone |
 | Password protection | App UI access PIN | Does not encrypt PDFs/files |
 | Cloud, Ask AI | Intentionally absent | Do not add without explicit new scope |
 
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.16 — New image-editing Tools and five reference clips
+
+- `381560.mp4` illustrates PDF → individual images, `381562.mp4` PDF → long image (bottom watermark/share), `381563.mp4` Extract Text OCR, `381564.mp4` selective PDF page extraction and `381565.mp4` rotating individual pages. These are **reference observations**, not evidence that every existing workflow has pixel-identical UI.
+- The three requested image tools previously had two placeholder actions and a fixed-size-only resizer. All three now open a new image editor with Gallery, Camera and unlocked DocScanner-document sources, a preview, Save as New and Share. No edit triggers a save notification before Save.
+- Passport mode supports 35×45 mm, 2×2 inch, 30×40 mm, 40×60 mm and 50×50 mm at 300 DPI, pan/zoom adjustments, simple backgrounds and 4×6 inch sheets with capacity-aware copy counts.
+- BG Remover flood-fills an edge-connected, approximately uniform colour locally; it outputs transparent PNG or recolours the removed area. This is not a semantic AI portrait matting engine.
+- Image Resizer adds percentage presets, custom width/height, aspect lock, JPEG quality and PNG/JPEG output. Photos are processed outside the UI isolate. Tools-grid Edit Text and Split PDF are removed, while document-level text editing and other PDF tools remain.
+- Pure image-processing and widget-opening tests added. Live device checks are needed for picker behavior, memory/latency, camera permissions, delicate hair edges, image fidelity and share targets.
 
 ### 0.5.11 candidate — video regression (381334.mp4)
 

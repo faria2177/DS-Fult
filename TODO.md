@@ -18,6 +18,8 @@
 
 ## P1 — Data and processing quality
 
+- [ ] **T-109: Validate 0.5.16 photo Tools on HONOR Android 16.** Test Passport Photo Maker sizes and 4×6 inch sheet against a ruler at 300 DPI; check both face positioning sliders and background choice. Test BG Remover on studio-white, mixed and textured backgrounds, including hair edges; the simple flood-fill limitation must be visible. Resize portrait/landscape PNG/JPG to exact dimensions with ratio lock on/off, verify JPEG quality, Save as New and Share, and original file preservation.
+- [ ] **T-110: Video workflow acceptance (381560–381565).** Compare each PDF-to-images, PDF-to-long-image, Extract Text, PDF-page-extract and Rotate Pages screen against the supplied clips; record which steps already work and which require additional source-page selection, save/share or layout changes. Do not claim exact UI parity based only on frame inspection.
 - [ ] **T-101: Re-edit saved card sides.** Persist front/back source image metadata and files alongside the composed A4 sheet; offer separate side editing after the document is saved. Do not lose existing composite documents during migration.
 - [ ] **T-102: Atomic document-index persistence.** Write `index.json.tmp`, fsync if available and safely replace/rename the index; recover from interrupted writes. Test corrupt/partial JSON and idempotent startup.
 - [ ] **T-103: Recoverable cleanup.** Make deletion behavior explicit (trash/undo/retention) and safely garbage-collect unreachable scan/edit files. Never delete original capture files without an agreed recovery policy.

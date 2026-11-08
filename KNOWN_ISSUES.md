@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.15+29` candidate; hardware verification pending.
+**Baseline:** `0.5.16+30` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -19,6 +19,8 @@ This list separates **confirmed implementation limits** from **risks that need p
 | K-009 | Document index writes | `index.json` is currently written directly, without an atomic temp-file swap. Interrupted writes may require recovery; unreadable source index is copied with a `.recovery` suffix. | Atomic persistence and corrupt-file tests (T-102) |
 | K-010 | Deletion/storage cleanup | The app may retain older backing image files after document/page deletion to avoid premature data loss. This can grow storage usage. | Design recoverable trash and controlled garbage collection (T-103) |
 | K-011 | Public share links | Without a cloud host, DocScanner cannot generate a public document URL; local Android sharing is available. | Retain offline explanation unless cloud scope changes |
+| K-012 | BG Remover quality | The offline colour/flood-fill remover handles relatively uniform edge-connected backgrounds. It does not reconstruct hair, transparent objects or complex indoor scenes like an AI portrait segmentation model. | Evaluate a licensed on-device segmentation model only if quality requirements justify extra APK size and device cost |
+| K-013 | Passport photo acceptance | The presets set nominal pixel sizes at 300 DPI but cannot automatically verify face position, expression, lighting or country-specific biometric requirements. Users must manually frame and confirm photos before official use. | Add country-specific rule templates, face measurements and preview validation if requested |
 
 ## Device-dependent or unverified risks
 
@@ -42,7 +44,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.14+28` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42486007998](https://github.com/faria2177/DS-Fult/actions/runs/42486007998). The new `0.5.15+29` tracking changes require fresh CI and same-scene hardware testing. Automated checks **do not** prove live CameraX behavior, corner accuracy or screenshot identity on a physical phone.
+The latest verified baseline `0.5.15+29` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42488745515](https://github.com/faria2177/DS-Fult/actions/runs/42488745515). The new `0.5.16+30` image tools require a fresh CI run and real-device output testing. Automated checks **do not** prove live CameraX behavior, image-segmentation fidelity, face framing or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

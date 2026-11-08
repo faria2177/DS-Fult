@@ -54,7 +54,7 @@
 ## ADR-007 — Tools-grid cleanup is a UI scope decision
 
 **Status:** Accepted  
-**Decision:** Remove **Mega Scan, Long Document, Driver License, Bank Card, Photo Translation, Scan Code, To PPT, Erase Marks, Restore Photo** from the Tools grid as requested. Code or entry points elsewhere may remain if useful; not every internal implementation is a visible Tools item.  
+**Decision:** Remove **Mega Scan, Long Document, Driver License, Bank Card, Photo Translation, Scan Code, To PPT, Erase Marks, Restore Photo** from the Tools grid as requested. In `0.5.16`, also remove **Edit Text** and **Split PDF** tiles only; retain document-level Edit Text and other PDF workflows. Code or entry points elsewhere may remain if useful; not every internal implementation is a visible Tools item.
 **Why:** User-defined navigation structure; reduces clutter without destructively removing working services.  
 **Consequences:** Avoid reintroducing these grid entries without a new requirement.  
 **Related:** `home_shell.dart`, `README.md` v0.5.2.
@@ -99,6 +99,14 @@
 **Why:** Video `381536.mp4` captures a moving, chair-backed textile whose border repeatedly jumps to the entire camera frame. The green tint communicates the selected region but cannot improve the native detection calculation by itself.
 **Consequences:** More colour-mask work on normal live frames may affect FPS/battery; rejecting very close-to-frame bounds may require the user to move the phone back. Preserve manual capture and the separate ID Card path; measure actual accuracy/latency on the target device.
 **Related:** `OpenCvBoundaryAdapter.kt`, `LiveBoundarySelector.kt`, `quad_smoother.dart`, `controller.dart`, `doclens_screen.dart`.
+
+## ADR-013 — On-device photo tools with explicit editing quality limits
+
+**Status:** Accepted for `0.5.16`, device testing pending.
+**Decision:** Keep Passport Photo Maker, BG Remover and Image Resizer fully offline, with local gallery/camera/DocScanner input and explicit Preview → Save as New or Share. Passport sizes use 300 DPI and a 4×6 inch printable layout; resizer supports custom exact pixels and JPG/PNG. Background removal uses an edge-connected solid-colour tolerance mask, with no claim of face/person AI segmentation. Preserve originals.
+**Why:** Replaces two nonfunctional Tools placeholders and a limited resize dialog without adding cloud services, proprietary models, hidden payment requirements or risky automatic overwrites.
+**Consequences:** Rough boundaries on detailed hair or patterned backgrounds and country-specific passport acceptance checks remain outside the current implementation. An AI segmenter or larger offline model would require separate quality, license and APK-size evaluation.
+**Related:** `home_shell.dart`, `photo_studio_screen.dart`, `photo_studio_operations.dart` and new photo-tool tests.
 
 ## How to change a decision
 

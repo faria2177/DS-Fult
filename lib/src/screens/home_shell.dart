@@ -23,6 +23,7 @@ import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'lock_document_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'photo_studio_screen.dart';
 import 'qr_code_screen.dart';
 import 'reorder_pages_screen.dart';
 import 'scan_more_settings_screen.dart';
@@ -301,7 +302,7 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Import File', Icons.upload_file_outlined, () => _notReady('Import File')),
         _Tool('Extract Text', Icons.text_fields, _startOcr),
         _Tool('Passport Photo Maker', Icons.portrait_outlined,
-            () => _notReady('Passport Photo Maker')),
+            () => _openPhotoStudio(PhotoStudioMode.passport)),
       ],
       'Convert': [
         _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
@@ -314,10 +315,10 @@ class _HomeShellState extends State<HomeShell> {
       ],
       'Edit': [
         _Tool('Edit PDF', Icons.edit_document, () => _openExisting('pdf')),
-        _Tool('Edit Text', Icons.edit_note_outlined, _startOcr),
-        _Tool('BG Remover', Icons.wallpaper_outlined, () => _notReady('BG Remover')),
-        _Tool('Image Resizer', Icons.photo_size_select_large_outlined, _resizeImage),
-        _Tool('Split PDF', Icons.call_split_outlined, () => _openExisting('pdf')),
+        _Tool('BG Remover', Icons.wallpaper_outlined,
+            () => _openPhotoStudio(PhotoStudioMode.backgroundRemover)),
+        _Tool('Image Resizer', Icons.photo_size_select_large_outlined,
+            () => _openPhotoStudio(PhotoStudioMode.resizer)),
         _Tool('Sign', Icons.draw_outlined, _startSign),
         _Tool('Add Watermark', Icons.branding_watermark_outlined, _startWatermark),
         _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startErase),
@@ -413,7 +414,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.2 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.16 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -681,27 +682,10 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  Future<void> _resizeImage() async {
-    try {
-      final image = await _picker.pickImage(source: ImageSource.gallery,
-          requestFullMetadata: false);
-      if (!mounted || image == null) return;
-      final size = await showDialog<int>(context: context,
-        builder: (dialog) => SimpleDialog(
-          title: const Text('Maximum image dimension'),
-          children: [
-            for (final dimension in [640, 1024, 1600, 2048])
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(dialog, dimension),
-                child: Text('$dimension pixels'),
-              ),
-          ],
-        ));
-      if (size == null) return;
-      await ImageToolOperations.shareResizedImage(image.path, size);
-    } catch (error) {
-      _message('Could not resize image: $error');
-    }
+  Future<void> _openPhotoStudio(PhotoStudioMode mode) async {
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => PhotoStudioScreen(mode: mode, store: widget.store),
+    ));
   }
 
   Future<void> _openExisting(String action) async {
