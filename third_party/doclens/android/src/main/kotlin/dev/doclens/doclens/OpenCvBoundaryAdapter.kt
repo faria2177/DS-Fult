@@ -80,7 +80,8 @@ internal class OpenCvBoundaryAdapter {
         val rgba = Mat()
         return try {
             Utils.bitmapToMat(small, rgba)
-            toNormalizedQuad(boundaryDetector.detectBoundary(rgba), w, h)
+            toNormalizedQuad(boundaryDetector.detectBoundary(
+                rgba, preferOuterPageInStill = true), w, h)
         } catch (_: Exception) {
             null
         } finally {

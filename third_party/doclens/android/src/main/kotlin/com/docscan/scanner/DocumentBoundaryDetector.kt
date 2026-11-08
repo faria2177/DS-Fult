@@ -87,6 +87,7 @@ class DocumentBoundaryDetector(
         val geometryScore: Double,
         val cornerScore: Double,
         val aspectRatioScore: Double,
+        val boundaryContrast: Double,
         val stage: DetectionStage
     )
 
@@ -95,7 +96,8 @@ class DocumentBoundaryDetector(
      */
     fun detectBoundary(
         rgbaMat: Mat,
-        stabilityScoreBonus: Double = 0.0
+        stabilityScoreBonus: Double = 0.0,
+        preferOuterPageInStill: Boolean = false,
     ): DocumentDetectionResult {
         val width = rgbaMat.width()
         val height = rgbaMat.height()
@@ -129,9 +131,11 @@ class DocumentBoundaryDetector(
 
         collectFromCurrentEdges(DetectionStage.CONTOUR_QUAD, 8)
 
-        // Only pay for adaptive threshold/color edges when the fast pass is not convincing.
+        // Preview keeps the fast path. For an actual shutter still, inspect
+        // colour/adaptive edges even if a high-confidence INNER table already
+        // won the fast pass: otherwise the faint outer A4 edge is never seen.
         var topScore = candidates.maxOfOrNull { it.totalConfidence } ?: 0.0
-        if (topScore < 0.60) {
+        if (topScore < 0.60 || preferOuterPageInStill) {
             Imgproc.adaptiveThreshold(
                 bilateralMat, adaptMat, 255.0,
                 Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY_INV,
@@ -252,13 +256,20 @@ class DocumentBoundaryDetector(
         // area, since under-cropping loses content while slight over-capture does not.
         // Confidence wins first. Area is only a tiny tie-breaker; otherwise a large
         // table/background quadrilateral can beat the real page.
-        val best = candidates.maxByOrNull { candidate ->
+        val scoredBest = candidates.maxByOrNull { candidate ->
             val areaRatio = ContourDetector.calculatePolygonArea(candidate.corners) / totalImageArea
             // Only use the outer-page preference as a tie-break among credible borders;
             // strong edge/geometry evidence still beats a larger background rectangle.
             candidate.totalConfidence + if (areaRatio in 0.16..0.88 && candidate.edgeScore >= 0.25)
                 areaRatio * 0.065 else 0.0
         }!!
+        // Video regression: live preview correctly framed an entire A4 sheet,
+        // but high-resolution still detection chose only its internal table.
+        // Promote a nested, much larger *credible paper border* on stills.
+        // Do not force this on small ID cards or low-contrast table outlines.
+        val best = if (preferOuterPageInStill) {
+            StillCapturePagePreference.select(candidates, scoredBest, totalImageArea)
+        } else scoredBest
 
         // STAGE 4: Corner Refinement to Subpixel Accuracy
         val proposedCorners = CornerRefiner.refineCorners(
@@ -402,6 +413,7 @@ class DocumentBoundaryDetector(
             geometryScore = geometryScore,
             cornerScore = cornerScore,
             aspectRatioScore = aspectRatioScore,
+            boundaryContrast = boundaryContrast,
             stage = stage
         )
     }

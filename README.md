@@ -3,6 +3,27 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Full A4 capture versus inner table crop — v0.5.9
+
+- The supplied `381270.mp4` demonstrates the live teal outline surrounding
+  the **entire A4 sheet** but the shutter still/preview retaining **only the
+  inner table**. The still detector used a fresh high-resolution edge search,
+  where a strong table frame sometimes outscored a softer paper outline.
+- For **captured stills only**, always run the adaptive/colour edge passes,
+  even when the initial Canny pass has already found a strong rectangle.
+  If the resulting candidates include a well-supported, fully visible page
+  surrounding the smaller table contour, preserve the larger page boundary.
+  Preview detection still uses its previous fast path and auto-capture remains
+  disabled.
+- The preference requires adequate outer edge support, contrast, geometry,
+  confidence, and containment, plus 20% or greater image coverage. It does
+  not blindly enlarge crops to camera boundaries or convert small ID cards
+  into full-page rectangles. When no credible outer boundary exists, existing
+  detection/manual corner adjustment is unchanged.
+- Native regression tests cover preserving the document header/signature,
+  rejecting weak desk rectangles around an ID card, and rejecting unrelated
+  large objects. Physical testing under different lighting remains necessary.
+
 ## Six reference-video tool interfaces — v0.5.8
 
 - The **Tools** entries for Add Watermark, Smart Erase, Merge Files, Compress,
