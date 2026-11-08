@@ -61,7 +61,9 @@ class QuadSmoother {
     if (quad == null || !_isValid(quad)) {
       _consecutiveMisses++;
       _challenger.clear();
-      if (_consecutiveMisses >= missesBeforeReset) reset();
+      if (_consecutiveMisses >= missesBeforeReset) {
+        reset();
+      }
       return _unmatchedFrames >= maxUnmatchedFrames ? null : _tracked;
     }
     _consecutiveMisses = 0;
@@ -117,8 +119,12 @@ class QuadSmoother {
   bool _isValid(Quad quad) {
     final points = quad.points;
     if (points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
-        p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1)) return false;
-    if (quad.area < .008 || quad.area > .96) return false;
+        p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1)) {
+      return false;
+    }
+    if (quad.area < .008 || quad.area > .96) {
+      return false;
+    }
     // A smoothing step must never display a bow-tie or crossed corner order.
     for (var i = 0; i < points.length; i++) {
       final a = points[i];
@@ -126,7 +132,9 @@ class QuadSmoother {
       final c = points[(i + 2) % points.length];
       final cross = (b.dx - a.dx) * (c.dy - b.dy) -
           (b.dy - a.dy) * (c.dx - b.dx);
-      if (cross <= .0001) return false;
+      if (cross <= .0001) {
+        return false;
+      }
     }
     return true;
   }
