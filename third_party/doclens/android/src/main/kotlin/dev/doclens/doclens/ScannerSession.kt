@@ -54,6 +54,11 @@ class ScannerSession(
     @Volatile private var previewSurfaceHeight: Int = 0
     @Volatile private var lastEmittedPreviewW: Int = 0
     @Volatile private var lastEmittedPreviewH: Int = 0
+    /** Latest page-like preview shape, retained only briefly for safe review. */
+    private data class PagePreviewHint(
+        val quad: Quad, val timestampMs: Long, val width: Int, val height: Int,
+    )
+    @Volatile private var latestPagePreviewHint: PagePreviewHint? = null
 
     init {
         lensFacing = if (config.initialLens == "front") CameraSelector.LENS_FACING_FRONT
@@ -235,6 +240,13 @@ class ScannerSession(
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
+            if (!config.preferIdCardBounds && rotated != null) {
+                val uprightW = if (rotation % 180 == 0) width else height
+                val uprightH = if (rotation % 180 == 0) height else width
+                if (StillCaptureCropSafety.isCrediblePage(rotated, uprightW, uprightH)) {
+                    latestPagePreviewHint = PagePreviewHint(rotated, now, uprightW, uprightH)
+                }
+            }
 
             val lowLight = config.enableLowLightDetection && LumaEstimator.isLowLight(luma)
 
@@ -292,6 +304,7 @@ class ScannerSession(
 
     @MainThread
     fun switchCamera() {
+        latestPagePreviewHint = null
         lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK)
             CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
         cameraProvider?.let { bindUseCases(it) }
@@ -299,6 +312,7 @@ class ScannerSession(
 
     @MainThread
     fun pause() {
+        latestPagePreviewHint = null
         cameraProvider?.unbindAll()
     }
 
@@ -348,6 +362,9 @@ class ScannerSession(
             result.error("init_failed", "ImageCapture not ready", null); return
         }
         val file = File(context.cacheDir, "fnds_raw_${System.currentTimeMillis()}.jpg")
+        val previewHintAtShutter = latestPagePreviewHint?.takeIf {
+            System.currentTimeMillis() - it.timestampMs in 0L..900L
+        }
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, captureExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onError(exception: ImageCaptureException) {
@@ -373,12 +390,31 @@ class ScannerSession(
                     // fails. CameraX stills can have a different crop/zoom;
                     // preserving the whole original lets the user adjust
                     // all four corners without irreversible mis-cropping.
-                    val q = QuadDetector.detectInBitmap(
+                    val stillQuad = QuadDetector.detectInBitmap(
                         rotated,
                         config.detectionPolarity,
                         config.detectionThresholdOffset,
                         config.preferIdCardBounds,
                     )
+                    // CameraX still capture is re-detected on upright pixels,
+                    // but a dense letter may yield only the inner text band.
+                    // In that case NEVER warp away the header and signature.
+                    // The recent live quad can seed manual review only when
+                    // preview/still field-of-view ratios are compatible.
+                    val reviewHint = previewHintAtShutter?.takeIf { hint ->
+                        !config.preferIdCardBounds &&
+                        StillCaptureCropSafety.compatibleView(hint.width, hint.height,
+                            rawSize.width, rawSize.height)
+                    }?.quad
+                    val uncertainStill = !config.preferIdCardBounds && (
+                        stillQuad == null ||
+                        StillCaptureCropSafety.isSuspiciousInteriorStrip(stillQuad,
+                            rawSize.width, rawSize.height) ||
+                        (reviewHint != null && StillCaptureCropSafety.significantlySmallerThan(
+                            stillQuad, reviewHint))
+                    )
+                    val q = if (uncertainStill && reviewHint != null) reviewHint
+                        else if (uncertainStill) null else stillQuad
                     val pixelQuad = q?.let {
                         Quad(
                             PointF(it.topLeft.x * rawSize.width, it.topLeft.y * rawSize.height),
@@ -389,7 +425,8 @@ class ScannerSession(
                     }
                     var croppedPath: String? = null
                     var warpError: String? = null
-                    if (config.enablePerspectiveWarp && pixelQuad != null) {
+                    if (config.enablePerspectiveWarp && pixelQuad != null &&
+                        !uncertainStill) {
                         try {
                             croppedPath = ImageWarper.warp(rotated, pixelQuad,
                                 config.jpegQuality, config.imageEnhancement, config.autoOrientation)

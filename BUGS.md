@@ -1,7 +1,7 @@
 # DocScanner — Bug and Regression Register
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.10+24`  
+**Baseline:** `0.5.12+26` (candidate; physical-device verification pending)
 **Scope:** Reproducible failures, historical regressions and their fix status. Potential limitations belong in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), not automatically in the Open list.
 
 ## Status rules
@@ -26,6 +26,7 @@ No **newly verified, device-reproduced** bug was provided after the `0.5.10` suc
 | B-005 | `Me → Scan` and camera More Settings can drift apart | `0.5.2`: shared seven-option page and one persisted preference source | RESOLVED — CI verified; device retest useful | Toggle each option, reopen both entry points and restart app |
 | B-006 | Long-press Files selection action/checkmark visibility and bottom-bar overlap | `0.5.5`: selection controls, safe-area-aware Files navigation | FIX IN CODE — device pending | Select 1 and many files on Android 16 with gesture/3-button navigation |
 | B-008 | Video `381334.mp4`: ID card over a bank form is cropped with background strips and clipped text; final A4 cards are oversized | `0.5.11` candidate: card-aware native quad ranking, safe original-image re-crop and smaller A4 print slots | FIX IN CODE — CI and device pending | On HONOR VKP-NX9, scan both sides over a busy form, inspect corners, adjust/reopen Crop, verify no lost text and one-page PDF |
+| B-009 | Video `381360.mp4` and image `381362.jpg`: Single Scan live preview outlines the portrait letter, but captured still selects only the middle horizontal text band; Reset/Continue buttons are too close to Android navigation bar | `0.5.12` candidate: preserve full still for manual review when still quad is a suspicious inner strip or shrinks relative to a recent credible live page; use recent live outline only as an editable hint, and place corner-editor controls inside SafeArea | FIX IN CODE — CI and device pending | Scan the same letter on HONOR VKP-NX9: header, closing and signature must remain visible throughout Adjust corners, Reset/Continue buttons fully reachable with 3-button navigation, final output contains complete page |
 
 ## Resolved build/publishing incident
 

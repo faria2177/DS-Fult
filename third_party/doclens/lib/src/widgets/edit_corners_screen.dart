@@ -220,8 +220,11 @@ class _EditCornersScreenState extends State<EditCornersScreen> {
             onPressed: _cancel,
           ),
         ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
+        body: SafeArea(
+          top: false,
+          bottom: true,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
             // Inset the fittable area so handles near the photo edge sit
             // comfortably away from the screen edges — much easier to grab
             // a top-left handle when the image isn't flush with the bezel.
@@ -286,7 +289,8 @@ class _EditCornersScreenState extends State<EditCornersScreen> {
                 ),
               ],
             );
-          },
+            },
+          ),
         ),
       ),
     );

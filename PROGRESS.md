@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-08  
-**Baseline release:** `0.5.10+24`  
-**Last fully successful CI baseline:** [GitHub Actions run #42440988584](https://github.com/faria2177/DS-Fult/actions/runs/42440988584)  
-**Baseline commit:** [`1c69de9`](https://github.com/faria2177/DS-Fult/commit/1c69de9362a4904b44aec2a9caed96f0832b210a)
+**Current candidate release:** `0.5.12+26`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42454738856](https://github.com/faria2177/DS-Fult/actions/runs/42454738856)
+**Baseline commit:** [`d65478e`](https://github.com/faria2177/DS-Fult/commit/d65478e8d17cef07c6f4e179396fbcb6aa9010a1)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -29,6 +29,7 @@
 | `0.5.9` | Still-image detector prefers complete visible A4 sheet over a strong inner table when evidence supports it | Native regression tests passed; field check needed |
 | `0.5.10` | Same-session Front→Back capture, General multi-page mode, A4 composite ID review/save/PDF, add paired pages | Implemented / native + Flutter CI passed; field check needed |
 | `0.5.11` | Card-specific OpenCV quad ranking, source-image re-crop recovery, improved true-size A4 card layout | Implemented / CI + physical device verification pending |
+| `0.5.12` | Single Scan crop guard against internal horizontal text bands; recent credible live outline seeds manual review, full original preserved; Adjust corners actions respect navigation safe-area | Native regression tests added; CI and device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -66,6 +67,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Full-size originals survive the Front/Back capture flow; reopening Crop uses the source, not an already clipped crop.
 - Card-size A4 placement is closer to physical ID-1 proportions, and the on-screen preview matches the saved composer.
 - New native candidate-selection and Dart page-scale regression tests are included. **Passing tests and a real-device retest are not yet recorded.**
+
+### 0.5.12 candidate — Single Scan video regression (381360.mp4, 381362.jpg)
+
+- A portrait letter can contain stronger horizontal text/table edges than its page outline. Suspicious landscape inner bands are no longer perspective-warped into an irreversible partial page.
+- If the current live frame has a credible page-like quadrilateral and the still framing matches, that recent outline seeds the editable **Adjust corners** screen, not an automatic warp. Otherwise the full upright capture opens for manual crop.
+- The existing ID Card crop strategy remains separate and unchanged.
+- **Adjust corners** actions now sit inside the Android bottom safe area; the full photograph remains available for correction.
+- Native geometric unit tests cover credible page, suspicious horizontal strip, sudden shrink, orientation mismatch and malformed quadrilaterals. **CI/device confirmation not yet recorded.**
 
 ## Recent CI note
 
