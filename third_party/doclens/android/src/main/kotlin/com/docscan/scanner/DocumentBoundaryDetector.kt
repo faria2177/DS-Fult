@@ -98,6 +98,7 @@ class DocumentBoundaryDetector(
         rgbaMat: Mat,
         stabilityScoreBonus: Double = 0.0,
         preferOuterPageInStill: Boolean = false,
+        preferIdCardBounds: Boolean = false,
     ): DocumentDetectionResult {
         val width = rgbaMat.width()
         val height = rgbaMat.height()
@@ -119,7 +120,9 @@ class DocumentBoundaryDetector(
 
         val candidates = mutableListOf<CandidateScore>()
         fun collectFromCurrentEdges(stage: DetectionStage, maxCandidates: Int = 8) {
-            val quads = ContourDetector.findQuadrilaterals(morphMat, maxCandidates = maxCandidates)
+            val quads = ContourDetector.findQuadrilaterals(morphMat,
+                maxCandidates = if (preferIdCardBounds) 24 else maxCandidates,
+                contourLimit = if (preferIdCardBounds) 32 else 10)
             for (cand in quads) {
                 val score = scoreCandidate(
                     cand.corners, grayMat, morphMat, width, height, totalImageArea,
@@ -135,7 +138,7 @@ class DocumentBoundaryDetector(
         // colour/adaptive edges even if a high-confidence INNER table already
         // won the fast pass: otherwise the faint outer A4 edge is never seen.
         var topScore = candidates.maxOfOrNull { it.totalConfidence } ?: 0.0
-        if (topScore < 0.60 || preferOuterPageInStill) {
+        if (topScore < 0.60 || preferOuterPageInStill || preferIdCardBounds) {
             Imgproc.adaptiveThreshold(
                 bilateralMat, adaptMat, 255.0,
                 Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY_INV,
@@ -164,7 +167,8 @@ class DocumentBoundaryDetector(
         // map: this keeps segment-length/gap thresholds meaningful (they'd otherwise
         // behave very differently on a 720p preview vs a 12MP still) and reduces
         // spurious short segments from high-res texture noise.
-        if (topScore < 0.56) {
+        if (topScore < 0.56 || (preferIdCardBounds &&
+                CardBoundaryPreference.select(candidates, width, height) == null)) {
             val maxDim = max(width, height)
             val houghScale = if (maxDim > 900) 900.0 / maxDim else 1.0
 
@@ -214,14 +218,18 @@ class DocumentBoundaryDetector(
 
         // STAGE 3: If still no good candidate, try Morphological Gradient fallback
         val topScoreAfterStage2 = candidates.maxByOrNull { it.totalConfidence }?.totalConfidence ?: 0.0
-        if (topScoreAfterStage2 < 0.46) {
+        if (topScoreAfterStage2 < 0.46 || (preferIdCardBounds &&
+                CardBoundaryPreference.select(candidates, width, height) == null)) {
             val gradMat = Mat()
             val largeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
             Imgproc.morphologyEx(claheMat, gradMat, Imgproc.MORPH_GRADIENT, largeKernel)
             val otsuMat = Mat()
             Imgproc.threshold(gradMat, otsuMat, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
 
-            val gradCandidates = ContourDetector.findQuadrilaterals(otsuMat, minAreaRatio = 0.12)
+            val gradCandidates = ContourDetector.findQuadrilaterals(otsuMat,
+                minAreaRatio = if (preferIdCardBounds) 0.025 else 0.12,
+                maxCandidates = if (preferIdCardBounds) 24 else 10,
+                contourLimit = if (preferIdCardBounds) 32 else 10)
             gradMat.release()
             largeKernel.release()
             otsuMat.release()
@@ -267,7 +275,13 @@ class DocumentBoundaryDetector(
         // but high-resolution still detection chose only its internal table.
         // Promote a nested, much larger *credible paper border* on stills.
         // Do not force this on small ID cards or low-contrast table outlines.
-        val best = if (preferOuterPageInStill) {
+        val best = if (preferIdCardBounds) {
+            // An application form beneath a small card is NOT the target.
+            // Never silently crop the form when a credible card is absent:
+            // the user can adjust the original four corners in that case.
+            CardBoundaryPreference.select(candidates, width, height)
+                ?: return DocumentDetectionResult.EMPTY
+        } else if (preferOuterPageInStill) {
             StillCapturePagePreference.select(candidates, scoredBest, totalImageArea)
         } else scoredBest
 

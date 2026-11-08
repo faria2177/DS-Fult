@@ -20,8 +20,10 @@ class IdCardPageComposer {
     }
     final paper = img.Image(width: pageWidth, height: pageHeight);
     img.fill(paper, color: img.ColorRgb8(255, 255, 255));
-    final maxWidth = input.compact ? 865 : 1050;
-    final maxHeight = input.compact ? 355 : 435;
+    // Match the print scale of a real card on an A4 page (roughly 86/210 of
+    // the paper width), with a little margin for cards of other proportions.
+    final maxWidth = input.compact ? 565 : 600;
+    final maxHeight = input.compact ? 355 : 380;
     final centersY = input.compact ? [680, 1080] : [565, 1190];
 
     for (var i = 0; i < sides.length; i++) {

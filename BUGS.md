@@ -25,6 +25,7 @@ No **newly verified, device-reproduced** bug was provided after the `0.5.10` suc
 | B-004 | Repeated scan fails to crop bright paper from saturated blue fabric | `0.5.6`: conditional colour/contrast fallback and native tests | FIX IN CODE — device pending | Repeat capture with the same light-paper/dark-fabric scene |
 | B-005 | `Me → Scan` and camera More Settings can drift apart | `0.5.2`: shared seven-option page and one persisted preference source | RESOLVED — CI verified; device retest useful | Toggle each option, reopen both entry points and restart app |
 | B-006 | Long-press Files selection action/checkmark visibility and bottom-bar overlap | `0.5.5`: selection controls, safe-area-aware Files navigation | FIX IN CODE — device pending | Select 1 and many files on Android 16 with gesture/3-button navigation |
+| B-008 | Video `381334.mp4`: ID card over a bank form is cropped with background strips and clipped text; final A4 cards are oversized | `0.5.11` candidate: card-aware native quad ranking, safe original-image re-crop and smaller A4 print slots | FIX IN CODE — CI and device pending | On HONOR VKP-NX9, scan both sides over a busy form, inspect corners, adjust/reopen Crop, verify no lost text and one-page PDF |
 
 ## Resolved build/publishing incident
 

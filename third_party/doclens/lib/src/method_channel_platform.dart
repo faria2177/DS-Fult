@@ -241,6 +241,7 @@ class MethodChannelDoclens extends DoclensPlatform {
           'imagePath': imagePath,
           'detectionPolarity': config.detectionPolarity.name,
           'detectionThresholdOffset': config.detectionThresholdOffset,
+          'preferIdCardBounds': config.preferIdCardBounds,
         },
       );
       if (raw == null) return null;

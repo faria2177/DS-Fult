@@ -275,6 +275,7 @@ class ScannerConfig {
     this.detectionThrottleHz = 15,
     this.detectionPolarity = DetectionPolarity.brighter,
     this.detectionThresholdOffset = 20,
+    this.preferIdCardBounds = false,
     this.enableQuadSmoothing = true,
     this.quadSmoothingWindow = 5,
     // Capture
@@ -391,6 +392,11 @@ class ScannerConfig {
   /// value changes nothing.
   final int detectionThresholdOffset;
 
+  /// Prefer a smaller, centred landscape card over a larger background form.
+  /// Only enable for ID/business-card capture; regular page scans continue to
+  /// prefer the complete outer page.
+  final bool preferIdCardBounds;
+
   /// Apply a median filter across recent frames before emitting the quad
   /// downstream. Kills single-frame jitter without adding meaningful lag.
   final bool enableQuadSmoothing;
@@ -503,6 +509,7 @@ class ScannerConfig {
         'detectionThrottleHz': detectionThrottleHz,
         'detectionPolarity': detectionPolarity.name,
         'detectionThresholdOffset': detectionThresholdOffset,
+        'preferIdCardBounds': preferIdCardBounds,
         'enablePerspectiveWarp': enablePerspectiveWarp,
         'jpegQuality': jpegQuality,
         'imageEnhancement': imageEnhancement.name,

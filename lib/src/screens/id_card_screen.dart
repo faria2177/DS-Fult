@@ -33,6 +33,9 @@ class IdCardScreen extends StatefulWidget {
 class _IdCardScreenState extends State<IdCardScreen> {
   final List<String> _selected = [];
   final List<String> _originals = [];
+  // Never lose the full camera still. Re-cropping an already cropped card
+  // cannot bring back clipped text or the missing card corners.
+  final List<String> _sourcePaths = [];
   final _picker = ImagePicker();
   bool _saving = false;
   bool _importing = false;
@@ -89,7 +92,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
         return;
       }
       setState(() => _importing = true);
-      final cropped = await DocumentEdges.autoCropFiles(paths);
+      final cropped = await DocumentEdges.autoCropFiles(paths,
+          preferIdCardBounds: _twoSided);
       if (!mounted) return;
       if (cropped.needsReview > 0) {
         _warn('Please check corners for ${cropped.needsReview} card image(s).');
@@ -97,6 +101,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
       setState(() {
         _selected.addAll(cropped.paths);
         _originals.addAll(cropped.paths);
+        _sourcePaths.addAll(paths);
         _activeIndex = _selected.length - 1;
       });
     } catch (error) {
@@ -113,12 +118,14 @@ class _IdCardScreenState extends State<IdCardScreen> {
     }
     final remainingForCamera = _maxImages == null
         ? null : _maxImages! - _selected.length;
+    var capturedRaw = <String>[];
     final paths = await Navigator.push<List<String>>(context, MaterialPageRoute(
       builder: (_) => CameraScreen(
         cardMode: true,
         cardTemplate: widget.template,
         side: _sideLabel(_selected.length),
         cardCaptureLimit: remainingForCamera,
+        onCardSourcePaths: (paths) => capturedRaw = List<String>.from(paths),
       ),
     ));
     if (!mounted) return;
@@ -136,6 +143,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
     setState(() {
       _selected.addAll(paths);
       _originals.addAll(paths);
+      _sourcePaths.addAll(List<String>.generate(paths.length, (index) =>
+          index < capturedRaw.length ? capturedRaw[index] : paths[index]));
       _activeIndex = _selected.length - 1;
     });
   }
@@ -143,7 +152,10 @@ class _IdCardScreenState extends State<IdCardScreen> {
   Future<void> _adjustSide(int index) async {
     if (_saving || _importing || index >= _selected.length) return;
     final result = await Navigator.push<Uint8List>(context, MaterialPageRoute(
-      builder: (_) => CropScreen(imagePath: _selected[index]),
+      builder: (_) => CropScreen(
+        imagePath: _sourcePaths[index],
+        preferIdCardBounds: _twoSided,
+      ),
     ));
     if (!mounted || result == null) return;
     try {
@@ -151,7 +163,10 @@ class _IdCardScreenState extends State<IdCardScreen> {
       final file = File('${temporaryDirectory.path}/ds_card_'
           '${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
       await file.writeAsBytes(result, flush: true);
-      if (mounted) setState(() => _selected[index] = file.path);
+      if (mounted) setState(() {
+        _selected[index] = file.path;
+        _originals[index] = file.path;
+      });
     } catch (error) {
       _warn('Could not save adjusted card: $error');
     }
@@ -163,11 +178,13 @@ class _IdCardScreenState extends State<IdCardScreen> {
     if (photo == null || !mounted) return;
     setState(() => _importing = true);
     try {
-      final cropped = await DocumentEdges.autoCropFiles([photo.path]);
+      final cropped = await DocumentEdges.autoCropFiles([photo.path],
+          preferIdCardBounds: _twoSided);
       if (!mounted) return;
       setState(() {
         _selected[_activeIndex] = cropped.paths.first;
         _originals[_activeIndex] = cropped.paths.first;
+        _sourcePaths[_activeIndex] = photo.path;
       });
     } catch (error) {
       _warn('Could not replace side: $error');
@@ -446,8 +463,10 @@ class _IdCardScreenState extends State<IdCardScreen> {
         child: LayoutBuilder(builder: (context, constraints) {
           final width = constraints.maxWidth;
           final height = constraints.maxHeight;
-          final cardWidth = width * (_compact ? .698 : .847);
-          final cardHeight = height * (_compact ? .202 : .248);
+          // Real ID-1 cards are about 86 mm wide on a 210 mm A4 sheet.
+          // The former 85%-wide slot made both sides look oversized.
+          final cardWidth = width * (_compact ? .456 : .484);
+          final cardHeight = height * (_compact ? .202 : .217);
           final centers = _compact ? const [.388, .616] : const [.322, .679];
           return Container(color: Colors.white,
             child: Stack(children: [
@@ -535,6 +554,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
                   onPressed: () => setState(() {
                     _selected.removeAt(index);
                     _originals.removeAt(index);
+                    _sourcePaths.removeAt(index);
                     if (_selected.isEmpty) {
                       _activeIndex = 0;
                     } else if (_activeIndex >= _selected.length) {

@@ -10,8 +10,10 @@ import '../services/image_processor.dart';
 import '../theme.dart';
 
 class CropScreen extends StatefulWidget {
-  const CropScreen({super.key, required this.imagePath});
+  const CropScreen({super.key, required this.imagePath,
+      this.preferIdCardBounds = false});
   final String imagePath;
+  final bool preferIdCardBounds;
 
   @override
   State<CropScreen> createState() => _CropScreenState();
@@ -55,7 +57,8 @@ class _CropScreenState extends State<CropScreen> {
     if (_detecting || _busy || _imageBytes == null) return;
     setState(() => _detecting = true);
     try {
-      final detected = await DocumentEdges.detect(widget.imagePath);
+      final detected = await DocumentEdges.detect(widget.imagePath,
+          preferIdCardBounds: widget.preferIdCardBounds);
       if (!mounted) return;
       final points = detected?.quad?.points;
       setState(() {

@@ -31,12 +31,33 @@ class DocumentEdges {
     captureResolution: Resolution.max,
   );
 
+  /// Keep the normal A4 detector unchanged. Card capture must favour the
+  /// smaller, centred card over an application form underneath it.
+  static const idCardScannerConfig = ScannerConfig(
+    enableAutoCapture: false,
+    enableAutoCaptureConfirmation: false,
+    detectionPolarity: DetectionPolarity.auto,
+    detectionThresholdOffset: 12,
+    detectionThrottleHz: 12,
+    enableQuadSmoothing: true,
+    quadSmoothingWindow: 7,
+    enablePerspectiveWarp: true,
+    enableSharpnessGate: true,
+    sharpnessFloor: 8.5,
+    enableLowLightDetection: true,
+    enableStabilityStatus: true,
+    enableTapToFocus: true,
+    captureResolution: Resolution.max,
+    preferIdCardBounds: true,
+  );
+
   /// A null result means that the native detector did not find a reliable
   /// convex four-corner boundary. Never invent a crop in that situation.
-  static Future<ImageDetection?> detect(String imagePath) async {
+  static Future<ImageDetection?> detect(String imagePath,
+      {bool preferIdCardBounds = false}) async {
     final detection = await DoclensPlatform.instance.detectInImage(
       imagePath: imagePath,
-      config: scannerConfig,
+      config: preferIdCardBounds ? idCardScannerConfig : scannerConfig,
     );
     final quad = detection?.quad;
     if (quad == null || !CropQuad(quad.points).isValid) return null;
@@ -45,12 +66,14 @@ class DocumentEdges {
 
   /// Original photos remain unchanged, including when no document is found.
   /// Per-file failure falls back to the original so imports never disappear.
-  static Future<AutoCropBatch> autoCropFiles(List<String> images) async {
+  static Future<AutoCropBatch> autoCropFiles(List<String> images,
+      {bool preferIdCardBounds = false}) async {
     final output = <String>[];
     var cropped = 0;
     for (final image in images) {
       try {
-        final detection = await detect(image);
+        final detection = await detect(image,
+            preferIdCardBounds: preferIdCardBounds);
         if (detection == null) {
           output.add(image);
           continue;

@@ -49,7 +49,8 @@ object ContourDetector {
         binaryMat: Mat,
         minAreaRatio: Double = ScannerTuning.MIN_LIVE_AREA_RATIO,
         maxAreaRatio: Double = ScannerTuning.MAX_LIVE_AREA_RATIO,
-        maxCandidates: Int = 10
+        maxCandidates: Int = 10,
+        contourLimit: Int = 10,
     ): List<QuadCandidate> {
         val contours = ArrayList<MatOfPoint>()
         val hierarchy = Mat()
@@ -74,7 +75,7 @@ object ContourDetector {
                 .map { c -> Pair(c, Imgproc.contourArea(c)) }
                 .filter { it.second in minArea..maxArea }
                 .sortedByDescending { it.second }
-                .take(10)
+                .take(contourLimit)
 
             val candidates = mutableListOf<QuadCandidate>()
 

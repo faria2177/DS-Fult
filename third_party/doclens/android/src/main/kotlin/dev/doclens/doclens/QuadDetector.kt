@@ -243,12 +243,14 @@ object QuadDetector {
         path: String,
         polarity: DetectionPolarity = DetectionPolarity.BRIGHTER,
         thresholdOffset: Int = DEFAULT_THRESHOLD_OFFSET,
+        preferIdCardBounds: Boolean = false,
     ): Map<String, Any?> {
         val raw = BitmapFactory.decodeFile(path)
             ?: throw ScannerException.CaptureFailed("Decode failed: $path")
         val upright = ExifRotator.rotated(raw, path)
         try {
-            val quad = detectInBitmap(upright, polarity, thresholdOffset)
+            val quad = detectInBitmap(upright, polarity, thresholdOffset,
+                preferIdCardBounds)
             return mapOf(
                 "quad" to quad?.toMap(),
                 "imageSize" to listOf(upright.width.toDouble(), upright.height.toDouble()),
@@ -267,12 +269,17 @@ object QuadDetector {
         bitmap: Bitmap,
         polarity: DetectionPolarity = DetectionPolarity.BRIGHTER,
         thresholdOffset: Int = DEFAULT_THRESHOLD_OFFSET,
+        preferIdCardBounds: Boolean = false,
     ): Quad? {
         // The reference OpenCV pipeline is primary, including gallery imports.
         // Keep a chroma-aware fallback for pale documents on coloured fabric;
         // without it a missed still quad silently saves the entire camera
         // frame (the incorrect third page in the supplied video).
-        val cvQuad = OpenCvBoundaryAdapter.detectStill(bitmap)
+        val cvQuad = OpenCvBoundaryAdapter.detectStill(bitmap, preferIdCardBounds)
+        // ID mode has its own strict card selector. If that selector cannot
+        // find the card, ask for corner review rather than segmenting the
+        // large pale form underneath it as the document.
+        if (preferIdCardBounds) return cvQuad
         val w = bitmap.width
         val h = bitmap.height
         val scale = min(1.0, 512.0 / max(w, h))

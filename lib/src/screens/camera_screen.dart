@@ -28,6 +28,7 @@ class CameraScreen extends StatefulWidget {
     this.side,
     this.cardCaptureLimit,
     this.onOpenIdCards,
+    this.onCardSourcePaths,
   });
 
   final bool cardMode;
@@ -35,6 +36,8 @@ class CameraScreen extends StatefulWidget {
   final String? side;
   /// Remaining sides in this session; null means unlimited card pages.
   final int? cardCaptureLimit;
+  /// Raw upright stills are retained for lossless four-corner correction.
+  final ValueChanged<List<String>>? onCardSourcePaths;
   final Future<void> Function(BuildContext context,
       IdCardTemplate template)? onOpenIdCards;
 
@@ -77,6 +80,11 @@ class _CameraScreenState extends State<CameraScreen> {
       : (widget.cardCaptureLimit ??
           (widget.cardTemplate == null || widget.cardTemplate?.sideCount == 2
               ? 2 : null));
+
+  bool get _detectCardBounds => widget.cardMode &&
+      (widget.cardTemplate == null ||
+          (widget.cardTemplate != IdCardTemplate.general &&
+           !widget.cardTemplate!.portraitGuide));
 
   String get _cameraIdentity => CameraScreen.captureConfigKey(
         _settings, batchMode: _batchMode,
@@ -273,8 +281,12 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() => _processingGallery = true);
       final cropped = await DocumentEdges.autoCropFiles(
         files.map((file) => file.path).toList(),
+        preferIdCardBounds: _detectCardBounds,
       );
       if (!mounted) return;
+      if (widget.cardMode) {
+        widget.onCardSourcePaths?.call(files.map((e) => e.path).toList());
+      }
       await _finishProcessed(cropped.paths,
         applySelectedEffect: _settings.importFromGallery && !_batchMode);
     } catch (error) {
@@ -301,7 +313,9 @@ class _CameraScreenState extends State<CameraScreen> {
         source: ImageSource.camera, imageQuality: 100,
       );
       if (image == null || !mounted) return;
-      final cropped = await DocumentEdges.autoCropFiles([image.path]);
+      final cropped = await DocumentEdges.autoCropFiles([image.path],
+          preferIdCardBounds: _detectCardBounds);
+      if (widget.cardMode) widget.onCardSourcePaths?.call([image.path]);
       await _finishProcessed(cropped.paths);
     } catch (error) {
       if (mounted) {
@@ -343,7 +357,10 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         ),
       );
-      if (files != null && files.isNotEmpty) _finish(files);
+      if (files != null && files.isNotEmpty) {
+        if (widget.cardMode) widget.onCardSourcePaths?.call(files);
+        _finish(files);
+      }
     } finally {
       if (mounted && !_finished) {
         setState(() => _cameraSuspended = false);
@@ -531,16 +548,23 @@ class _CameraScreenState extends State<CameraScreen> {
                   overlayStyle: QuadOverlayStyle.outline,
                   enableAutoCapture: !widget.cardMode && _settings.autoCapture &&
                       !_settings.useSystemCamera,
-                  enablePerspectiveWarp: _settings.autoCrop &&
-                      (!_batchMode || _settings.autoAdjustBorders),
+                  enablePerspectiveWarp: widget.cardMode ||
+                      (_settings.autoCrop &&
+                          (!_batchMode || _settings.autoAdjustBorders)),
                   captureSize: _settings.resolution == 'auto'
                       ? null : _settings.resolution,
                   enableEditCorners: true,
                   imageEnhancement: ImageEnhancement.none,
                   jpegQuality: 95,
-                  config: DocumentEdges.scannerConfig,
+                  config: _detectCardBounds
+                      ? DocumentEdges.idCardScannerConfig
+                      : DocumentEdges.scannerConfig,
                   onComplete: (results) {
                     if (_cameraSuspended) return;
+                    if (widget.cardMode) {
+                      widget.onCardSourcePaths?.call(results
+                          .map((result) => result.rawImagePath).toList());
+                    }
                     final paths = results
                         .map((result) => result.croppedImagePath ?? result.rawImagePath)
                         .where((path) => path.isNotEmpty)
@@ -549,6 +573,9 @@ class _CameraScreenState extends State<CameraScreen> {
                   },
                   onCapture: (result) {
                     if (_cameraSuspended) return;
+                    if (widget.cardMode) {
+                      widget.onCardSourcePaths?.call([result.rawImagePath]);
+                    }
                     final path = result.croppedImagePath ?? result.rawImagePath;
                     if (path.isNotEmpty) unawaited(_finishProcessed([path]));
                   },

@@ -39,6 +39,19 @@ void main() {
     expect(page.getPixel(620, 1080).b, greaterThan(150));
   });
 
+  test('Card copy is printed at approximately physical ID-1 scale on A4', () {
+    final output = IdCardPageComposer.composeSync((
+      sides: [_solid(240, 20, 20), _solid(20, 20, 240)],
+      compact: false,
+    ));
+    final page = img.decodeImage(output)!;
+    // A4 is 210 mm wide; a typical ID-1 card is 85.6 mm wide.
+    // A slight oversize margin is allowed, but it must not fill the page.
+    expect(page.getPixel(620, 565).r, greaterThan(180));
+    expect(page.getPixel(310, 565).r, greaterThan(240));
+    expect(page.getPixel(930, 565).r, greaterThan(240));
+  });
+
   test('Saving only Front or only Back cannot make a completed card', () {
     expect(() => IdCardPageComposer.composeSync((
       sides: [_solid(200, 20, 20)], compact: false,

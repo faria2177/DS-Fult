@@ -29,7 +29,8 @@ internal class OpenCvBoundaryAdapter {
     }
 
     /** Live CameraX Y-plane frame. Returns corners in frame coordinates. */
-    fun detectLuma(luma: ByteArray, width: Int, height: Int): Quad? {
+    fun detectLuma(luma: ByteArray, width: Int, height: Int,
+                   preferIdCardBounds: Boolean = false): Quad? {
         if (width < 32 || height < 32 || luma.size < width * height) return null
         val boundaryDetector = try { engine() } catch (_: Throwable) { null } ?: return null
         val gray = Mat(height, width, CvType.CV_8UC1)
@@ -37,7 +38,8 @@ internal class OpenCvBoundaryAdapter {
         return try {
             gray.put(0, 0, luma)
             Imgproc.cvtColor(gray, rgba, Imgproc.COLOR_GRAY2RGBA)
-            toNormalizedQuad(boundaryDetector.detectBoundary(rgba), width, height)
+            toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
+                preferIdCardBounds = preferIdCardBounds), width, height)
         } catch (_: Exception) {
             null // The original luma-only detector remains the safe fallback.
         } finally {
@@ -51,7 +53,8 @@ internal class OpenCvBoundaryAdapter {
      * replication, this lets the detector use its HSV/saturation edge pass
      * when paper and background have similar brightness but different hues.
      */
-    fun detectRgba(pixels: ByteArray, width: Int, height: Int): Quad? {
+    fun detectRgba(pixels: ByteArray, width: Int, height: Int,
+                   preferIdCardBounds: Boolean = false): Quad? {
         if (width < 32 || height < 32 || pixels.size != width * height * 4) {
             return null
         }
@@ -59,7 +62,8 @@ internal class OpenCvBoundaryAdapter {
         val rgba = Mat(height, width, CvType.CV_8UC4)
         return try {
             rgba.put(0, 0, pixels)
-            toNormalizedQuad(boundaryDetector.detectBoundary(rgba), width, height)
+            toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
+                preferIdCardBounds = preferIdCardBounds), width, height)
         } catch (_: Exception) {
             null
         } finally {
@@ -68,7 +72,7 @@ internal class OpenCvBoundaryAdapter {
     }
 
     /** Captured still bitmap; preserves colour-dependent edge detection. */
-    fun detectBitmap(bitmap: Bitmap): Quad? {
+    fun detectBitmap(bitmap: Bitmap, preferIdCardBounds: Boolean = false): Quad? {
         val boundaryDetector = try { engine() } catch (_: Throwable) { null } ?: return null
         val longest = max(bitmap.width, bitmap.height)
         if (longest < 32) return null
@@ -80,8 +84,9 @@ internal class OpenCvBoundaryAdapter {
         val rgba = Mat()
         return try {
             Utils.bitmapToMat(small, rgba)
-            toNormalizedQuad(boundaryDetector.detectBoundary(
-                rgba, preferOuterPageInStill = true), w, h)
+            toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
+                preferOuterPageInStill = !preferIdCardBounds,
+                preferIdCardBounds = preferIdCardBounds), w, h)
         } catch (_: Exception) {
             null
         } finally {
@@ -97,9 +102,10 @@ internal class OpenCvBoundaryAdapter {
 
     companion object {
         /** Stateless wrapper for gallery and capture paths on arbitrary threads. */
-        fun detectStill(bitmap: Bitmap): Quad? {
+        fun detectStill(bitmap: Bitmap, preferIdCardBounds: Boolean = false): Quad? {
             val adapter = OpenCvBoundaryAdapter()
-            return try { adapter.detectBitmap(bitmap) } finally { adapter.release() }
+            return try { adapter.detectBitmap(bitmap, preferIdCardBounds) }
+                finally { adapter.release() }
         }
 
         private fun toNormalizedQuad(

@@ -296,9 +296,11 @@ class DoclensPlugin :
         val polarity = DetectionPolarity.from(call.argument<String>("detectionPolarity"))
         val thresholdOffset = call.argument<Int>("detectionThresholdOffset")
             ?: QuadDetector.DEFAULT_THRESHOLD_OFFSET
+        val preferIdCardBounds = call.argument<Boolean>("preferIdCardBounds") ?: false
         backgroundExecutor.execute {
             try {
-                val out = QuadDetector.detectInFile(path, polarity, thresholdOffset)
+                val out = QuadDetector.detectInFile(path, polarity, thresholdOffset,
+                    preferIdCardBounds)
                 mainHandler.post { result.success(out) }
             } catch (e: Exception) {
                 mainHandler.post { result.error("capture_failed", e.message, null) }

@@ -222,14 +222,16 @@ class ScannerSession(
             // existing grayscale and connected-component fallbacks.
             val rgba = YuvUtils.extractRgba(image, YuvUtils.Luma(luma, width, height), downscaleTo)
             val quad = (if (rgba != null) {
-                openCvDetector.detectRgba(rgba, width, height)
+                openCvDetector.detectRgba(rgba, width, height,
+                    config.preferIdCardBounds)
             } else {
-                openCvDetector.detectLuma(luma, width, height)
+                openCvDetector.detectLuma(luma, width, height,
+                    config.preferIdCardBounds)
             })
-                ?: QuadDetector.detect(
+                ?: (if (config.preferIdCardBounds) null else QuadDetector.detect(
                 luma, width, height,
                 config.detectionPolarity, config.detectionThresholdOffset,
-            )
+            ))
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
@@ -375,6 +377,7 @@ class ScannerSession(
                         rotated,
                         config.detectionPolarity,
                         config.detectionThresholdOffset,
+                        config.preferIdCardBounds,
                     )
                     val pixelQuad = q?.let {
                         Quad(

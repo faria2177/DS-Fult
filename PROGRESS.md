@@ -28,6 +28,7 @@
 | `0.5.7`–`0.5.8` | More video-style Tools screens; watermark, reorder, compress, lock and Smart Erase UI | Implemented with documented non-AI limitations |
 | `0.5.9` | Still-image detector prefers complete visible A4 sheet over a strong inner table when evidence supports it | Native regression tests passed; field check needed |
 | `0.5.10` | Same-session Front→Back capture, General multi-page mode, A4 composite ID review/save/PDF, add paired pages | Implemented / native + Flutter CI passed; field check needed |
+| `0.5.11` | Card-specific OpenCV quad ranking, source-image re-crop recovery, improved true-size A4 card layout | Implemented / CI + physical device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -57,6 +58,14 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.11 candidate — video regression (381334.mp4)
+
+- ID capture explicitly prefers a centred, landscape card to a larger background bank form; normal A4 page detection keeps its separate outer-sheet preference.
+- When no credible card quad exists, review must allow adjusting the original image instead of saving a guessed form crop.
+- Full-size originals survive the Front/Back capture flow; reopening Crop uses the source, not an already clipped crop.
+- Card-size A4 placement is closer to physical ID-1 proportions, and the on-screen preview matches the saved composer.
+- New native candidate-selection and Dart page-scale regression tests are included. **Passing tests and a real-device retest are not yet recorded.**
 
 ## Recent CI note
 

@@ -44,6 +44,7 @@ data class ScannerConfig(
     val enableLowLightDetection: Boolean,
     val detectionPolarity: DetectionPolarity,
     val detectionThresholdOffset: Int,
+    val preferIdCardBounds: Boolean,
 ) {
     companion object {
         fun fromMap(m: Map<String, Any?>): ScannerConfig = ScannerConfig(
@@ -64,6 +65,7 @@ data class ScannerConfig(
             detectionPolarity = DetectionPolarity.from(m["detectionPolarity"] as? String),
             detectionThresholdOffset = (m["detectionThresholdOffset"] as? Number)?.toInt()
                 ?: QuadDetector.DEFAULT_THRESHOLD_OFFSET,
+            preferIdCardBounds = m["preferIdCardBounds"] as? Boolean ?: false,
         )
     }
 }
