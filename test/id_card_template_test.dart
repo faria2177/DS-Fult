@@ -86,4 +86,25 @@ void main() {
       settings.dispose();
     }
   });
+
+  testWidgets('second side shows Back and a one-session batch finish control',
+      (tester) async {
+    final settings = ReferenceScanSettings();
+    var finished = false;
+    await tester.pumpWidget(MaterialApp(home: ReferenceIdCardChrome(
+      preview: const ColoredBox(color: Color(0xFF333333)),
+      label: 'ID Card', side: 'Back', portraitGuide: false,
+      accent: const Color(0xFF00BBA4), flashMode: FlashMode.off,
+      capturing: false, settings: settings, pagesCaptured: 1,
+      onFinishBatch: () => finished = true,
+      onClose: () {}, onFlash: () {}, onCapture: () {},
+    )));
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('1  Done'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('card-right-action')));
+    expect(finished, isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    settings.dispose();
+  });
 }

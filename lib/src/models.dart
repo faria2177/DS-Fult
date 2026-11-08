@@ -78,6 +78,7 @@ class ScanDocument {
     required this.pages,
     this.folderId,
     this.kind = DocumentKind.document,
+    this.compositeCardPages = false,
     this.tags = const [],
     this.lockHash,
   });
@@ -88,6 +89,9 @@ class ScanDocument {
   final List<ScanPage> pages;
   final String? folderId;
   final DocumentKind kind;
+  /// True when each saved page is an A4 sheet containing both card sides.
+  /// Older two-sided documents retain the legacy two-image PDF behavior.
+  final bool compositeCardPages;
   final List<String> tags;
   /// An app-level access PIN hash, not encryption of exported PDF files.
   final String? lockHash;
@@ -106,6 +110,7 @@ class ScanDocument {
         createdAt: createdAt,
         pages: pages ?? this.pages,
         kind: kind,
+        compositeCardPages: compositeCardPages,
         folderId: clearFolder ? null : (folderId ?? this.folderId),
         tags: tags ?? this.tags,
         lockHash: clearLock ? null : (lockHash ?? this.lockHash),
@@ -125,6 +130,7 @@ class ScanDocument {
           (e) => e.name == json['kind'],
           orElse: () => DocumentKind.document,
         ),
+        compositeCardPages: json['compositeCardPages'] == true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -134,6 +140,7 @@ class ScanDocument {
         'pages': pages.map((p) => p.toJson()).toList(),
         'folderId': folderId,
         'kind': kind.name,
+        'compositeCardPages': compositeCardPages,
         'tags': tags,
         'lockHash': lockHash,
       };

@@ -12,6 +12,7 @@ void main() {
             originalPath: '/tmp/scan.jpg', recognizedText: 'Hello world'),
       ],
       kind: DocumentKind.idCard,
+      compositeCardPages: true,
       folderId: 'folder1',
       tags: const ['Work', 'Receipt'],
       lockHash: 'example-hash',
@@ -19,6 +20,8 @@ void main() {
     final loaded = ScanDocument.fromJson(original.toJson());
     expect(loaded.name, original.name);
     expect(loaded.kind, DocumentKind.idCard);
+    expect(loaded.compositeCardPages, isTrue);
+    expect(loaded.copyWith(name: 'renamed').compositeCardPages, isTrue);
     expect(loaded.folderId, 'folder1');
     expect(loaded.pages.first.recognizedText, 'Hello world');
     expect(loaded.pages.first.originalPath, '/tmp/scan.jpg');

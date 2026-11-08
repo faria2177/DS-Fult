@@ -57,7 +57,20 @@ class DocumentExport {
       return pw.MemoryImage(compact);
     }
 
-    if (document.kind.twoSided) {
+    if (document.compositeCardPages) {
+      // Every card sheet already contains the front/back composite. Support
+      // additional A4 card sheets without accidentally re-combining them.
+      for (final page in document.pages) {
+        final image = await readImage(page);
+        pdf.addPage(pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(0),
+          build: (_) => decorate(pw.Center(
+            child: pw.Image(image, fit: pw.BoxFit.contain),
+          )),
+        ));
+      }
+    } else if (document.kind.twoSided) {
       final pictures = <pw.MemoryImage>[];
       for (final page in document.pages.take(2)) {
         pictures.add(await readImage(page));

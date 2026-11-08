@@ -26,12 +26,15 @@ class CameraScreen extends StatefulWidget {
     this.cardMode = false,
     this.cardTemplate,
     this.side,
+    this.cardCaptureLimit,
     this.onOpenIdCards,
   });
 
   final bool cardMode;
   final IdCardTemplate? cardTemplate;
   final String? side;
+  /// Remaining sides in this session; null means unlimited card pages.
+  final int? cardCaptureLimit;
   final Future<void> Function(BuildContext context,
       IdCardTemplate template)? onOpenIdCards;
 
@@ -69,6 +72,11 @@ class _CameraScreenState extends State<CameraScreen> {
   String _appliedIdentity = '';
   static const _outlineColor = dsTeal;
   final _picker = ImagePicker();
+
+  int? get _cardLimit => !widget.cardMode ? null
+      : (widget.cardCaptureLimit ??
+          (widget.cardTemplate == null || widget.cardTemplate?.sideCount == 2
+              ? 2 : null));
 
   String get _cameraIdentity => CameraScreen.captureConfigKey(
         _settings, batchMode: _batchMode,
@@ -258,7 +266,7 @@ class _CameraScreenState extends State<CameraScreen> {
       await _suspendCamera();
       if (!mounted) return;
       final files = await _picker.pickMultiImage(
-        limit: widget.cardMode ? 2 : null,
+        limit: _cardLimit,
         requestFullMetadata: false,
       );
       if (files.isEmpty || !mounted) return;
@@ -468,7 +476,10 @@ class _CameraScreenState extends State<CameraScreen> {
               ? const ColoredBox(color: Colors.black)
               : DoclensScreen(
                   key: ValueKey(_cameraIdentity),
-                  multiPage: _batchMode,
+                  multiPage: widget.cardMode || _batchMode,
+                  maxPages: _cardLimit,
+                  autoFinishAtPageLimit: widget.cardMode &&
+                      _cardLimit != null,
                   referenceScanChrome: !widget.cardMode,
                   referencePickerBuilder: _showIdCards && !widget.cardMode
                       ? (context, livePreview, cycleFlash) =>
@@ -518,7 +529,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   accentColor: _outlineColor,
                   warningColor: _outlineColor,
                   overlayStyle: QuadOverlayStyle.outline,
-                  enableAutoCapture: _settings.autoCapture &&
+                  enableAutoCapture: !widget.cardMode && _settings.autoCapture &&
                       !_settings.useSystemCamera,
                   enablePerspectiveWarp: _settings.autoCrop &&
                       (!_batchMode || _settings.autoAdjustBorders),

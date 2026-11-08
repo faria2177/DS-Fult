@@ -3,6 +3,26 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## ID Cards Front/Back capture and one-page preview — v0.5.10
+
+- Reference videos `381271.mp4` and `381273.mp4`: the ID Card and Driver
+  License camera now captures **Front and Back in the same CameraX session**.
+  The first accepted image changes the guide to **Back**, and accepting the
+  second finishes capture automatically. The camera is not recreated between
+  sides. The right-hand counter also finishes a partially captured batch.
+- **General** allows multi-page captures in one camera session; its review
+  scrolls through the individual page images. Each page is independently
+  editable and remains a separate saved page.
+- ID Card/Driver License/Bank Card review displays both sides on a **single
+  white A4 sheet**, with selectable Front/Back, manual corner adjustment,
+  Rotate, Filter, Compare, two A4 templates and optional Watermark.
+- Saving produces a single combined A4 image and **one PDF page**, not two
+  unrelated document pages. The document grid displays one thumbnail. Add
+  Pages collects another front/back pair and adds a second composed A4 sheet;
+  legacy two-image ID documents preserve their previous PDF export behavior.
+- No Ask AI, paywall, or online processing is included. Validate camera focus,
+  borders, and layout using a physical Android device in addition to tests.
+
 ## Full A4 capture versus inner table crop — v0.5.9
 
 - The supplied `381270.mp4` demonstrates the live teal outline surrounding

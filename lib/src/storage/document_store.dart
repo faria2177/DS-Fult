@@ -54,8 +54,10 @@ class DocumentStore extends ChangeNotifier {
     String? name,
     String? folderId,
     DocumentKind kind = DocumentKind.document,
+    bool compositeCardPages = false,
   }) async {
-    if (paths.isEmpty || (kind.twoSided && paths.length > 2)) {
+    if (paths.isEmpty ||
+        (kind.twoSided && !compositeCardPages && paths.length > 2)) {
       throw ArgumentError('Invalid image count for ${kind.label}');
     }
     final pages = <ScanPage>[];
@@ -71,6 +73,7 @@ class DocumentStore extends ChangeNotifier {
       pages: pages,
       folderId: folderId,
       kind: kind,
+      compositeCardPages: compositeCardPages,
     );
     _documents.insert(0, document);
     await _persist();
@@ -80,7 +83,8 @@ class DocumentStore extends ChangeNotifier {
   Future<void> appendPaths(String documentId, List<String> paths) async {
     final doc = byId(documentId);
     if (doc == null) return;
-    if (doc.kind.twoSided && doc.pages.length + paths.length > 2) {
+    if (doc.kind.twoSided && !doc.compositeCardPages &&
+        doc.pages.length + paths.length > 2) {
       throw ArgumentError('Only the front and back may be imported.');
     }
     final newPages = <ScanPage>[];

@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
+import '../services/id_card_page_composer.dart';
 import '../services/docx_export.dart';
 import '../services/image_processor.dart';
 import '../services/image_tool_operations.dart';
@@ -225,10 +227,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       List<String> paths;
       if (source) {
         paths = await Navigator.push<List<String>>(context, MaterialPageRoute(
-          builder: (_) => CameraScreen(cardMode: doc.kind.twoSided),
+          builder: (_) => CameraScreen(cardMode: doc.kind.twoSided,
+            side: doc.compositeCardPages ? 'Front' : null,
+            cardCaptureLimit: doc.compositeCardPages ? 2 : null),
         )) ?? [];
       } else {
-        final remaining = doc.kind.twoSided ? 2 - doc.pages.length : null;
+        final remaining = doc.compositeCardPages ? 2
+            : (doc.kind.twoSided ? 2 - doc.pages.length : null);
         if (remaining != null && remaining <= 0) {
           throw StateError('Both sides of the card have already been added.');
         }
@@ -238,6 +243,20 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         if (paths.isNotEmpty) {
           paths = (await DocumentEdges.autoCropFiles(paths)).paths;
         }
+      }
+      if (doc.compositeCardPages && paths.isNotEmpty) {
+        if (paths.length != 2) {
+          throw StateError('Scan both Front and Back to add a card page.');
+        }
+        final composite = await IdCardPageComposer.compose([
+          await File(paths[0]).readAsBytes(),
+          await File(paths[1]).readAsBytes(),
+        ]);
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/ds_extra_card_'
+            '${DateTime.now().microsecondsSinceEpoch}.jpg');
+        await file.writeAsBytes(composite, flush: true);
+        paths = [file.path];
       }
       if (paths.isNotEmpty) await widget.store.appendPaths(doc.id, paths);
     });
@@ -796,6 +815,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     mainAxisSpacing: 15, childAspectRatio: .69,
                   ),
                   itemCount: doc.pages.length + (doc.kind.twoSided &&
+                      !doc.compositeCardPages &&
                       doc.pages.length == 2 ? 0 : 1),
                   itemBuilder: (context, index) => index == doc.pages.length
                       ? _addTile() : _pageTile(doc, index),

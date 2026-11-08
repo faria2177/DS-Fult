@@ -21,6 +21,8 @@ class ReferenceIdCardChrome extends StatelessWidget {
     required this.onCapture,
     this.onImportImages,
     this.onMoreSettings,
+    this.pagesCaptured = 0,
+    this.onFinishBatch,
     this.cameraModes = const [],
   });
 
@@ -38,6 +40,8 @@ class ReferenceIdCardChrome extends StatelessWidget {
   final VoidCallback onCapture;
   final VoidCallback? onImportImages;
   final VoidCallback? onMoreSettings;
+  final int pagesCaptured;
+  final VoidCallback? onFinishBatch;
 
   IconData get _flashIcon => switch (flashMode) {
         FlashMode.off => Icons.flash_off,
@@ -141,14 +145,19 @@ class ReferenceIdCardChrome extends StatelessWidget {
                         ),
                       )),
                     ),
-                    Expanded(child: InkWell(onTap: onImportImages,
-                      child: const Column(mainAxisAlignment: MainAxisAlignment.center,
+                    Expanded(child: InkWell(
+                      key: const Key('card-right-action'),
+                      onTap: onFinishBatch ?? onImportImages,
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_photo_alternate_outlined,
+                          Icon(pagesCaptured > 0 ? Icons.photo_library_outlined
+                              : Icons.add_photo_alternate_outlined,
                             size: 27, color: Colors.white),
-                          SizedBox(height: 4),
-                          Text('Import Images', style: TextStyle(
-                            color: Colors.white, fontSize: 11.5)),
+                          const SizedBox(height: 4),
+                          Text(pagesCaptured > 0 ? '$pagesCaptured  Done'
+                              : 'Import Images',
+                            style: const TextStyle(
+                              color: Colors.white, fontSize: 11.5)),
                         ],
                       ),
                     )),

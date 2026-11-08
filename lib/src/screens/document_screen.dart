@@ -3,10 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
+import '../services/id_card_page_composer.dart';
 import '../services/docx_export.dart';
 import '../services/image_processor.dart';
 import '../services/image_tool_operations.dart';
@@ -154,7 +156,9 @@ class _DocumentScreenState extends State<DocumentScreen> {
     if (paths == null || paths.isEmpty) return;
     setState(() => _busy = true);
     try {
-      final bytes = await File(paths.first).readAsBytes();
+      final bytes = doc.compositeCardPages
+          ? await _composeExtraCard(paths)
+          : await File(paths.first).readAsBytes();
       await widget.store.replacePageBytes(doc.id, doc.pages[_index].id, bytes,
           replaceOriginal: true);
     } catch (error) {
@@ -214,7 +218,8 @@ class _DocumentScreenState extends State<DocumentScreen> {
   Future<void> _addImages({required bool fromCamera}) async {
     final doc = _document;
     if (doc == null) return;
-    final remaining = doc.kind.twoSided ? 2 - doc.pages.length : null;
+    final remaining = doc.compositeCardPages ? 2
+        : (doc.kind.twoSided ? 2 - doc.pages.length : null);
     if (remaining != null && remaining <= 0) {
       _message('Front and back are already selected (maximum 2 images).');
       return;
@@ -248,6 +253,14 @@ class _DocumentScreenState extends State<DocumentScreen> {
           _message('${cropped.needsReview} image(s) need manual corner review.');
         }
       }
+      if (doc.compositeCardPages) {
+        final combined = await _composeExtraCard(paths);
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/ds_card_extra_'
+            '${DateTime.now().microsecondsSinceEpoch}.jpg');
+        await file.writeAsBytes(combined, flush: true);
+        paths = [file.path];
+      }
       await widget.store.appendPaths(doc.id, paths);
       if (mounted) setState(() {});
     } catch (error) {
@@ -255,6 +268,16 @@ class _DocumentScreenState extends State<DocumentScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<Uint8List> _composeExtraCard(List<String> paths) async {
+    if (paths.length != 2) {
+      throw StateError('Both Front and Back are required for one ID page.');
+    }
+    return IdCardPageComposer.compose([
+      await File(paths[0]).readAsBytes(),
+      await File(paths[1]).readAsBytes(),
+    ]);
   }
 
   Future<void> _rename() async {
