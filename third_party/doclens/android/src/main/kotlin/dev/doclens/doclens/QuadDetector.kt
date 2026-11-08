@@ -252,9 +252,12 @@ object QuadDetector {
         pixels: IntArray,
         width: Int,
         height: Int,
+        forLivePreview: Boolean = false,
     ): Quad? {
         if (width < 64 || height < 64 || pixels.size != width * height) return null
-        val samples = arrayOf(
+        val samples = if (forLivePreview) arrayOf(
+            .32 to .32, .68 to .32, .32 to .68, .68 to .68, .50 to .50,
+        ) else arrayOf(
             .28 to .20, .72 to .20,
             .28 to .32, .72 to .32,
         )
@@ -282,14 +285,43 @@ object QuadDetector {
                 mask[i] = difference <= 48
             }
             val quad = analyzeMask(mask, width, height)?.quad ?: continue
-            if (!StillCaptureCropSafety.isCrediblePage(quad, width, height)) continue
             val area = StillCaptureCropSafety.area(quad)
+            if (forLivePreview) {
+                // Fabric, posters and book covers can be close to square.
+                // Keep this a candidate, subject to LiveBoundarySelector.
+                if (area !in 0.22..0.87) continue
+            } else if (!StillCaptureCropSafety.isCrediblePage(quad, width, height)) {
+                continue
+            }
             if (area > bestArea) {
                 best = quad
                 bestArea = area
             }
         }
         return best
+    }
+
+    /** RGB-backed live candidate at a bounded 256px edge, independent of OpenCV. */
+    internal fun detectSaturatedPanelInRgba(
+        rgba: ByteArray, width: Int, height: Int,
+    ): Quad? {
+        if (width < 64 || height < 64 || rgba.size != width * height * 4) return null
+        val scale = min(1.0, 256.0 / max(width, height))
+        val dw = (width * scale).toInt().coerceAtLeast(64)
+        val dh = (height * scale).toInt().coerceAtLeast(64)
+        val pixels = IntArray(dw * dh)
+        for (y in 0 until dh) {
+            val sourceY = (y / scale).toInt().coerceIn(0, height - 1)
+            for (x in 0 until dw) {
+                val sourceX = (x / scale).toInt().coerceIn(0, width - 1)
+                val offset = (sourceY * width + sourceX) * 4
+                pixels[y * dw + x] = (0xFF shl 24) or
+                    ((rgba[offset].toInt() and 0xFF) shl 16) or
+                    ((rgba[offset + 1].toInt() and 0xFF) shl 8) or
+                    (rgba[offset + 2].toInt() and 0xFF)
+            }
+        }
+        return detectSaturatedPanel(pixels, dw, dh, forLivePreview = true)
     }
 
     /**

@@ -1,7 +1,7 @@
 # DocScanner — Bug and Regression Register
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.13+27` (candidate; physical-device verification pending)
+**Baseline:** `0.5.14+28` (candidate; physical-device verification pending)
 **Scope:** Reproducible failures, historical regressions and their fix status. Potential limitations belong in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), not automatically in the Open list.
 
 ## Status rules
@@ -16,6 +16,7 @@
 | ID | Evidence | Observed behavior | Current status | Required confirmation |
 | --- | --- | --- | --- | --- |
 | B-010 | Video `381526.mp4`, ~00:18–00:28, HONOR Android 16 screen recording | Single Scan live outline follows the entire blue Grameenphone poster; shutter review, editor and saved thumbnail contain only the smaller yellow inner label | OPEN — confirmed in video. Post-`0.5.13` still-only saturated outer-panel candidate and orientation-independent compact-crop guard added; CI/device results pending | Install an APK containing this patch; scan the same poster. Expect full-board auto-crop if boundaries are reliable, otherwise full-original corner review. Log still/live quads and compare all four edges to CamScanner's accepted scan |
+| B-011 | Video `381530.mp4`, ~00:14–00:30, HONOR Android 16 screen recording | CamScanner follows the outer edges of a blue textile on a chair; DocScanner's turquoise box instead encloses the tall chair/background and remains displaced, with a partial motif-only capture | OPEN — confirmed in video. `0.5.14`: colour-connected live panel challenger, geometric target selection, adaptive four-corner tracking, lifecycle reset and removal of misleading fixed preview border added; CI/device results pending | Scan the same textile while panning and pausing 10 times; overlay should follow the cloth, reject the chair, disappear promptly when lost and preserve entire textile in review, not the inner motif |
 
 ## Historical fixes requiring targeted hardware retest
 

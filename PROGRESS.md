@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-08  
-**Current candidate release:** `0.5.13+27`
+**Current candidate release:** `0.5.14+28`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42458973854](https://github.com/faria2177/DS-Fult/actions/runs/42458973854)
 **Baseline commit:** [`708589f`](https://github.com/faria2177/DS-Fult/commit/708589f3b16cddbcc3fd5bb5f1ec74169fbceb0a)
 
@@ -32,6 +32,7 @@
 | `0.5.12` | Single Scan crop guard against internal horizontal text bands; recent credible live outline seeds manual review, full original preserved; Adjust corners actions respect navigation safe-area | Native/Flutter CI passed in run #42458973854; device verification pending |
 | `0.5.13` | More capable still-image Auto Crop: background-versus-paper contrast mask, thorough still-only edge/line candidate search and safer outer-page preference | Regression tests added; CI/device verification pending |
 | Post-`0.5.13` | Video `381526.mp4` regression: try still-only saturated outer-panel recovery on mixed backgrounds; reject small, centred inner title/label quads in either JPEG orientation; retain full-original review if uncertain | Code + synthetic native regressions added; CI and physical-device verification pending |
+| `0.5.14` | Video `381530.mp4`: prefer a coherent coloured document over an elongated chair-frame false detection, adaptive jitter damping with stronger switch confirmation, reset tracking after camera lifecycle changes, remove permanent preview border | Kotlin/Dart tests added; GitHub CI and physical-camera confirmation pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -92,6 +93,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - A conservative saturated-panel detector now looks for a connected outer-colour region on heterogeneous backgrounds (stone above, patterned table below). It competes with the still contour only when that contour is small, and must pass the existing credible-outer-page and substantial-growth criteria before being selected. This is not specific to blue pixels.
 - The still-crop guard now rejects a small centred inner band even if CameraX/EXIF reports a landscape or transposed JPEG. Normal page captures keep the existing native detector; uncertain captures preserve the full upright image and open the existing editable four-corner review rather than warping a guessed inner label.
 - Added native geometry regressions for a full poster, yellow inner title in both orientations, full landscape page, edge-touching document and absent still quad; synthetic pixel regressions check poster recovery against a patterned background and reject uniform/undersized coloured patches. **The source video is not a raw camera still; a same-scene device retest is required to establish the exact detector failure and the quality of the final automatic crop.**
+
+### 0.5.14 — CamScanner-like stable four-corner tracking (381530.mp4)
+
+- The reference tracks the outside of a blue patterned textile, while DocScanner's live polygon strays over the tall brown/black chair. The static full-preview turquoise border also creates an extra misleading frame.
+- Normal Scan live RGBA analysis now checks a second downscaled saturated-colour panel candidate when the OpenCV result is absent, elongated or overly large. A conservative geometric selector changes targets only for a strongly elongated background around the same centre or a small nested title. ID Card boundary ranking remains separate.
+- Dart tracking keeps the same-document identity gate, confirms challengers across four mutually consistent frames, rejects crossed/invalid quads and adaptively blends pixel-level jitter versus deliberate movement. Pause, resume and lens switching clear stale tracking state. The permanent preview border is removed; only the detected document is outlined.
+- Synthetic native live-cloth and competing-chair tests plus Dart movement/jitter/false-candidate tests were added. **No physical-phone result is claimed before a same-scene retest on HONOR VKP-NX9.**
 
 ## Recent CI note
 

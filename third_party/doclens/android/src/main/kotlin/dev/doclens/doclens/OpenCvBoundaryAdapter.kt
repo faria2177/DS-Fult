@@ -62,8 +62,24 @@ internal class OpenCvBoundaryAdapter {
         val rgba = Mat(height, width, CvType.CV_8UC4)
         return try {
             rgba.put(0, 0, pixels)
-            toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
+            val contour = toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
                 preferIdCardBounds = preferIdCardBounds), width, height)
+            if (preferIdCardBounds) {
+                contour
+            } else {
+                // In 381530.mp4 the contrast-rich chair was more prominent
+                // than the textured blue cloth. A second, colour-connected
+                // proposal can challenge an elongated background or an inner
+                // title, but cannot replace a credible normal page merely
+                // because it is brightly coloured.
+                val inspectColour = contour == null ||
+                    !StillCaptureCropSafety.isCrediblePage(contour, width, height) ||
+                    StillCaptureCropSafety.area(contour) > .43
+                val panel = if (inspectColour) {
+                    QuadDetector.detectSaturatedPanelInRgba(pixels, width, height)
+                } else null
+                LiveBoundarySelector.choose(contour, panel, width, height)
+            }
         } catch (_: Exception) {
             null
         } finally {

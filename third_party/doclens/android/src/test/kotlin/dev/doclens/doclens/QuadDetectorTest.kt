@@ -193,6 +193,33 @@ class QuadDetectorTest {
         assertNull(QuadDetector.detectSaturatedPanel(pixels, width, height))
     }
 
+    @Test
+    fun liveRgbaPanelTracksBlueClothInsteadOfBrownChair() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFF92745F.toInt() }
+        fillRgb(pixels, width, 34, 48, 292, 100, 0xFF171C20.toInt())
+        fillRgb(pixels, width, 50, 111, 268, 358, 0xFF176BC3.toInt())
+        // A white, densely decorated centre must not replace the blue cloth.
+        fillRgb(pixels, width, 92, 162, 228, 297, 0xFFE5E4D9.toInt())
+        val rgba = ByteArray(width * height * 4)
+        for (index in pixels.indices) {
+            val colour = pixels[index]
+            val offset = index * 4
+            rgba[offset] = (colour shr 16).toByte()
+            rgba[offset + 1] = (colour shr 8).toByte()
+            rgba[offset + 2] = colour.toByte()
+            rgba[offset + 3] = 0xFF.toByte()
+        }
+        val detected = assertNotNull(
+            QuadDetector.detectSaturatedPanelInRgba(rgba, width, height),
+        )
+        assertTrue(abs(detected.topLeft.x - 50f / width) < .055f)
+        assertTrue(abs(detected.topLeft.y - 111f / height) < .055f)
+        assertTrue(abs(detected.bottomRight.x - 267f / width) < .055f)
+        assertTrue(abs(detected.bottomRight.y - 357f / height) < .055f)
+    }
+
     private fun fillRgb(
         image: IntArray, width: Int, left: Int, top: Int,
         right: Int, bottom: Int, color: Int,

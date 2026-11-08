@@ -443,6 +443,7 @@ class DoclensController extends ChangeNotifier {
 
   Future<void> switchCamera() {
     _ensureReady();
+    _resetTracking();
     return DoclensPlatform.instance.switchCamera();
   }
 
@@ -460,6 +461,7 @@ class DoclensController extends ChangeNotifier {
 
   Future<void> pause() {
     _ensureReady();
+    _resetTracking();
     return DoclensPlatform.instance.pause();
   }
 
@@ -473,9 +475,18 @@ class DoclensController extends ChangeNotifier {
   Future<void> resume() {
     _ensureReady();
     _cancelConfirmation();
-    _stability.reset();
+    _resetTracking();
     _autoCaptureCooldownUntil = DateTime.now().add(resumeAutoCaptureGrace);
     return DoclensPlatform.instance.resume();
+  }
+
+  void _resetTracking() {
+    _smoother?.reset();
+    _lastQuad = null;
+    _quadCtrl.add(null);
+    _stability.reset();
+    _resetFocusEpisode();
+    _emitStatus(DetectionStatus.searching);
   }
 
   /// How long after [resume] auto-capture stays suppressed so the user can

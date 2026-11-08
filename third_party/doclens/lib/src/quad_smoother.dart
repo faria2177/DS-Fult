@@ -6,10 +6,11 @@ import 'quad.dart';
 
 /// Sliding-window median filter with document-identity hysteresis.
 ///
-/// Each corner is independently median-filtered (median X, median Y) over
-/// the last [windowSize] observations *of the same document*. A detector can
+/// Candidate observations of the same document are median-filtered and then
+/// adaptively blended into a single displayed quadrilateral. Tiny variations
+/// move very slowly; deliberate camera movement follows faster. A detector can
 /// briefly prefer a background rectangle when light changes: feeding that
-/// outlier directly into the median produces a visibly jumping green box.
+/// outlier directly into the display would cause a jumping green box.
 /// Large changes must therefore persist for [switchConfirmationFrames]
 /// consistent frames before the new quad replaces the tracked document.
 ///
@@ -21,7 +22,7 @@ class QuadSmoother {
   QuadSmoother({
     this.windowSize = 5,
     this.missesBeforeReset = 3,
-    this.switchConfirmationFrames = 3,
+    this.switchConfirmationFrames = 4,
     this.maxUnmatchedFrames = 6,
     this.switchDistanceThreshold = 0.12,
   })  : assert(windowSize > 0 && windowSize.isOdd,
@@ -42,12 +43,14 @@ class QuadSmoother {
 
   final Queue<Quad> _buffer = Queue<Quad>();
   final Queue<Quad> _challenger = Queue<Quad>();
+  Quad? _tracked;
   int _consecutiveMisses = 0;
   int _unmatchedFrames = 0;
 
   void reset() {
     _buffer.clear();
     _challenger.clear();
+    _tracked = null;
     _consecutiveMisses = 0;
     _unmatchedFrames = 0;
   }
@@ -55,32 +58,39 @@ class QuadSmoother {
   /// Add [quad] (or null for a missed frame) and return the smoothed quad.
   /// Returns null when there's not yet any data to smooth.
   Quad? add(Quad? quad) {
-    if (quad == null) {
+    if (quad == null || !_isValid(quad)) {
       _consecutiveMisses++;
       _challenger.clear();
       if (_consecutiveMisses >= missesBeforeReset) reset();
-      return _buffer.isEmpty || _unmatchedFrames >= maxUnmatchedFrames
-          ? null
-          : _median();
+      return _unmatchedFrames >= maxUnmatchedFrames ? null : _tracked;
     }
     _consecutiveMisses = 0;
-    if (_buffer.isEmpty) {
+    if (_tracked == null) {
       _append(quad);
+      _tracked = quad;
       return quad;
     }
 
-    if (_sameDocument(_median(), quad)) {
+    if (_sameDocument(_tracked!, quad)) {
       _challenger.clear();
       _unmatchedFrames = 0;
       _append(quad);
-      return _median();
+      final distance = _tracked!.maxCornerDistance(quad);
+      final alpha = distance < .008 ? .20 : distance < .035 ? .45 : .68;
+      // Give recent movement more influence than the window median so a
+      // moving phone does not leave a visibly lagging box on the document.
+      final target = Quad.interpolate(_median(), quad, .72);
+      _tracked = Quad.interpolate(_tracked!, target, alpha);
+      return _tracked;
     }
 
     // Do not pollute the confirmed document's median with a competing quad.
     // Require consecutive *mutually matching* candidates before moving the
     // outline. This also handles a genuinely new document entering view.
     _unmatchedFrames++;
-    if (_challenger.isEmpty || !_sameDocument(_challenger.last, quad)) {
+    if (_challenger.isEmpty ||
+        !_sameDocument(_challenger.first, quad) ||
+        !_sameDocument(_challenger.last, quad)) {
       _challenger.clear();
     }
     _challenger.addLast(quad);
@@ -90,15 +100,33 @@ class QuadSmoother {
       for (final candidate in incoming) {
         _append(candidate);
       }
+      _tracked = _median();
       _challenger.clear();
       _unmatchedFrames = 0;
-      return _median();
+      return _tracked;
     }
 
     // Rapid camera movement can produce a different candidate each frame.
     // In that case a stale outline is worse than displaying no outline.
     if (_unmatchedFrames >= maxUnmatchedFrames) return null;
-    return _median();
+    return _tracked;
+  }
+
+  bool _isValid(Quad quad) {
+    final points = quad.points;
+    if (points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
+        p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1)) return false;
+    if (quad.area < .008 || quad.area > .96) return false;
+    // A smoothing step must never display a bow-tie or crossed corner order.
+    for (var i = 0; i < points.length; i++) {
+      final a = points[i];
+      final b = points[(i + 1) % points.length];
+      final c = points[(i + 2) % points.length];
+      final cross = (b.dx - a.dx) * (c.dy - b.dy) -
+          (b.dy - a.dy) * (c.dx - b.dx);
+      if (cross <= .0001) return false;
+    }
+    return true;
   }
 
   void _append(Quad quad) {

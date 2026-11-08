@@ -155,11 +155,9 @@ class ReferenceScanChrome extends StatelessWidget {
                 ),
               ),
             )),
-            IgnorePointer(
-              child: DecoratedBox(decoration: BoxDecoration(
-                border: Border.all(color: accent.withValues(alpha: 0.78), width: 1.2),
-              )),
-            ),
+            // Only the detected document has a turquoise outline. A second,
+            // permanent border around the entire preview looked like an
+            // incorrectly detected page in the 381530.mp4 comparison.
             Positioned(
               bottom: 12,
               left: 0,

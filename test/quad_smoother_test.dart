@@ -39,14 +39,15 @@ void main() {
     expect(tracker.add(falseDetection), original);
   });
 
-  test('switches only after three consistent observations of a new page', () {
+  test('switches only after four consistent observations of a new page', () {
     final tracker = QuadSmoother(windowSize: 7);
     final oldPage = rectangle(.08, .10);
     final newPage = rectangle(.43, .34);
     tracker.add(oldPage);
     expect(tracker.add(newPage), oldPage);
     expect(tracker.add(rectangle(.434, .343)), oldPage);
-    final switched = tracker.add(rectangle(.431, .341))!;
+    expect(tracker.add(rectangle(.431, .341)), oldPage);
+    final switched = tracker.add(rectangle(.432, .340))!;
     expect(switched.maxCornerDistance(newPage), lessThan(.01));
     expect(switched.maxCornerDistance(oldPage), greaterThan(.20));
   });
@@ -85,5 +86,47 @@ void main() {
     expect(tracker.add(null), isNull);
     // It can still recover as soon as the original document comes back.
     expect(tracker.add(original), original);
+  });
+
+  test('rejects crossed corners and impossible geometry', () {
+    final tracker = QuadSmoother();
+    final doc = rectangle(.2, .2);
+    tracker.add(doc);
+    final crossed = Quad(
+      topLeft: const Offset(.2, .2),
+      topRight: const Offset(.6, .7),
+      bottomRight: const Offset(.6, .2),
+      bottomLeft: const Offset(.2, .7),
+    );
+    expect(tracker.add(crossed), doc);
+    expect(tracker.add(rectangle(.2, .2)), doc);
+  });
+
+  test('four drifting challengers cannot steal the outline', () {
+    final tracker = QuadSmoother(
+      switchConfirmationFrames: 4, maxUnmatchedFrames: 12,
+    );
+    final doc = rectangle(.15, .15);
+    tracker.add(doc);
+    for (var i = 0; i < 8; i++) {
+      final output = tracker.add(rectangle(
+        .45 + (i % 3) * .075, .29, width: .30,
+      ));
+      expect(output, doc);
+    }
+  });
+
+  test('small vibration is damped but deliberate movement follows promptly', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    tracker.add(rectangle(.15, .14));
+    for (var i = 0; i < 10; i++) {
+      final q = tracker.add(rectangle(.15 + (i.isEven ? .004 : -.004), .14))!;
+      expect((q.topLeft.dx - .15).abs(), lessThan(.012));
+    }
+    Quad? result;
+    for (var i = 1; i <= 5; i++) {
+      result = tracker.add(rectangle(.15 + i * .030, .14));
+    }
+    expect(result!.topLeft.dx, greaterThan(.20));
   });
 }
