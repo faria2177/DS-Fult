@@ -31,6 +31,7 @@
 | `0.5.11` | Card-specific OpenCV quad ranking, source-image re-crop recovery, improved true-size A4 card layout | Implemented / CI-tested; physical device verification pending |
 | `0.5.12` | Single Scan crop guard against internal horizontal text bands; recent credible live outline seeds manual review, full original preserved; Adjust corners actions respect navigation safe-area | Native/Flutter CI passed in run #42458973854; device verification pending |
 | `0.5.13` | More capable still-image Auto Crop: background-versus-paper contrast mask, thorough still-only edge/line candidate search and safer outer-page preference | Regression tests added; CI/device verification pending |
+| Post-`0.5.13` | Video `381526.mp4` regression: try still-only saturated outer-panel recovery on mixed backgrounds; reject small, centred inner title/label quads in either JPEG orientation; retain full-original review if uncertain | Code + synthetic native regressions added; CI and physical-device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -84,6 +85,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Outer-sheet selection tolerates a more subdued page boundary only if its polygon encloses the inner rectangle, has credible paper geometry and independently supported edges/contrast.
 - A new colour-mask candidate replaces an existing CV crop only if the page is credible and substantially larger; otherwise the original still/crop behavior remains. Card-specific ranking, manual shutter, original-image preservation and reversible four-corner editing remain intact.
 - Native regression tests cover dense printed letters, light-grey paper on a grey desk, uniformly blank scenes, cut-off background panels, subdued outer page borders and square false positives. **CI and physical device confirmation not yet recorded.**
+
+### Post-0.5.13 — blue poster versus yellow inner label (381526.mp4)
+
+- The video shows a credible live outline around the complete blue signboard, followed by a still-image crop of only the central yellow title. The final saved thumbnail loses the logo and lower text.
+- A conservative saturated-panel detector now looks for a connected outer-colour region on heterogeneous backgrounds (stone above, patterned table below). It competes with the still contour only when that contour is small, and must pass the existing credible-outer-page and substantial-growth criteria before being selected. This is not specific to blue pixels.
+- The still-crop guard now rejects a small centred inner band even if CameraX/EXIF reports a landscape or transposed JPEG. Normal page captures keep the existing native detector; uncertain captures preserve the full upright image and open the existing editable four-corner review rather than warping a guessed inner label.
+- Added native geometry regressions for a full poster, yellow inner title in both orientations, full landscape page, edge-touching document and absent still quad; synthetic pixel regressions check poster recovery against a patterned background and reject uniform/undersized coloured patches. **The source video is not a raw camera still; a same-scene device retest is required to establish the exact detector failure and the quality of the final automatic crop.**
 
 ## Recent CI note
 

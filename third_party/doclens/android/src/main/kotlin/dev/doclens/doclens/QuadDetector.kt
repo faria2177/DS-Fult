@@ -236,6 +236,63 @@ object QuadDetector {
     }
 
     /**
+     * A saturated *outer* document can contain a much stronger contrasting
+     * inner label. In video 381526.mp4 the blue poster is on mixed stone and
+     * patterned cloth, so sampling all four frame corners as one background
+     * colour cannot recover its boundary. Search for a large connected panel
+     * of locally consistent colour instead.
+     *
+     * This is a still-only proposal, never a standalone cropping decision.
+     * [detectInBitmap] promotes it only when it is a credible, substantially
+     * larger page than the contour winner. Four small inset samples avoid a
+     * hard-coded colour (the page need not be blue); blank or full-frame
+     * coloured backgrounds are rejected by the same geometric checks.
+     */
+    internal fun detectSaturatedPanel(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+    ): Quad? {
+        if (width < 64 || height < 64 || pixels.size != width * height) return null
+        val samples = arrayOf(
+            .28 to .20, .72 to .20,
+            .28 to .32, .72 to .32,
+        )
+        var best: Quad? = null
+        var bestArea = 0.0
+        for ((sx, sy) in samples) {
+            val sample = pixels[(sy * height).toInt() * width + (sx * width).toInt()]
+            val sr = (sample shr 16) and 0xFF
+            val sg = (sample shr 8) and 0xFF
+            val sb = sample and 0xFF
+            val high = max(sr, max(sg, sb))
+            val low = min(sr, min(sg, sb))
+            if (high < 85 || (high - low) * 100 < high * 32) continue
+
+            val mask = BooleanArray(pixels.size)
+            for (i in pixels.indices) {
+                val p = pixels[i]
+                val r = (p shr 16) and 0xFF
+                val g = (p shr 8) and 0xFF
+                val b = p and 0xFF
+                val peak = max(r, max(g, b))
+                val trough = min(r, min(g, b))
+                if (peak < 70 || (peak - trough) * 100 < peak * 25) continue
+                val difference = (abs(r - sr) + abs(g - sg) + abs(b - sb)) / 3
+                mask[i] = difference <= 48
+            }
+            val quad = analyzeMask(mask, width, height)?.quad ?: continue
+            if (!StillCaptureCropSafety.isCrediblePage(quad, width, height)) continue
+            val area = StillCaptureCropSafety.area(quad)
+            if (area > bestArea) {
+                best = quad
+                bestArea = area
+            }
+        }
+        return best
+    }
+
+    /**
      * Give a central, closed card a chance against a larger bright background.
      *
      * - **solidity** — component pixels over its own quad's area. A document
@@ -395,7 +452,13 @@ object QuadDetector {
             StillCaptureCropSafety.isSuspiciousInteriorStrip(cvQuad, dw, dh)) {
             detectBackgroundContrastPage(pixels, dw, dh)
         } else null
-        val wholePage = listOfNotNull(neutralQuad, contrastQuad)
+        val saturatedPanelQuad = if (cvQuad == null ||
+            StillCaptureCropSafety.area(cvQuad) < .28) {
+            detectSaturatedPanel(pixels, dw, dh)
+                ?.takeIf { cvQuad == null ||
+                    StillCaptureCropSafety.encloses(it, cvQuad) }
+        } else null
+        val wholePage = listOfNotNull(neutralQuad, contrastQuad, saturatedPanelQuad)
             .filter { StillCaptureCropSafety.isCrediblePage(it, dw, dh) }
             .maxByOrNull { StillCaptureCropSafety.area(it) }
         if (cvQuad != null) {

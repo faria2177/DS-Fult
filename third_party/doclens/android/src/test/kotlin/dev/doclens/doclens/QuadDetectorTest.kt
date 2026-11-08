@@ -153,6 +153,46 @@ class QuadDetectorTest {
         assertNull(QuadDetector.detectBackgroundContrastPage(pixels, width, height))
     }
 
+    @Test
+    fun saturatedPanelFindsEntireBluePosterAroundYellowInnerLabel() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFF746F68.toInt() }
+        // Mixed stone and a patterned bottom surface defeat single-colour
+        // background-corner sampling, as in the 381526.mp4 scene.
+        for (y in 305 until height step 20) {
+            for (x in 0 until width step 40) {
+                val tile = if ((x / 40 + y / 20) % 2 == 0) 0xFF1768BE.toInt()
+                    else 0xFF993A62.toInt()
+                fillRgb(pixels, width, x, y, x + 40, (y + 20).coerceAtMost(height), tile)
+            }
+        }
+        fillRgb(pixels, width, 65, 58, 255, 285, 0xFF1766C9.toInt())
+        fillRgb(pixels, width, 102, 152, 215, 203, 0xFFEACA46.toInt())
+        fillRgb(pixels, width, 112, 89, 190, 100, 0xFFF3F4F4.toInt())
+
+        val quad = assertNotNull(QuadDetector.detectSaturatedPanel(pixels, width, height))
+        assertTrue(abs(quad.topLeft.x - 65f / width) < .045f)
+        assertTrue(abs(quad.topLeft.y - 58f / height) < .045f)
+        assertTrue(abs(quad.bottomRight.x - 254f / width) < .045f)
+        assertTrue(abs(quad.bottomRight.y - 284f / height) < .045f)
+    }
+
+    @Test
+    fun saturatedPanelDoesNotTreatUniformBackgroundAsDocument() {
+        val pixels = IntArray(320 * 400) { 0xFF1766C9.toInt() }
+        assertNull(QuadDetector.detectSaturatedPanel(pixels, 320, 400))
+    }
+
+    @Test
+    fun saturatedPanelRejectsSmallInternalColourBox() {
+        val width = 320
+        val height = 400
+        val pixels = IntArray(width * height) { 0xFFDBD9D5.toInt() }
+        fillRgb(pixels, width, 85, 55, 225, 179, 0xFF1766C9.toInt())
+        assertNull(QuadDetector.detectSaturatedPanel(pixels, width, height))
+    }
+
     private fun fillRgb(
         image: IntArray, width: Int, left: Int, top: Int,
         right: Int, bottom: Int, color: Int,

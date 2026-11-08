@@ -44,12 +44,43 @@ internal object StillCaptureCropSafety {
         return coverage in .30..0.94 && aspect in 1.12..1.89
     }
 
-    /** Horizontal letter body on a portrait still: never make it the saved page. */
+    /**
+     * A high-contrast inner title, label or table can win still detection even
+     * though the live preview framed the entire document. The still JPEG's
+     * sensor orientation is not guaranteed to match the displayed preview, so
+     * do not rely solely on `height > width` to recognise a narrow inner crop.
+     *
+     * Prefer a full, editable original over an irreversible crop when a small,
+     * centred strip is proposed. The separate ID-card flow deliberately does
+     * not use this guard (see ScannerSession.capture).
+     */
     fun isSuspiciousInteriorStrip(quad: Quad, width: Int, height: Int): Boolean {
-        if (width <= 0 || height <= width * 1.10) return false
+        if (width <= 0 || height <= 0) return false
+        val points = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
+                it.x !in 0f..1f || it.y !in 0f..1f }) return false
+
+        val left = points.minOf { it.x }
+        val right = points.maxOf { it.x }
+        val top = points.minOf { it.y }
+        val bottom = points.maxOf { it.y }
+        // A border touching the picture edge may be a real, closely framed
+        // document. This guard is specifically for an *interior* rectangle.
+        if (left < .045f || right > .955f || top < .065f || bottom > .935f) {
+            return false
+        }
+
         val (w, h) = sideLengths(quad, width, height)
-        val isLandscapeStrip = w > h * 1.58
-        return isLandscapeStrip && area(quad) < .73
+        val coverage = area(quad)
+        // Cover both orientations: a landscape text band in an upright JPEG,
+        // or the same band rotated by CameraX/EXIF on a device-specific path.
+        val narrowStrip = max(w, h) > min(w, h) * 1.55
+        val smallCentralPanel = coverage < .19 && narrowStrip
+        // Preserve the earlier portrait-page protection for somewhat wider
+        // text bands, without disallowing a well-framed landscape document.
+        val portraitTextBand = height > width * 1.10 && w > h * 1.58 &&
+            coverage < .36 && (bottom - top) < .43f
+        return smallCentralPanel || portraitTextBand
     }
 
     fun compatibleView(previewWidth: Int, previewHeight: Int,
@@ -63,6 +94,29 @@ internal object StillCaptureCropSafety {
 
     fun significantlySmallerThan(still: Quad, preview: Quad): Boolean =
         area(still) < area(preview) * .64
+
+    /** A proposed coloured outer panel must actually contain the inner crop. */
+    fun encloses(outer: Quad, inner: Quad): Boolean {
+        val boundary = listOf(outer.topLeft, outer.topRight,
+            outer.bottomRight, outer.bottomLeft)
+        val subject = listOf(inner.topLeft, inner.topRight,
+            inner.bottomRight, inner.bottomLeft)
+        return subject.all { point ->
+            boundary.indices.all { index ->
+                val a = boundary[index]
+                val b = boundary[(index + 1) % boundary.size]
+                (b.x - a.x) * (point.y - a.y) -
+                    (b.y - a.y) * (point.x - a.x) >= -.008f
+            }
+        }
+    }
+
+    /** Called before any irreversible perspective warp of a normal scan. */
+    fun requiresManualReview(
+        still: Quad?, width: Int, height: Int, credibleLiveHint: Quad?,
+    ): Boolean = still == null ||
+        isSuspiciousInteriorStrip(still, width, height) ||
+        (credibleLiveHint != null && significantlySmallerThan(still, credibleLiveHint))
 
     /** Keep accurate CV corners unless the independent mask clearly recovers a page. */
     fun shouldPreferPaperMask(

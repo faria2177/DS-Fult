@@ -13,7 +13,9 @@
 
 ## Currently confirmed open bugs
 
-No **newly verified, device-reproduced** bug was provided after the `0.5.10` successful CI run. This means **not yet confirmed**, not “bug-free.” File any new regression using the template below before promoting it to an OPEN issue.
+| ID | Evidence | Observed behavior | Current status | Required confirmation |
+| --- | --- | --- | --- | --- |
+| B-010 | Video `381526.mp4`, ~00:18–00:28, HONOR Android 16 screen recording | Single Scan live outline follows the entire blue Grameenphone poster; shutter review, editor and saved thumbnail contain only the smaller yellow inner label | OPEN — confirmed in video. Post-`0.5.13` still-only saturated outer-panel candidate and orientation-independent compact-crop guard added; CI/device results pending | Install an APK containing this patch; scan the same poster. Expect full-board auto-crop if boundaries are reliable, otherwise full-original corner review. Log still/live quads and compare all four edges to CamScanner's accepted scan |
 
 ## Historical fixes requiring targeted hardware retest
 

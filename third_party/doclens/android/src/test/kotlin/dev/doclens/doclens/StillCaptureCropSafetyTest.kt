@@ -25,6 +25,50 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun saturatedPosterWithSmallYellowLandscapeTitleKeepsWholeOriginal() {
+        // Regression for video 381526.mp4: live tracking framed the full blue
+        // portrait sign, but the shutter still returned only its yellow label.
+        val bluePoster = rect(.16f, .22f, .84f, .83f)
+        val yellowTitle = rect(.28f, .46f, .72f, .64f)
+        assertFalse(StillCaptureCropSafety.isSuspiciousInteriorStrip(bluePoster, 900, 1200))
+        assertTrue(StillCaptureCropSafety.isSuspiciousInteriorStrip(yellowTitle, 900, 1200))
+        assertTrue(StillCaptureCropSafety.significantlySmallerThan(yellowTitle, bluePoster))
+        assertTrue(StillCaptureCropSafety.encloses(bluePoster, yellowTitle))
+        assertFalse(StillCaptureCropSafety.encloses(yellowTitle, bluePoster))
+        assertTrue(StillCaptureCropSafety.requiresManualReview(
+            yellowTitle, 900, 1200, bluePoster))
+        assertFalse(StillCaptureCropSafety.requiresManualReview(
+            bluePoster, 900, 1200, bluePoster))
+    }
+
+    @Test
+    fun compactInteriorLabelIsUnsafeWhenStillPixelsAreLandscape() {
+        val yellowTitle = rect(.29f, .41f, .71f, .59f)
+        assertTrue(StillCaptureCropSafety.isSuspiciousInteriorStrip(yellowTitle, 1200, 900))
+        assertTrue(StillCaptureCropSafety.requiresManualReview(
+            yellowTitle, 1200, 900, null))
+    }
+
+    @Test
+    fun compactInteriorLabelIsUnsafeWhenStillPixelsAreRotated() {
+        val rotatedTitle = rect(.41f, .29f, .59f, .71f)
+        assertTrue(StillCaptureCropSafety.isSuspiciousInteriorStrip(rotatedTitle, 900, 1200))
+    }
+
+    @Test
+    fun fullLandscapePageAndEdgeTouchingDocumentAreNotRejected() {
+        val landscapePage = rect(.06f, .16f, .94f, .84f)
+        val closeCrop = rect(.01f, .38f, .99f, .62f)
+        assertFalse(StillCaptureCropSafety.isSuspiciousInteriorStrip(landscapePage, 900, 1200))
+        assertFalse(StillCaptureCropSafety.isSuspiciousInteriorStrip(closeCrop, 900, 1200))
+    }
+
+    @Test
+    fun missingStillOutlineUsesRawPhotoForReview() {
+        assertTrue(StillCaptureCropSafety.requiresManualReview(null, 900, 1200, null))
+    }
+
+    @Test
     fun suddenlySmallerStillQuadRequiresReview() {
         val livePage = rect(.09f, .06f, .91f, .94f)
         val innerBand = rect(.12f, .43f, .88f, .62f)

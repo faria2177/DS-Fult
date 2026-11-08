@@ -406,13 +406,9 @@ class ScannerSession(
                         StillCaptureCropSafety.compatibleView(hint.width, hint.height,
                             rawSize.width, rawSize.height)
                     }?.quad
-                    val uncertainStill = !config.preferIdCardBounds && (
-                        stillQuad == null ||
-                        StillCaptureCropSafety.isSuspiciousInteriorStrip(stillQuad,
-                            rawSize.width, rawSize.height) ||
-                        (reviewHint != null && StillCaptureCropSafety.significantlySmallerThan(
-                            stillQuad, reviewHint))
-                    )
+                    val uncertainStill = !config.preferIdCardBounds &&
+                        StillCaptureCropSafety.requiresManualReview(
+                            stillQuad, rawSize.width, rawSize.height, reviewHint)
                     val q = if (uncertainStill && reviewHint != null) reviewHint
                         else if (uncertainStill) null else stillQuad
                     val pixelQuad = q?.let {
