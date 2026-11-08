@@ -3,6 +3,14 @@
 Local-first Android document scanner with an original DS-branded, CamScanner-inspired interface.
 The app does **not** include CamScanner's proprietary code, artwork, cloud services or trademarks.
 
+## Project documentation
+
+Start with [PROJECT.md](PROJECT.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+Follow current status in [PROGRESS.md](PROGRESS.md), planned work in
+[TODO.md](TODO.md), design choices in [DECISIONS.md](DECISIONS.md), reusable
+coding instructions in [PROMPTS.md](PROMPTS.md), and tracked problems in
+[BUGS.md](BUGS.md) / [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+
 ## ID Cards Front/Back capture and one-page preview — v0.5.10
 
 - Reference videos `381271.mp4` and `381273.mp4`: the ID Card and Driver
@@ -364,8 +372,10 @@ The app does **not** include CamScanner's proprietary code, artwork, cloud servi
 
 **Not CamScanner quality parity:** AI generative image inpainting, fully automatic
 accurate OCR text replacement on arbitrary photo backgrounds, Bengali OCR word
-bounding boxes, PDF lock/password, digital signatures, Office conversions,
-and direct editing of imported native PDFs remain unimplemented. Image text
+bounding boxes, actual encrypted PDF locking, cryptographic digital signatures,
+fully layout-faithful Office conversion, and direct editing of imported native
+PDFs remain unimplemented. Basic OCR-based DOCX/XLSX and image-based PPTX
+export are available but do not reproduce the source layout exactly. Image text
 replacement uses local background interpolation (not a generative model), which
 can leave visible artifacts on patterned backgrounds. Tools which are not ready
 still say so. All changes require real Android device testing in addition to CI.

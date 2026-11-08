@@ -1,0 +1,49 @@
+# DocScanner — Known Issues and Limitations
+
+**Last reviewed:** 2026-11-08  
+**Baseline:** `0.5.10+24`  
+This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
+
+## Confirmed implementation limitations
+
+| ID | Topic | Current behavior and impact | Possible next step |
+| --- | --- | --- | --- |
+| K-001 | App lock vs encryption | The document PIN restricts DocScanner UI access. Images and exported PDFs are **not encrypted** by this mechanism. | Design true file/PDF encryption only if explicitly requested (TODO T-107) |
+| K-002 | Saved card-side re-editing | New ID Card/License/Bank Card documents store a **composed A4 JPEG** as a page. Individual Front/Back images are editable during review, but separate side data is not persisted for later independent edits. | Persist source-side assets and migration metadata (T-101) |
+| K-003 | Smart Erase and image text replacement | Local pixel interpolation/brush algorithms are not generative semantic inpainting. Textured backgrounds can retain seams or artifacts. | Quality fixtures and explicitly labeled local tools |
+| K-004 | DOCX conversion | Word output is editable OCR text, not full original layout/font reconstruction. | Layout analysis and compare real-document exports |
+| K-005 | XLSX conversion | Spreadsheet columns are inferred from tabs/repeated spaces in OCR; original table geometry can be lost. | Table-cell detector and test fixtures (T-106) |
+| K-006 | PPTX conversion | PowerPoint files contain scanned page **images** on slides; their text/shapes are not independently editable. | Only promise editable objects after actual reconstruction support |
+| K-007 | Bengali OCR layout | Bundled Bengali Tesseract supports text recognition, but reliable Bengali word bounding boxes and arbitrary-layout editing are not provided. | Model/layout improvements and physical fixtures |
+| K-008 | Native imported PDFs | Direct, lossless editing of arbitrary imported PDF text/vector content is not a complete native PDF editing engine. Document workflows are primarily image-backed. | Separate PDF parser/content-edit architecture if required |
+| K-009 | Document index writes | `index.json` is currently written directly, without an atomic temp-file swap. Interrupted writes may require recovery; unreadable source index is copied with a `.recovery` suffix. | Atomic persistence and corrupt-file tests (T-102) |
+| K-010 | Deletion/storage cleanup | The app may retain older backing image files after document/page deletion to avoid premature data loss. This can grow storage usage. | Design recoverable trash and controlled garbage collection (T-103) |
+| K-011 | Public share links | Without a cloud host, DocScanner cannot generate a public document URL; local Android sharing is available. | Retain offline explanation unless cloud scope changes |
+
+## Device-dependent or unverified risks
+
+| ID | Area | What still needs checking |
+| --- | --- | --- |
+| R-001 | Real-time contours | Camera resolution, lighting, glare, nested rectangles and contrast can change live/still candidate selection. Test A4 and Legal with real sample sets. |
+| R-002 | Mode switching | Some configuration changes intentionally rebind the native camera. Verify no unwanted reflection/black flash on the target HONOR Android 16 device. |
+| R-003 | Reference video fidelity | Similar Flutter UI and interaction flow do **not** guarantee pixel-identical colors, typography, motion, overlays or native processing output across screen sizes. |
+| R-004 | Navigation/safe areas | Verify toolbar and dialog positioning with Android gesture navigation and three-button navigation. |
+| R-005 | Export receivers | Android share targets, Office viewers and printers vary by installed apps and permissions; validate opening each output type. |
+| R-006 | OCR model installation | The Bengali model is downloaded and bundled during **build**. A failed dependency download can break CI; runtime scans should not require downloading it again. |
+| R-007 | APK size/third-party binaries | Native `.so` libraries and OCR/model assets increase APK size. Audit ABI packaging, binary provenance and license/redistribution rights before public distribution. Do not delete detector dependencies without dependency mapping. |
+| R-008 | General mode limits | UI allows many General pages, but very long sessions may use significant RAM and storage; test large batches on low-memory hardware. |
+
+## Intentional exclusions (not bugs)
+
+- No **Ask AI**, account login, cloud backup, cloud sync or paid AI service.
+- Removed Tools-grid entries: Mega Scan, Long Document, Driver License, Bank Card, Photo Translation, Scan Code, To PPT, Erase Marks and Restore Photo. Internal helpers or other navigation routes may still exist.
+- Manual shutter is the default; automatic capture is not an assumed requirement.
+- Proprietary CamScanner algorithms, code and graphics are not part of this independently implemented Flutter design.
+
+## What “verified” means
+
+The `0.5.10+24` baseline completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42440988584](https://github.com/faria2177/DS-Fult/actions/runs/42440988584). These tests verify compile-time and covered automated behavior; they **do not** prove live CameraX behavior or screenshot identity on a physical phone.
+
+## Reporting a newly observed issue
+
+Supply the app version, device/Android version, precise interaction steps, expected/actual result and a short recording or redacted log. Add a confirmed regression to [BUGS.md](BUGS.md); add a reproducible remediation task to [TODO.md](TODO.md). Keep personal ID cards and private scanned data out of public GitHub issues.
