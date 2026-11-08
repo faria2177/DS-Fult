@@ -2,6 +2,7 @@ package dev.doclens.doclens
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class LiveBoundarySelectorTest {
     private fun rect(left: Float, top: Float, right: Float, bottom: Float) = Quad(
@@ -45,6 +46,27 @@ class LiveBoundarySelectorTest {
     @Test
     fun colourPanelCannotBeInventedWithoutVisiblePixels() {
         val page = rect(.10f, .15f, .85f, .90f)
+        assertEquals(page, LiveBoundarySelector.choose(page, null, 592, 792))
+    }
+
+    @Test
+    fun frameWideChairCannotStealDetectionFromBlueCloth() {
+        // Matches 381536.mp4, 00:02: the chair/frame starts at the preview
+        // limits while the real cloth remains completely in the camera view.
+        val chair = rect(0f, 0f, 1f, .83f)
+        val cloth = rect(.28f, .23f, .86f, .81f)
+        assertEquals(cloth, LiveBoundarySelector.choose(chair, cloth, 592, 792))
+    }
+
+    @Test
+    fun frameWideFalsePositiveWithNoDocumentIsHidden() {
+        val chair = rect(0f, .001f, 1f, .78f)
+        assertNull(LiveBoundarySelector.choose(chair, null, 592, 792))
+    }
+
+    @Test
+    fun normalPageWithClearMarginIsStillDetected() {
+        val page = rect(.065f, .07f, .935f, .91f)
         assertEquals(page, LiveBoundarySelector.choose(page, null, 592, 792))
     }
 }

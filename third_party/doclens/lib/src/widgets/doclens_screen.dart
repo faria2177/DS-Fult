@@ -3221,6 +3221,10 @@ class _ReticleOverlay extends StatelessWidget {
   final Color warning;
 
   Color _strokeColor() {
+    // Detection status can briefly lag the native quad. A detected document
+    // stays mint green during "searching"/"move back" guidance, so the
+    // outline does not appear to flash grey as classification changes.
+    if (quad != null) return accent;
     switch (status) {
       case DetectionStatus.confirming:
         return accent;
@@ -3306,9 +3310,11 @@ class _ReticlePainter extends CustomPainter {
       ..lineTo(q.bottomRight.dx, q.bottomRight.dy)
       ..lineTo(q.bottomLeft.dx, q.bottomLeft.dy)
       ..close();
-    final fill = Paint()..color = color.withValues(alpha: 0.06);
+    // CamScanner-style recognition tint: this is only a visual indication
+    // of the verified polygon, not an input to the edge detector.
+    final fill = Paint()..color = color.withValues(alpha: 0.075);
     final stroke = Paint()
-      ..color = color.withValues(alpha: 0.45)
+      ..color = color.withValues(alpha: 0.62)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     canvas.drawPath(path, fill);

@@ -153,7 +153,12 @@ class DoclensController extends ChangeNotifier {
 
     // Run the raw quad through a median filter so jitter doesn't reach the
     // overlay or the stability tracker. Smoothing is a no-op when disabled.
-    final smoothed = _smoother?.add(event.quad) ?? event.quad;
+    // A null from QuadSmoother is an intentional rejection of an unstable
+    // candidate. Never fall back to the raw detection: doing so redraws the
+    // very background rectangle the tracker just suppressed.
+    final smoother = _smoother;
+    final smoothed =
+        smoother == null ? event.quad : smoother.add(event.quad);
     _lastQuad = smoothed;
     _quadCtrl.add(smoothed);
 

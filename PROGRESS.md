@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-08  
-**Current candidate release:** `0.5.14+28`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42458973854](https://github.com/faria2177/DS-Fult/actions/runs/42458973854)
-**Baseline commit:** [`708589f`](https://github.com/faria2177/DS-Fult/commit/708589f3b16cddbcc3fd5bb5f1ec74169fbceb0a)
+**Current candidate release:** `0.5.15+29`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42486007998](https://github.com/faria2177/DS-Fult/actions/runs/42486007998)
+**Baseline commit:** [`1557943`](https://github.com/faria2177/DS-Fult/commit/1557943b06fb90410ff6bfe49b07455c409bec79)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -32,7 +32,8 @@
 | `0.5.12` | Single Scan crop guard against internal horizontal text bands; recent credible live outline seeds manual review, full original preserved; Adjust corners actions respect navigation safe-area | Native/Flutter CI passed in run #42458973854; device verification pending |
 | `0.5.13` | More capable still-image Auto Crop: background-versus-paper contrast mask, thorough still-only edge/line candidate search and safer outer-page preference | Regression tests added; CI/device verification pending |
 | Post-`0.5.13` | Video `381526.mp4` regression: try still-only saturated outer-panel recovery on mixed backgrounds; reject small, centred inner title/label quads in either JPEG orientation; retain full-original review if uncertain | Code + synthetic native regressions added; CI and physical-device verification pending |
-| `0.5.14` | Video `381530.mp4`: prefer a coherent coloured document over an elongated chair-frame false detection, adaptive jitter damping with stronger switch confirmation, reset tracking after camera lifecycle changes, remove permanent preview border | Kotlin/Dart tests added; GitHub CI and physical-camera confirmation pending |
+| `0.5.14` | Video `381530.mp4`: prefer a coherent coloured document over an elongated chair-frame false detection, adaptive jitter damping with stronger switch confirmation, reset tracking after camera lifecycle changes, remove permanent preview border | Kotlin/Dart tests and complete GitHub CI passed in #42486007998; physical-camera confirmation pending |
+| `0.5.15` | Video `381536.mp4`: fix controller's raw-quad fallback that resurrected rejected detections; reject camera-border contenders, delay abrupt border takeovers, add tiny-motion deadband and persistent pale-green fill inside accepted quad | Native/Dart regressions added; CI and same-scene physical-device confirmation pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -100,6 +101,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Normal Scan live RGBA analysis now checks a second downscaled saturated-colour panel candidate when the OpenCV result is absent, elongated or overly large. A conservative geometric selector changes targets only for a strongly elongated background around the same centre or a small nested title. ID Card boundary ranking remains separate.
 - Dart tracking keeps the same-document identity gate, confirms challengers across four mutually consistent frames, rejects crossed/invalid quads and adaptively blends pixel-level jitter versus deliberate movement. Pause, resume and lens switching clear stale tracking state. The permanent preview border is removed; only the detected document is outlined.
 - Synthetic native live-cloth and competing-chair tests plus Dart movement/jitter/false-candidate tests were added. **No physical-phone result is claimed before a same-scene retest on HONOR VKP-NX9.**
+
+### 0.5.15 — Prevent green box jumps and clarify tint (381536.mp4)
+
+- The 16-second clip repeatedly jumps between the blue textile and full-frame/near-frame chair contours. A code bug in `DoclensController` used `smoother?.add(raw) ?? raw`, so when the smoother intentionally suppressed a bad quad, the unsafe raw quad was displayed anyway. The controller now respects null rejections.
+- Native detection independently inspects a small saturated-colour region for every normal Scan frame; it can prefer a fully visible cloth over a camera-border chair, and hides near-frame contours when no credible cloth/page evidence exists. ID Card detection remains separate.
+- The Dart tracker ignores sub-0.6%-of-frame movement and demands additional confirmations before a sudden, larger border-hugging rectangle replaces a tracked document. The actual document polygon, not the entire camera preview, receives a faint mint-green fill. This overlay is **visual feedback only**, not an algorithmic detection input.
+- Regression tests cover native frame-border rejection, transient/reappearing quads, deadband jitter, slow takeover and the controller's rejected-quad leak. **Manual capture remains unchanged; measure actual 12 Hz CPU/frame time and compare the same moving scene on HONOR VKP-NX9 after CI succeeds.**
 
 ## Recent CI note
 

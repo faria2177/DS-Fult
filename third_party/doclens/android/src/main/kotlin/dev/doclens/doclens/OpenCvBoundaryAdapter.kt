@@ -72,12 +72,13 @@ internal class OpenCvBoundaryAdapter {
                 // proposal can challenge an elongated background or an inner
                 // title, but cannot replace a credible normal page merely
                 // because it is brightly coloured.
-                val inspectColour = contour == null ||
-                    !StillCaptureCropSafety.isCrediblePage(contour, width, height) ||
-                    StillCaptureCropSafety.area(contour) > .43
-                val panel = if (inspectColour) {
-                    QuadDetector.detectSaturatedPanelInRgba(pixels, width, height)
-                } else null
+                // A chair can satisfy the normal page aspect/coverage tests
+                // (381536.mp4). Sample the independent coloured-document
+                // proposal on every non-ID frame, including such contenders.
+                // It is capped to a 256px edge and the selector still
+                // preserves convincing normal white paper boundaries.
+                val panel = QuadDetector.detectSaturatedPanelInRgba(
+                    pixels, width, height)
                 LiveBoundarySelector.choose(contour, panel, width, height)
             }
         } catch (_: Exception) {

@@ -12,9 +12,12 @@ import kotlin.math.min
 internal object LiveBoundarySelector {
     fun choose(contour: Quad?, colourPanel: Quad?, width: Int, height: Int): Quad? {
         if (colourPanel == null || !isPlausiblePanel(colourPanel, width, height)) {
-            return contour
+            // Several corners pinned to the camera edges are almost always
+            // the frame or a clipped background surface, not a visible page.
+            return contour?.takeUnless { isFrameSpanning(it) }
         }
         if (contour == null) return colourPanel
+        if (isFrameSpanning(contour)) return colourPanel
 
         val centreDistance = hypot(
             (contour.topLeft.x + contour.topRight.x + contour.bottomRight.x +
@@ -31,6 +34,13 @@ internal object LiveBoundarySelector {
         val contourRatio = longSideRatio(contour, width, height)
         val panelRatio = longSideRatio(colourPanel, width, height)
 
+        // The frame-wide green quad in 381536.mp4 has all four edges on the
+        // camera limits while the blue cloth is fully visible inside it.
+        // Prefer the independent cloth mask even if the chair accidentally
+        // has a credible A4 aspect ratio.
+        val borderBackground = edgeCornerCount(contour) >= 2 &&
+            contourArea > panelArea * 1.20 && panelArea >= .28
+
         // A chair frame or desk edge can be bigger and considerably more
         // elongated than the actual document, as in 381530.mp4. Both must
         // be supported by the live pixels: area alone never decides.
@@ -41,8 +51,17 @@ internal object LiveBoundarySelector {
         val innerTitle = contourArea < panelArea * .42 &&
             StillCaptureCropSafety.isSuspiciousInteriorStrip(contour, width, height) &&
             StillCaptureCropSafety.encloses(colourPanel, contour)
-        return if (elongatedBackground || innerTitle) colourPanel else contour
+        return if (borderBackground || elongatedBackground || innerTitle) colourPanel
+            else contour
     }
+
+    private fun edgeCornerCount(q: Quad): Int =
+        listOf(q.topLeft, q.topRight, q.bottomRight, q.bottomLeft).count {
+            it.x <= .020f || it.x >= .980f || it.y <= .020f || it.y >= .980f
+        }
+
+    private fun isFrameSpanning(q: Quad): Boolean =
+        StillCaptureCropSafety.area(q) > .53 && edgeCornerCount(q) >= 3
 
     private fun isPlausiblePanel(q: Quad, width: Int, height: Int): Boolean {
         if (width <= 0 || height <= 0) return false

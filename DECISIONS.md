@@ -92,6 +92,14 @@
 **Alternatives:** Always applying the most recent live quad (rejected due preview/still crop mismatch); always promoting the largest rectangle (rejected due desktop/background false positives); proprietary scanner binaries or online APIs (excluded).
 **Related:** `DocumentBoundaryDetector.kt`, `StillCapturePagePreference.kt`, `QuadDetector.kt`, `ScannerSession.kt` and native regression tests.
 
+## ADR-012 — Live box rejection and mint tint are separate concerns
+
+**Status:** Accepted for `0.5.15`; device tuning pending.
+**Decision:** A suppressed live quad must remain suppressed through the Flutter controller; do not restore a raw native proposal when smoothing returns null. For normal Scan (not ID Card), compare independent low-resolution colour-connected and OpenCV candidates every analyzed frame, rejecting near-camera-border rectangles when they lack credible whole-page evidence. Require additional temporal confirmation before a sudden large edge-hugging box replaces the tracked page. Paint a faint green fill **only inside the accepted quad**, keeping its appearance independent of the detection status label.
+**Why:** Video `381536.mp4` captures a moving, chair-backed textile whose border repeatedly jumps to the entire camera frame. The green tint communicates the selected region but cannot improve the native detection calculation by itself.
+**Consequences:** More colour-mask work on normal live frames may affect FPS/battery; rejecting very close-to-frame bounds may require the user to move the phone back. Preserve manual capture and the separate ID Card path; measure actual accuracy/latency on the target device.
+**Related:** `OpenCvBoundaryAdapter.kt`, `LiveBoundarySelector.kt`, `quad_smoother.dart`, `controller.dart`, `doclens_screen.dart`.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

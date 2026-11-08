@@ -78,6 +78,12 @@ class QuadSmoother {
       _unmatchedFrames = 0;
       _append(quad);
       final distance = _tracked!.maxCornerDistance(quad);
+      // ~3-4 preview pixels of hand tremor must not animate all four edges.
+      // The median still receives every valid frame and catches up when
+      // deliberate movement extends beyond this display deadband.
+      if (distance < .006) {
+        return _tracked;
+      }
       final alpha = distance < .008 ? .20 : distance < .035 ? .45 : .68;
       // Give recent movement more influence than the window median so a
       // moving phone does not leave a visibly lagging box on the document.
@@ -96,7 +102,14 @@ class QuadSmoother {
       _challenger.clear();
     }
     _challenger.addLast(quad);
-    if (_challenger.length >= switchConfirmationFrames) {
+    // A new rectangle that grows abruptly into the preview border is much
+    // more likely to be the chair/table behind a document than the document
+    // itself. It may still become the target if it remains consistent for
+    // twice as many frames; legitimate page changes are not blocked forever.
+    final requiredFrames = _borderTakeover(quad)
+        ? switchConfirmationFrames * 2
+        : switchConfirmationFrames;
+    if (_challenger.length >= requiredFrames) {
       final incoming = _challenger.toList();
       _buffer.clear();
       for (final candidate in incoming) {
@@ -125,6 +138,11 @@ class QuadSmoother {
     if (quad.area < .008 || quad.area > .96) {
       return false;
     }
+    // Camera/preview bounds are not document edges. Reject a near-full-frame
+    // quadrilateral even if its four points are otherwise geometrically valid.
+    if (quad.area > .53 && _nearPreviewEdgeCount(quad) >= 3) {
+      return false;
+    }
     // A smoothing step must never display a bow-tie or crossed corner order.
     for (var i = 0; i < points.length; i++) {
       final a = points[i];
@@ -138,6 +156,14 @@ class QuadSmoother {
     }
     return true;
   }
+
+  int _nearPreviewEdgeCount(Quad quad) => quad.points.where((p) =>
+      p.dx <= .022 || p.dx >= .978 || p.dy <= .022 || p.dy >= .978).length;
+
+  bool _borderTakeover(Quad candidate) =>
+      _tracked != null &&
+      candidate.area > _tracked!.area * 1.35 &&
+      _nearPreviewEdgeCount(candidate) >= 2;
 
   void _append(Quad quad) {
     _buffer.addLast(quad);

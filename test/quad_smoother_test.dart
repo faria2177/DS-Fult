@@ -129,4 +129,34 @@ void main() {
     }
     expect(result!.topLeft.dx, greaterThan(.20));
   });
+
+  test('micro-jitter inside display deadband does not shift the border', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    final document = rectangle(.20, .18);
+    tracker.add(document);
+    for (var i = 0; i < 12; i++) {
+      final result = tracker.add(
+          rectangle(.20 + (i.isEven ? .003 : -.003), .18));
+      expect(result, document);
+    }
+  });
+
+  test('full-preview camera border is not a document quadrilateral', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    expect(tracker.add(rectangle(.001, .001, width: .998, height: .81)),
+        isNull);
+    final document = rectangle(.23, .18);
+    expect(tracker.add(document), document);
+  });
+
+  test('sudden near-edge background takeover requires extra confirmation', () {
+    final tracker = QuadSmoother(windowSize: 7, maxUnmatchedFrames: 12);
+    final cloth = rectangle(.20, .20, width: .35, height: .40);
+    final chair = rectangle(.015, .10, width: .65, height: .73);
+    tracker.add(cloth);
+    for (var i = 0; i < 7; i++) {
+      expect(tracker.add(chair), cloth);
+    }
+    expect(tracker.add(chair), chair);
+  });
 }
