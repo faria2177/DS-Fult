@@ -391,9 +391,11 @@ class _ProviderKeySheetState extends State<_ProviderKeySheet> {
           TextButton.icon(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: widget.provider.keyPage));
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('API key website link copied.')),
-              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('API key website link copied.')),
+                );
+              }
             },
             icon: const Icon(Icons.copy_outlined),
             label: const Text('Copy API key website link'),
