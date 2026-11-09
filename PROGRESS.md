@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.29+43`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42567562071](https://github.com/faria2177/DS-Fult/actions/runs/42567562071)
-**Baseline commit:** [`4a237cf`](https://github.com/faria2177/DS-Fult/commit/4a237cfabebd363304b526ec77fd5a793cf1fa97)
+**Current candidate release:** `0.5.30+44`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42660360758](https://github.com/faria2177/DS-Fult/actions/runs/42660360758)
+**Baseline commit:** [`ee9d3e6`](https://github.com/faria2177/DS-Fult/commit/ee9d3e6dd5a41df1797a83dff38e1703cd77c798)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -48,6 +48,15 @@
 | `0.5.27` | `381709.mp4` DS visual identity: pastel DS AI Tools banner, dark four-column categories, two-column To Word Scan/Gallery/Device source picker, local `Converting with DS AI` indicator, white-page To Word review with tap-to-edit, undo/redo, page switching, DS Formatting persisted into DOCX, rule-based DS Writing, Word/PDF/original-image sharing, and CS PDF → DS PDF. | Widget regressions added; CI/device pixel comparison pending; Unicode text-PDF limited |
 | `0.5.28` | `381711.mp4` To Excel: DS-branded X badge and two-column picker, `Converting with DS AI` offline recognition, spreadsheet-style column letters/row numbers, pinch/pan, per-cell edits, sheet-text edits, undo/redo, multi-sheet navigation, Only tables/All content filtering, DS Formatting persisted to XLSX column width/row height/font/bold first row, genuine XLSX export sheet and editable share; PDF export of Latin-script table cells. | UI + XLSX structure regressions added; CI pending; real-device parity and table reconstruction accuracy need testing |
 | `0.5.29` | Me → AI Mode: add Google AI Studio, Groq Cloud, OpenRouter and nine other optional provider credential slots; encrypt secrets with OS secure storage; choose active provider and opt in via Enable toggle; remove/replace keys. Android Back from the root shell now asks to Cancel/Exit. | Configuration and exit-dialog widget tests added; GitHub CI / Android 16 validation pending. **No AI inference calls or automatic scan uploads in this release.** |
+| `0.5.30` | Explicit opt-in text AI: use saved Gemini/Groq/OpenRouter keys for proofreading one Word or Extract Text page and cleaning one Excel sheet. Display provider/model/character count and text preview before external send; show AI suggestion for Apply/Discard. Preserve Word/Excel Undo and original scanned images. | HTTP adapters, consent UI and mocked-request regressions added. No automatic uploads or silent fallbacks. CI + live credential/device testing pending. |
+
+### 0.5.30 — Text AI proofread with per-request approval
+
+- Added separate HTTPS text-generation adapters for Gemini `generateContent`, Groq chat completions and OpenRouter chat completions, with provider-specific headers and fixed endpoints. Actual keys are read from encrypted storage only after the user approves one bounded text request (up to 12,000 characters). Other nine API entries remain secure setup-only slots.
+- DS Writing → AI Proofread sends only the current Word page's editable OCR text. To Excel → AI clean sheet (toolbar) submits only the current sheet's editable tab-separated text. Tools → Extract Text has its own opt-in AI Proofread button. No source image, file path or other page is transmitted.
+- A clear send approval dialog shows provider, model ID, character count, privacy/billing caveat and a text preview. AI suggestions are always shown before Apply/Discard; Word and Excel keep reversible Undo history and originals untouched. Model ID is customizable in Me → AI Mode.
+- Responses use size/time bounds, HTTPS host allowlisting, no redirects and generic safe error messages. Credentials and OCR text are never logged. Android release manifest gains INTERNET permission only to support the user-approved requests.
+- Unit and widget tests cover disabled-mode no-network behavior, three provider request formats, rejection of stale/oversized requests, consent cancellation, preview, application and undo. Actual APIs, rate limits, prices, model availability and privacy requirements must be checked on the user's Android device.
 
 ### 0.5.29 — Optional AI credentials and exit confirmation
 

@@ -4,83 +4,83 @@
 
 ## ADR-001 — Flutter UI, Android-native scanner
 
-**Status:** Accepted  
-**Decision:** The application interface and document workflows use Flutter/Dart. Live detection, camera capture and selected platform functions use a locally patched `third_party/doclens` plugin and Android-native implementation.  
-**Why:** Allows a flexible Flutter UI while retaining native camera/detection performance.  
-**Consequences:** Native changes require Kotlin/Gradle regression tests and real-device checks; a working native engine must not be replaced purely for UI imitation.  
+**Status:** Accepted
+**Decision:** The application interface and document workflows use Flutter/Dart. Live detection, camera capture and selected platform functions use a locally patched `third_party/doclens` plugin and Android-native implementation.
+**Why:** Allows a flexible Flutter UI while retaining native camera/detection performance.
+**Consequences:** Native changes require Kotlin/Gradle regression tests and real-device checks; a working native engine must not be replaced purely for UI imitation.
 **Related:** `lib/src/screens/camera_screen.dart`, `third_party/doclens/`.
 
 ## ADR-002 — Local-first, no cloud or Ask AI
 
-**Status:** Accepted  
-**Decision:** Store images and document index locally; no automatic cloud account/sync/AI-chat, **Ask AI** or paywall surface. From `0.5.29`, users may *optionally configure* their own API credentials in Me without any upload or inference integration. The app may invoke Android sharing or externally installed apps when the user selects an action.  
-**Why:** User preference for an offline scanner, privacy and predictable operation.  
-**Consequences:** A real public share link or cross-device sync cannot be promised without a separately authorized service.  
+**Status:** Accepted
+**Decision:** Store images and document index locally; no automatic cloud account/sync/AI-chat, **Ask AI** or paywall surface. From `0.5.29`, users may *optionally configure* their own API credentials in Me without any upload or inference integration. The app may invoke Android sharing or externally installed apps when the user selects an action.
+**Why:** User preference for an offline scanner, privacy and predictable operation.
+**Consequences:** A real public share link or cross-device sync cannot be promised without a separately authorized service.
 **Related:** `document_store.dart`, `document_export.dart`, `home_shell.dart`.
 
 ## ADR-003 — Manual shutter and reversible editing
 
-**Status:** Accepted  
-**Decision:** Automatic capture is disabled by default, including card mode. Manual shutter, edge preview, four-corner crop, rotate, Compare and explicit Done/Save remain available. Keep original page data when possible.  
-**Why:** The user repeatedly reported unstable auto-capture and wrong crops.  
-**Consequences:** Scanning requires a user tap; uncertain detectors must fall back to manual review.  
+**Status:** Accepted
+**Decision:** Automatic capture is disabled by default, including card mode. Manual shutter, edge preview, four-corner crop, rotate, Compare and explicit Done/Save remain available. Keep original page data when possible.
+**Why:** The user repeatedly reported unstable auto-capture and wrong crops.
+**Consequences:** Scanning requires a user tap; uncertain detectors must fall back to manual review.
 **Related:** `camera_screen.dart`, `crop_screen.dart`, `image_processor.dart`.
 
 ## ADR-004 — Avoid CameraX rebind on mode-only changes
 
-**Status:** Accepted  
-**Decision:** Single ↔ Batch and Scan ↔ ID Cards chooser normally change Flutter state without recreating CameraX. Rebind only when native configuration actually differs; release one camera owner before a separate camera or external picker takes ownership.  
-**Why:** Prevent reflection/mirroring, black placeholder flashes and duplicate camera-session races.  
-**Tradeoff:** Certain warp/configuration switches still incur controlled restart.  
+**Status:** Accepted
+**Decision:** Single ↔ Batch and Scan ↔ ID Cards chooser normally change Flutter state without recreating CameraX. Rebind only when native configuration actually differs; release one camera owner before a separate camera or external picker takes ownership.
+**Why:** Prevent reflection/mirroring, black placeholder flashes and duplicate camera-session races.
+**Tradeoff:** Certain warp/configuration switches still incur controlled restart.
 **Related:** `CameraScreen.captureConfigKey`, `DoclensScreen`, regression tests.
 
 ## ADR-005 — One A4 image per saved two-sided card
 
-**Status:** Accepted in `0.5.10`  
-**Decision:** ID Card, Driver License and Bank Card capture Front/Back in one camera session and combine them onto one white A4 JPEG. Mark new documents `compositeCardPages=true`; export one A4 PDF page for each combined sheet. General template remains multi-page with separate images.  
-**Why:** Matches demonstrated review/document page counts and simplifies sharing.  
-**Consequences:** The rendered sheet is saved; individual side metadata does not yet survive as independently editable sources. See TODO T-101.  
-**Compatibility:** Legacy two-image card documents retain the old PDF composition branch.  
+**Status:** Accepted in `0.5.10`
+**Decision:** ID Card, Driver License and Bank Card capture Front/Back in one camera session and combine them onto one white A4 JPEG. Mark new documents `compositeCardPages=true`; export one A4 PDF page for each combined sheet. General template remains multi-page with separate images.
+**Why:** Matches demonstrated review/document page counts and simplifies sharing.
+**Consequences:** The rendered sheet is saved; individual side metadata does not yet survive as independently editable sources. See TODO T-101.
+**Compatibility:** Legacy two-image card documents retain the old PDF composition branch.
 **Related:** `id_card_screen.dart`, `id_card_page_composer.dart`, `document_export.dart`, `models.dart`.
 
 ## ADR-006 — One persistent Scan settings source
 
-**Status:** Accepted  
-**Decision:** `Me → Scan` and the camera's `⋮ → More Settings` open the same seven-setting interface, backed by a single persisted settings record.  
-**Why:** Avoid mismatched toggles and inconsistent scanning behavior.  
-**Consequences:** Settings that affect native configuration must use a controlled rebind; UI-only changes should not.  
+**Status:** Accepted
+**Decision:** `Me → Scan` and the camera's `⋮ → More Settings` open the same seven-setting interface, backed by a single persisted settings record.
+**Why:** Avoid mismatched toggles and inconsistent scanning behavior.
+**Consequences:** Settings that affect native configuration must use a controlled rebind; UI-only changes should not.
 **Related:** `scan_more_settings_screen.dart`, `scan_settings_store.dart`.
 
 ## ADR-007 — Tools-grid cleanup is a UI scope decision
 
-**Status:** Accepted  
+**Status:** Accepted
 **Decision:** Remove **Mega Scan, Long Document, Driver License, Bank Card, Photo Translation, Scan Code, To PPT, Erase Marks, Restore Photo** from the Tools grid as requested. In `0.5.16`, also remove **Edit Text** and **Split PDF** tiles only; retain document-level Edit Text and other PDF workflows. Code or entry points elsewhere may remain if useful; not every internal implementation is a visible Tools item.
-**Why:** User-defined navigation structure; reduces clutter without destructively removing working services.  
-**Consequences:** Avoid reintroducing these grid entries without a new requirement.  
+**Why:** User-defined navigation structure; reduces clutter without destructively removing working services.
+**Consequences:** Avoid reintroducing these grid entries without a new requirement.
 **Related:** `home_shell.dart`, `README.md` v0.5.2.
 
 ## ADR-008 — Offline Office generation, with stated fidelity limits
 
-**Status:** Accepted as current implementation  
-**Decision:** Word and Excel are generated from offline OCR text; PowerPoint contains page-image slides. PDF is generated locally from page images.  
-**Why:** Real, shareable files without a cloud converter.  
-**Consequences:** Native PDF editability, original typography, table boundaries and slide objects are not guaranteed to be reconstructed. Do not market it as lossless conversion.  
+**Status:** Accepted as current implementation
+**Decision:** Word and Excel are generated from offline OCR text; PowerPoint contains page-image slides. PDF is generated locally from page images.
+**Why:** Real, shareable files without a cloud converter.
+**Consequences:** Native PDF editability, original typography, table boundaries and slide objects are not guaranteed to be reconstructed. Do not market it as lossless conversion.
 **Related:** `docx_export.dart`, `xlsx_export.dart`, `pptx_export.dart`, `document_export.dart`.
 
 ## ADR-009 — An app access PIN is not file encryption
 
-**Status:** Accepted / Security limitation documented  
-**Decision:** Use the existing per-document PIN hash to restrict app UI operations; keep the limitation visible.  
-**Why:** It supports the current local lock UI but does not encrypt exported PDF, page images or data at rest.  
-**Consequences:** Never describe the Lock feature as cryptographic PDF encryption. Any upgrade requires a new security design, migration plan and tests.  
+**Status:** Accepted / Security limitation documented
+**Decision:** Use the existing per-document PIN hash to restrict app UI operations; keep the limitation visible.
+**Why:** It supports the current local lock UI but does not encrypt exported PDF, page images or data at rest.
+**Consequences:** Never describe the Lock feature as cryptographic PDF encryption. Any upgrade requires a new security design, migration plan and tests.
 **Related:** `lock_document_screen.dart`, `document_store.dart`.
 
 ## ADR-010 — CI generates the Android host at build time
 
-**Status:** Accepted  
-**Decision:** Run `tool/setup_android.sh` on a fresh checkout, download the Bengali OCR model before bundling, and patch the legacy Tesseract plugin Gradle script locally. GitHub Actions then runs native tests, Flutter analysis/tests and ABI-split APK builds.  
-**Why:** Keep the Flutter/Gradle template consistent with pinned Flutter and avoid committing generated or downloaded dependency artifacts.  
-**Consequences:** A fresh local build must follow the documented setup order. If dependency sources change or fail to download, CI may fail even when Dart code is unchanged.  
+**Status:** Accepted
+**Decision:** Run `tool/setup_android.sh` on a fresh checkout, download the Bengali OCR model before bundling, and patch the legacy Tesseract plugin Gradle script locally. GitHub Actions then runs native tests, Flutter analysis/tests and ABI-split APK builds.
+**Why:** Keep the Flutter/Gradle template consistent with pinned Flutter and avoid committing generated or downloaded dependency artifacts.
+**Consequences:** A fresh local build must follow the documented setup order. If dependency sources change or fail to download, CI may fail even when Dart code is unchanged.
 **Related:** `.github/workflows/android-apk.yml`, `tool/`.
 
 ## ADR-011 — Offline still-image Auto Crop combines independent boundary evidence
@@ -196,11 +196,19 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 
 ## ADR-025 — Optional AI credential setup with explicit no-upload boundary
 
-**Status:** Accepted for `0.5.29`; real-device Android secure-storage verification pending.  
-**Decision:** Me → AI Mode may store user-provided keys for Google AI Studio, Groq Cloud, OpenRouter and other catalog providers. Use OS-backed `flutter_secure_storage` for API keys and Cloudflare Account ID; use `SharedPreferences` solely for non-secret enabled/provider-ID state. Keys are never logged, placed in document metadata, read back into visible text or included in exports. The Android root Back action must require explicit Exit confirmation.  
-**Why:** The user explicitly requested personal API configuration and an exit prompt without requesting cloud processing or automatic transfer of existing scans.  
-**Consequences:** `Enable AI Mode` is currently a preference, not a working model request. No external upload, Gmail login, provider fallback, remote OCR, or guaranteed free usage is implied. Before enabling real inference, require a feature-specific user action, provider model selection, clear data-sharing disclosure, error handling and rate/billing protection. Verify encrypted key storage, Android backup/restore and removal on a real device.  
+**Status:** Accepted for `0.5.29`; real-device Android secure-storage verification pending.
+**Decision:** Me → AI Mode may store user-provided keys for Google AI Studio, Groq Cloud, OpenRouter and other catalog providers. Use OS-backed `flutter_secure_storage` for API keys and Cloudflare Account ID; use `SharedPreferences` solely for non-secret enabled/provider-ID state. Keys are never logged, placed in document metadata, read back into visible text or included in exports. The Android root Back action must require explicit Exit confirmation.
+**Why:** The user explicitly requested personal API configuration and an exit prompt without requesting cloud processing or automatic transfer of existing scans.
+**Consequences:** At `0.5.29`, `Enable AI Mode` was only a preference, not a working model request. See ADR-026 for the explicitly approved text-only integration in `0.5.30`. No Gmail login, provider fallback, automatic remote OCR or guaranteed free usage is implied. Verify encrypted key storage, Android backup/restore and removal on a real device.
 **Related:** `ai_mode_screen.dart`, `ai_credential_store.dart`, `ai_provider_catalog.dart`, `home_shell.dart`, `test/ai_mode_screen_test.dart`.
+
+## ADR-026 — Provider BYOK inference never runs without per-request text consent
+
+**Status:** Accepted for `0.5.30`; Android 16/API-account acceptance pending.
+**Decision:** Only Google AI Studio, Groq Cloud and OpenRouter currently support model execution, and only for edited OCR text. Enabling AI Mode does not itself send requests. Each Word page / Excel sheet / Extract Text action must show the exact provider/model, text length and a text preview, and require an explicit Send tap. The API receives only that text, no scans or file paths. AI output is a proposal until Apply; Discard preserves edits and Undo history. Permit model IDs but never arbitrary API URLs; HTTPS hosts remain fixed, redirects disallowed and key/request text never logged. Users control potential quota and billing.
+**Why:** The follow-up requested usable AI after first adding secure provider keys, but scan privacy and reversibility remain foundational.
+**Consequences:** Network permission is newly required for the release APK. For large scans, model hallucinations, poor table reconstruction, limited free quotas and API downtime, users must manually review results; no silent retry/fallback to another provider. The remaining nine providers are setup-only until separate audited adapters exist.
+**Related:** `ai_text_gateway.dart`, `ai_text_review_action.dart`, `ai_mode_screen.dart`, `word_review_screen.dart`, `excel_review_screen.dart`, `extract_text_screen.dart`, `tool/setup_android.sh` and AI unit/widget tests.
 
 ## How to change a decision
 

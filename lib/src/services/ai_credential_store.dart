@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// The OS-backed vault encrypts values at rest; uninstalling may erase keys.
 abstract class AiCredentialStore {
   Future<bool> hasKey(String providerId);
+  /// Secret material is read only at the moment of an explicitly approved call.
+  Future<String?> readKey(String providerId);
   Future<void> saveKey(String providerId, String apiKey,
       {String? accountId});
   Future<void> deleteKey(String providerId);
@@ -23,6 +25,10 @@ class SecureAiCredentialStore implements AiCredentialStore {
   @override
   Future<bool> hasKey(String providerId) async =>
       (await _vault.containsKey(key: _key(providerId)));
+
+  @override
+  Future<String?> readKey(String providerId) =>
+      _vault.read(key: _key(providerId));
 
   @override
   Future<bool> hasAccountId(String providerId) async =>

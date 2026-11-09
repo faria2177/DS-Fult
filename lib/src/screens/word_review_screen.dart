@@ -9,17 +9,21 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/docx_export.dart';
+import '../services/ai_text_gateway.dart';
+import 'ai_text_review_action.dart';
 import 'video_tool_style.dart';
 
 /// Video-inspired Word review with *real* offline text editing and export.
-/// All CS reference branding is replaced by DS; no remote AI is invoked.
+/// All CS reference branding is replaced by DS; online text AI requires
+/// explicit per-page consent and never uploads source scans.
 class WordReviewScreen extends StatefulWidget {
   const WordReviewScreen({super.key, required this.document,
-    required this.pageTexts, this.onTagsChanged});
+    required this.pageTexts, this.onTagsChanged, this.aiEngine});
 
   final ScanDocument document;
   final List<String> pageTexts;
   final Future<void> Function(List<String>)? onTagsChanged;
+  final AiTextEngine? aiEngine;
 
   @override
   State<WordReviewScreen> createState() => _WordReviewScreenState();
@@ -201,6 +205,22 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _aiProofreadPage() async {
+    if (_busy || _current.trim().isEmpty) return;
+    final page = _page;
+    final original = _texts[page];
+    setState(() => _busy = true);
+    try {
+      final result = await AiTextReviewAction.run(context,
+        text: original, task: AiTextTask.proofread, engine: widget.aiEngine);
+      if (!mounted || result == null) return;
+      final next = List<String>.of(_texts)..[page] = result;
+      _commit(next); // Editable, locally undoable; never overwrite scan image.
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _editTags() async {
     var draft = _tags.join(', ');
     final tags = await showDialog<String>(context: context,
@@ -308,7 +328,8 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
         const Text('DS Writing ✦', style: TextStyle(color: VideoToolStyle.teal,
             fontSize: 20, fontWeight: FontWeight.w600)),
         const SizedBox(height: 5),
-        const Text('Local rule-based cleanup; no cloud AI or upload.',
+        const Text('DS Polish and Proofread run offline. AI Proofread '
+          'requires your approval to send text.',
           style: TextStyle(color: VideoToolStyle.muted, fontSize: 12)),
         const SizedBox(height: 19),
         ListTile(key: const Key('word-polish'),
@@ -323,6 +344,18 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
           subtitle: const Text('Fix a few common typos and punctuation spaces'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _applyWriting(proofreadText)),
+        const Divider(),
+        ListTile(key: const Key('word-ai-proofread'),
+          leading: const Icon(Icons.auto_awesome,
+            color: VideoToolStyle.teal),
+          title: const Text('AI Proofread (Online)'),
+          subtitle: const Text('Ask your selected provider to correct only '
+            'this page of OCR text. Confirm before sending.'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.of(context).pop();
+            _aiProofreadPage();
+          }),
       ]),
     ))),
   );

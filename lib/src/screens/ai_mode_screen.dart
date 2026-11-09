@@ -27,6 +27,7 @@ class _AiModeScreenState extends State<AiModeScreen> {
   bool _loading = true;
   bool _enabled = false;
   String? _activeId;
+  String? _modelId;
 
   @override
   void initState() {
@@ -43,14 +44,17 @@ class _AiModeScreenState extends State<AiModeScreen> {
       }
       final active = prefs.getString(_providerPreference);
       final enabled = prefs.getBool(_enabledPreference) ?? false;
+      final supported = AiProviderCatalog.textModels.containsKey(active);
       if (!mounted) return;
       setState(() {
         _hasKeys..clear()..addAll(keys);
         _activeId = active;
-        _enabled = enabled && (keys[active] ?? false);
+        _enabled = enabled && supported && (keys[active] ?? false);
+        _modelId = prefs.getString('ai_model_$active') ??
+            AiProviderCatalog.textModels[active];
         _loading = false;
       });
-      if (enabled && !(_hasKeys[active] ?? false)) {
+      if (enabled && (!supported || !(_hasKeys[active] ?? false))) {
         await prefs.setBool(_enabledPreference, false);
       }
     } catch (_) {
@@ -69,8 +73,9 @@ class _AiModeScreenState extends State<AiModeScreen> {
   }
 
   Future<void> _changeEnabled(bool value) async {
-    if (!(_hasKeys[_activeId] ?? false)) {
-      _notice('Save a key and choose a provider first.');
+    if (!(_hasKeys[_activeId] ?? false) ||
+        !AiProviderCatalog.textModels.containsKey(_activeId)) {
+      _notice('Choose Google AI Studio, Groq or OpenRouter with a saved key.');
       return;
     }
     setState(() => _enabled = value);
@@ -91,11 +96,51 @@ class _AiModeScreenState extends State<AiModeScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_providerPreference, provider.id);
-      if (mounted) setState(() => _activeId = provider.id);
+      if (!AiProviderCatalog.textModels.containsKey(provider.id)) {
+        await prefs.setBool(_enabledPreference, false);
+      }
+      await _refresh();
       _notice('${provider.name} selected.');
     } catch (_) {
       _notice('Could not choose this provider.');
     }
+  }
+
+  Future<void> _editModel() async {
+    final active = _activeId;
+    if (active == null || !AiProviderCatalog.textModels.containsKey(active)) return;
+    var draft = _modelId ?? AiProviderCatalog.textModels[active]!;
+    final next = await showDialog<String>(context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Text AI model ID'),
+        content: TextFormField(
+          key: const Key('ai-model-editor'),
+          initialValue: draft,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'Provider model ID',
+            helperText: 'Check your provider for supported models',
+          ),
+          onChanged: (text) => draft = text,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel')),
+          FilledButton(key: const Key('ai-save-model'),
+            onPressed: () => Navigator.pop(dialogContext, draft),
+            child: const Text('Save')),
+        ],
+      ));
+    if (!mounted || next == null) return;
+    final normalized = next.trim();
+    if (!RegExp(r'^[A-Za-z0-9._:/-]{2,110}$').hasMatch(normalized)) {
+      _notice('Invalid model ID. Use letters, numbers, /, :, - or _.');
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ai_model_$active', normalized);
+    await _refresh();
+    _notice('Model ID saved.');
   }
 
   Future<void> _edit(AiProvider provider) async {
@@ -154,9 +199,9 @@ class _AiModeScreenState extends State<AiModeScreen> {
                       fontSize: 22,
                     )),
                     SizedBox(height: 6),
-                    Text('Connect your own provider API key. Secrets are '
-                      'encrypted on this device and are never stored in '
-                      'document files.', style: TextStyle(color: Color(0xFFE3F9F7))),
+                    Text('Connect your own API key for explicitly approved '
+                      'text corrections. Your credentials stay encrypted '
+                      'on this device.', style: TextStyle(color: Color(0xFFE3F9F7))),
                   ],
                 ),
               ),
@@ -169,15 +214,27 @@ class _AiModeScreenState extends State<AiModeScreen> {
                     ? 'Choose a provider and save a key'
                     : '${active.name} · ${_hasKeys[_activeId] == true ? 'Key saved' : 'Key required'}'),
                 value: _enabled,
-                onChanged: (_hasKeys[_activeId] ?? false)
+                onChanged: (_hasKeys[_activeId] ?? false) &&
+                    AiProviderCatalog.textModels.containsKey(_activeId)
                     ? _changeEnabled : null,
               )),
+              if (active != null &&
+                  AiProviderCatalog.textModels.containsKey(active.id))
+                Card(child: ListTile(
+                  key: const Key('ai-model-tile'),
+                  leading: const Icon(Icons.tune_outlined, color: dsTeal),
+                  title: const Text('Text AI model'),
+                  subtitle: Text(_modelId ?? 'Choose a model'),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: _editModel,
+                )),
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 10, 4, 12),
                 child: Text(
-                  'AI document processing is not connected yet. '
-                  'Turning this on only saves your preference; it does not '
-                  'upload scans or make API calls.',
+                  'Google AI Studio, Groq and OpenRouter support optional '
+                  'AI proofreading in text review. Every text request requires '
+                  'a separate Send confirmation. Scanned images never upload. '
+                  'Other provider slots store keys only for now.',
                   style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
                 ),
               ),
@@ -224,7 +281,8 @@ class _AiModeScreenState extends State<AiModeScreen> {
             ),
             title: Text(provider.name,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text('${provider.subtitle}\n${saved ? 'Key saved securely' : 'API key not added'}',
+            subtitle: Text('${provider.subtitle}\n${saved ? 'Key saved securely' : 'API key not added'}'
+                '${AiProviderCatalog.textModels.containsKey(provider.id) ? ' · Text AI supported' : ' · Setup only'}',
                 style: const TextStyle(fontSize: 12)),
             isThreeLine: true,
             trailing: const Icon(Icons.chevron_right),

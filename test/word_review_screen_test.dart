@@ -72,7 +72,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('DS Polish'), findsOneWidget);
     expect(find.text('DS Proofread'), findsOneWidget);
-    expect(find.textContaining('no cloud AI'), findsOneWidget);
+    expect(find.textContaining('run offline'), findsOneWidget);
+    expect(find.byKey(const Key('word-ai-proofread')), findsOneWidget);
     await tester.tap(find.byKey(const Key('word-polish')));
     await tester.pumpAndSettle();
     expect(find.text('A sentence with extra spaces.'), findsOneWidget);

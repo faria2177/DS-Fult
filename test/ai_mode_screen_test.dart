@@ -13,6 +13,9 @@ class _FakeAiVault implements AiCredentialStore {
   Future<bool> hasKey(String id) async => keys.containsKey(id);
 
   @override
+  Future<String?> readKey(String id) async => keys[id];
+
+  @override
   Future<bool> hasAccountId(String id) async => accounts.containsKey(id);
 
   @override
@@ -104,6 +107,31 @@ void main() {
     expect(tester.widget<SwitchListTile>(find.byKey(const Key('ai-mode-switch')))
         .value, isFalse);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('selected text model ID can be changed without replacing key',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final vault = _FakeAiVault()..keys['groq'] = 'saved_key';
+    SharedPreferences.setMockInitialValues({
+      'ai_mode_active_provider': 'groq',
+      'ai_mode_enabled': true,
+    });
+    await tester.pumpWidget(MaterialApp(home: AiModeScreen(
+      credentialStore: vault,
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('llama-3.3-70b-versatile'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ai-model-tile')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('ai-model-editor')),
+        'openai/gpt-oss-120b');
+    await tester.tap(find.byKey(const Key('ai-save-model')));
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('ai_model_groq'), 'openai/gpt-oss-120b');
+    expect(vault.keys['groq'], 'saved_key');
   });
 
   testWidgets('Cloudflare requires Account ID for first key', (tester) async {

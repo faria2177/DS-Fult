@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../models.dart';
 import '../services/document_export.dart';
 import '../services/docx_export.dart';
+import '../services/ai_text_gateway.dart';
+import 'ai_text_review_action.dart';
 import '../theme.dart';
 
 typedef ExtractTextRecognizer = Future<List<String>> Function(
@@ -17,12 +19,14 @@ class ExtractTextScreen extends StatefulWidget {
     super.key,
     required this.document,
     this.recognizer,
+    this.aiEngine,
   });
 
   final ScanDocument document;
 
   /// Allows deterministic tests without invoking the phone's OCR runtime.
   final ExtractTextRecognizer? recognizer;
+  final AiTextEngine? aiEngine;
 
   @override
   State<ExtractTextScreen> createState() => _ExtractTextScreenState();
@@ -121,6 +125,22 @@ class _ExtractTextScreenState extends State<ExtractTextScreen> {
   Future<void> _share() => _perform(() =>
       DocumentExport.shareText(_text.text, widget.document.name));
 
+  Future<void> _aiProofread() async {
+    if (_busy || _text.text.trim().isEmpty) return;
+    setState(() => _busy = true);
+    final original = _text.text;
+    try {
+      final result = await AiTextReviewAction.run(context,
+        text: original, task: AiTextTask.proofread,
+        engine: widget.aiEngine);
+      if (mounted && result != null) {
+        setState(() => _text.text = result);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Extract Text'), actions: [
@@ -187,6 +207,13 @@ class _ExtractTextScreenState extends State<ExtractTextScreen> {
       )),
       Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Column(children: [
+          SizedBox(width: double.infinity, child: OutlinedButton.icon(
+            key: const Key('extract-ai-proofread'),
+            onPressed: _busy || _text.text.trim().isEmpty
+                ? null : _aiProofread,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('AI Proofread (Online · approval required)'),
+          )),
           Row(children: [
             Expanded(child: OutlinedButton.icon(
               onPressed: _busy || _text.text.isEmpty ? null : _copy,

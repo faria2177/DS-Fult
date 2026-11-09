@@ -9,6 +9,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/xlsx_export.dart';
+import '../services/ai_text_gateway.dart';
+import 'ai_text_review_action.dart';
 import 'video_tool_style.dart';
 
 /// Video 381711: interactive, on-device Excel OCR review and genuine XLSX.
@@ -16,11 +18,12 @@ import 'video_tool_style.dart';
 /// scanned-table layout reconstruction or a cloud-based AI conversion.
 class ExcelReviewScreen extends StatefulWidget {
   const ExcelReviewScreen({super.key, required this.document,
-    required this.pageTexts, this.onTagsChanged});
+    required this.pageTexts, this.onTagsChanged, this.aiEngine});
 
   final ScanDocument document;
   final List<String> pageTexts;
   final Future<void> Function(List<String>)? onTagsChanged;
+  final AiTextEngine? aiEngine;
 
   static List<List<String>> parseRows(String text) => text
       .replaceAll('\r\n', '\n')
@@ -185,6 +188,24 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
     if (!mounted || result == null) return;
     final next = _clone(_sheets)..[_page] = ExcelReviewScreen.parseRows(result);
     _commit(next);
+  }
+
+  Future<void> _aiCleanSheet() async {
+    if (_busy) return;
+    final page = _page;
+    final original = _sheets[page].map((row) => row.join('\t')).join('\n');
+    if (original.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final updated = await AiTextReviewAction.run(context,
+        text: original, task: AiTextTask.tableCleanup,
+        engine: widget.aiEngine);
+      if (!mounted || updated == null) return;
+      final next = _clone(_sheets)..[page] = ExcelReviewScreen.parseRows(updated);
+      _commit(next); // Undo history retains original OCR cells.
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   List<String> _exportTexts() => [for (final sheet in _sheets)
@@ -496,6 +517,10 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
           maxLines: 1, overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 18)),
         actions: [
+          IconButton(key: const Key('excel-ai-clean'),
+            tooltip: 'AI clean sheet (Online)',
+            icon: const Icon(Icons.auto_awesome_outlined),
+            onPressed: _busy ? null : _aiCleanSheet),
           TextButton(onPressed: _editTags,
             child: Text(_tags.isEmpty ? 'Tags+' : 'Tags (${_tags.length})',
               style: const TextStyle(color: VideoToolStyle.muted))),

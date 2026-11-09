@@ -35,6 +35,11 @@ printf '\nandroid.newDsl=false\nandroid.builtInKotlin=false\n' >> android/gradle
 manifest='android/app/src/main/AndroidManifest.xml'
 if [ -f "$manifest" ]; then
   sed -i 's/android:label="docscanner"/android:label="DocScanner"/' "$manifest"
+  # Release builds need INTERNET only for user-approved text AI calls.
+  # Flutter's debug manifest has this permission; release does not by default.
+  if ! grep -q 'android.permission.INTERNET' "$manifest"; then
+    sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$manifest"
+  fi
 fi
 
 # The ML Kit plugin references optional Asian-script recognizers even when

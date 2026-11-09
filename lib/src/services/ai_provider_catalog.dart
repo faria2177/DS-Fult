@@ -14,6 +14,14 @@ class AiProvider {
 }
 
 abstract final class AiProviderCatalog {
+  /// Only these three providers have an implemented text-only inference path.
+  /// Other listed providers currently support secure key storage only.
+  static const textModels = <String, String>{
+    'gemini': 'gemini-3.5-flash',
+    'groq': 'llama-3.3-70b-versatile',
+    'openrouter': 'openrouter/free',
+  };
+
   static const providers = <AiProvider>[
     AiProvider(id: 'gemini', name: 'Google AI Studio (Gemini)',
       subtitle: 'Gemini models · limited free tier',

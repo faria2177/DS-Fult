@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.29+43` candidate; hardware verification pending.
+**Baseline:** `0.5.30+44` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -24,7 +24,8 @@ This list separates **confirmed implementation limits** from **risks that need p
 | K-014 | Word review vs original document | The video-inspired To Word editor displays OCR text on a styled page; original handwriting, fonts, signatures and exact layout are not reconstructed. DS Writing offers transparent rule-based cleanup, not generative AI. | Add offline structured layout/handwriting support after validated models |
 | K-015 | Edited-text PDF script support | To Word → Save as PDF currently supports Latin text through built-in PDF fonts. It rejects non-Latin/Bengali to avoid missing glyph boxes. DOCX preserves Bengali. Share as Images returns **original scan images**, not rasterized edited text. | Bundle/test licensed Unicode PDF font if needed |
 | K-016 | Excel review PDF script and grid limits | `381711.mp4` Excel review exports complete XLSX rows, but the interactive in-app grid previews at most 85 rows and 14 columns per sheet to keep phone interactions responsive; more data remains editable through sheet text. Save as PDF currently requires Latin script; XLSX preserves Unicode including বাংলা. | Profile long workbooks and bundle a tested Unicode PDF font |
-| K-017 | AI Mode credential configuration only | Me → AI Mode can encrypt and select provider API keys but **does not yet call AI models**. Toggle state is a preference; adding a key never authorizes uploading a scan. Provider prices and free-tier quotas can change. | Add explicitly consented provider calls only after the UX/security design in T-114 |
+| K-017 | AI provider coverage | Me → AI Mode securely stores keys for 12 providers. Only **Google AI Studio, Groq and OpenRouter** can execute text-only AI requests in `0.5.30`, after separate Send confirmation. The other nine slots are configuration-only; enabling alone never sends anything. Provider models, prices and free quotas may change. | Implement and validate any additional API adapter separately, with consent |
+| K-018 | AI quality and privacy | AI proofreading can hallucinate, alter facts, lose OCR spacing or change Excel columns; its remote provider sees the approved text and may charge for inference. Results require explicit Apply. No model traffic/device key-storage roundtrip has been confirmed on HONOR Android 16. | Validate per-provider API/model availability, table fidelity and privacy notices on device |
 
 ## Device-dependent or unverified risks
 
