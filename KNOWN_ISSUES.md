@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.24+38` candidate; hardware verification pending.
+**Baseline:** `0.5.25+39` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -51,7 +51,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.23+37` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42558781567](https://github.com/faria2177/DS-Fult/actions/runs/42558781567). The new `0.5.24+38` live tracker overlay changes require fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
+The latest verified baseline `0.5.24+38` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42563091513](https://github.com/faria2177/DS-Fult/actions/runs/42563091513). The new `0.5.25+39` border-only visual change requires fresh CI and real-device comparison. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.24+38`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42558781567](https://github.com/faria2177/DS-Fult/actions/runs/42558781567)
-**Baseline commit:** [`54234fe`](https://github.com/faria2177/DS-Fult/commit/54234fe737f9aed5cf8146587baa79ab3d97ff0d)
+**Current candidate release:** `0.5.25+39`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42563091513](https://github.com/faria2177/DS-Fult/actions/runs/42563091513)
+**Baseline commit:** [`917889f`](https://github.com/faria2177/DS-Fult/commit/917889f79a0c84db8a71d74fecfeafa33136ec5d)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -43,6 +43,7 @@
 | `0.5.22` | Tools → Import File now offers device PDF and images rather than a placeholder toast. The imported pages are saved locally and the result opens in document preview. | UI/native-picker cancellation regression added; CI pending, physical Android SAF and large PDF tests remain |
 | `0.5.23` | Tools → Image to PDF now selects/gallery-imports photos, selects and reorders pages, previews an actual multi-page A4 PDF, supports editable output name, Save PDF via Android SAF and Share PDF. | UI selection/order/export tests and file-name tests added; CI and Android Save As integration pending |
 | `0.5.24` | Live green quad stability follow-up: faint green fill is actually enabled on the Single/Batch camera; identity smoother resets outlier streaks after missing frames and prevents a coherent delayed border challenger from making the box blink before confirmation. | Two synthetic regression tests added; CI and HONOR Android 16 video/CPU acceptance pending |
+| `0.5.25` | Scan/Batch filled green four-corner border increased from 2.5 to 3.5 logical pixels, retaining the delicate mint interior, manual shutter and existing tracking. | Constructor regression test added; APK/real-camera visual verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -73,6 +74,11 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.25 — More visible green document frame
+
+- The filled green four-corner border in Single/Batch mode is now 3.5 logical pixels wide instead of 2.5. Other overlay presets and the low-alpha interior fill remain unchanged.
+- This is visual styling only; it neither affects document detection nor claims pixel-perfect equivalence with CamScanner. Check the rendered border on HONOR Android 16 in bright and dim environments.
 
 ### 0.5.24 — Live quad jitter/blink follow-up
 
