@@ -50,7 +50,7 @@ void main() {
     expect(find.text('Line Spacing'), findsOneWidget);
     await tester.tap(find.text('Large'));
     await tester.pump();
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Share'));
@@ -58,7 +58,7 @@ void main() {
     expect(find.text('Share as Word'), findsOneWidget);
     expect(find.text('Share as PDF'), findsOneWidget);
     expect(find.text('Share as Images'), findsOneWidget);
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
   });
 
   testWidgets('DS writing offers real local text-cleanup actions',
