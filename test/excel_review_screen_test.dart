@@ -38,7 +38,9 @@ void main() {
     expect(find.text('All content'), findsOneWidget);
     expect(find.byKey(const Key('excel-cell-0-2-1')), findsOneWidget);
     await tester.tap(find.byKey(const Key('excel-cell-0-2-1')));
-    await tester.pump();
+    // InkWell resolves a possible double-tap before firing the single-tap
+    // selection callback, so the test must advance that gesture timeout.
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Edit text'));
     await tester.pumpAndSettle();
     expect(find.text('Edit cell B3'), findsOneWidget);
