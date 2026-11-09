@@ -6,6 +6,16 @@ set -euo pipefail
 # not ship an unverified hand-written Android template.
 flutter create --platforms=android --project-name=docscanner --org=com.docscan .
 
+# The template defaults to the much larger Gradle "all" distribution via a
+# service URL that currently redirects to GitHub release assets. CI downloads
+# intermittently fail with HTTP 504 there. Use Gradle's official direct
+# download host and runtime-only "bin" archive instead; the Android build
+# does not need the Gradle source/documentation bundle.
+wrapper_props='android/gradle/wrapper/gradle-wrapper.properties'
+if [ -f "$wrapper_props" ]; then
+  sed -i 's#services.gradle.org/distributions/#downloads.gradle.org/distributions/#; s#-all.zip#-bin.zip#' "$wrapper_props"
+fi
+
 # Reapply the branded launcher icon every time Flutter regenerates android/.
 # Adaptive icons are used on Android 8+, with density-specific PNG fallbacks.
 for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do

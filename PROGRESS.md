@@ -82,6 +82,7 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - **Tools → Sign** uses the shared source picker, then a dark signing canvas with page preview, black/blue/red/green ink, adjustable stroke size, Undo/Clear and explicit Apply Signature. This is a visible image signature applied to a page, not an encrypted/certificate-backed PDF signature.
 - **Tools → To Word / To Excel** now uses Scan/Gallery/PDF/app source selection, toggles which pages to convert, selects English/Latin versus Bengali offline OCR, and previews/edit recognized page text before sharing genuine `.docx`/`.xlsx` files. Excel's table preview uses the same tab/double-space column splitting as its exporter. Edited OCR text is exported without re-running OCR; source image pages are not overwritten.
 - Full original CamScanner layout, table cells, embedded graphics, handwriting, font/paragraph positioning, and merged Excel headings are **not** guaranteed to match scanned originals. That requires document layout understanding beyond local text-only OCR. No cloud or proprietary CamScanner processing was added.
+- After repeated CI HTTP 504 failures downloading Gradle's bulky `-all.zip` from redirected GitHub release assets, `tool/setup_android.sh` now directs the generated wrapper to Gradle's official `downloads.gradle.org` `-bin.zip` archive. This changes CI distribution retrieval only, not the native detector or app behavior.
 
 ### 0.5.25 — More visible green document frame
 
