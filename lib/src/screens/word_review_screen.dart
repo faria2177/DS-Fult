@@ -300,7 +300,8 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
     context: context,
     backgroundColor: VideoToolStyle.panel,
     showDragHandle: true,
-    builder: (context) => SafeArea(top: false, child: Padding(
+    builder: (context) => SafeArea(top: false,
+      child: SingleChildScrollView(child: Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 23),
       child: Column(mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -323,14 +324,15 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _applyWriting(proofreadText)),
       ]),
-    )),
+    ))),
   );
 
   void _shareSheet() => showModalBottomSheet<void>(
     context: context,
     backgroundColor: VideoToolStyle.panel,
     showDragHandle: true,
-    builder: (context) => SafeArea(top: false, child: Padding(
+    builder: (context) => SafeArea(top: false,
+      child: SingleChildScrollView(child: Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
       child: Column(mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -359,7 +361,7 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
           subtitle: const Text('Share original scan images'),
           onTap: () { Navigator.pop(context); _shareOriginalImages(); }),
       ]),
-    )),
+    ))),
   );
 
   Widget _action(IconData icon, String title, VoidCallback callback) =>
