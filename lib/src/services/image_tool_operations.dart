@@ -44,7 +44,6 @@ class ImageToolOperations {
 
   /// Splits a tall stitched image into readable A4 PDF pages, instead of
   /// squeezing the entire receipt/scan into one unreadable A4 thumbnail.
-  @visibleForTesting
   static Future<Uint8List> longImagePdfBytes(Uint8List jpeg) async {
     final decoded = img.decodeImage(jpeg);
     if (decoded == null) throw const FormatException('Invalid long image');
