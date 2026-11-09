@@ -31,4 +31,14 @@ void main() {
     expect(xml, contains('ABC'));
     expect(xml, isNot(contains('\u0000')));
   });
+
+  test('Word export persists preview font size and line spacing', () {
+    final bytes = DocxExport.buildDocxBytes('Letter', ['Hello world'],
+      fontSize: 18, lineSpacing: 1.85);
+    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    final styles = utf8.decode(
+      archive.findFile('word/styles.xml')!.readBytes()!);
+    expect(styles, contains('<w:sz w:val="36"/>'));
+    expect(styles, contains('<w:spacing w:line="444" w:lineRule="auto"/>'));
+  });
 }

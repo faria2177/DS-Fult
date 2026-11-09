@@ -25,6 +25,23 @@ class _PickerStore extends DocumentStore {
 }
 
 void main() {
+  testWidgets('To Word picker uses DS reference header and two-column sources',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: VideoToolSourcePicker(
+      store: _PickerStore(), title: 'To Word',
+      description: 'Convert images and PDFs into editable Word documents.',
+      icon: Icons.description_outlined,
+      allowGallery: true, allowPdf: true,
+      onScan: () async {},
+    )));
+    await tester.pump();
+    expect(find.text('To Word ✦'), findsOneWidget);
+    expect(find.text('Scan'), findsOneWidget);
+    expect(find.text('Gallery'), findsOneWidget);
+    expect(find.text('Device'), findsOneWidget);
+    expect(find.text('Select from This App'), findsOneWidget);
+  });
+
   testWidgets('video picker can select two source documents for merge',
       (tester) async {
     final store = _PickerStore();

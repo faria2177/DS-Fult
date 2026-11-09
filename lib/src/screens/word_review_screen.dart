@@ -138,7 +138,8 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
 
   Future<void> _shareWord() => _run(() async {
     final file = await DocxExport.createFromPageTexts(
-        widget.document.name, _texts);
+        widget.document.name, _texts,
+        fontSize: _fontSize, lineSpacing: _lineHeight);
     await DocxExport.shareFile(file, widget.document.name);
   });
 
@@ -400,7 +401,7 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
                   if (normalized.isEmpty) const Text('Tap to edit this page',
                     style: TextStyle(color: Colors.black54)),
                 ],
-              ]))),
+              ))),
           Positioned(left: 20, top: 30, child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             color: const Color(0xFF4B4B4B),

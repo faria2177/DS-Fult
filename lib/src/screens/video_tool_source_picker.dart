@@ -109,6 +109,7 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final wordReference = widget.title == 'To Word' && !widget.light;
     final light = widget.light;
     final muted = light ? const Color(0xFF656877) : VideoToolStyle.muted;
     final headerColor = light ? const Color(0xFFF7F8FB) : VideoToolStyle.header;
@@ -139,19 +140,48 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                     Expanded(child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.title, style: TextStyle(color: ink,
+                        Text(wordReference ? 'To Word ✦' : widget.title,
+                          style: TextStyle(color: ink,
                           fontSize: 28, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 8),
                         Text(widget.description, style: TextStyle(
                           color: muted, fontSize: 13)),
                       ],
                     )),
-                    Container(width: 92, height: 92,
-                      decoration: BoxDecoration(
-                        color: VideoToolStyle.teal.withValues(alpha: .10),
-                        borderRadius: BorderRadius.circular(16)),
-                      child: Icon(widget.icon, size: 55,
-                          color: VideoToolStyle.teal)),
+                    if (wordReference)
+                      Container(width: 108, height: 115,
+                        color: Colors.white,
+                        child: Stack(children: [
+                          const Padding(padding: EdgeInsets.fromLTRB(15, 15, 5, 0),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Docs Done Right', style: TextStyle(
+                                  color: Colors.black54, fontSize: 9)),
+                                SizedBox(height: 13),
+                                Text('Your documents, made editable',
+                                  style: TextStyle(color: Colors.black38,
+                                    fontSize: 8)),
+                                SizedBox(height: 12),
+                                Text('Scan · Convert · Share',
+                                  style: TextStyle(color: Colors.black38,
+                                    fontSize: 8)),
+                              ])),
+                          Positioned(left: -2, top: 34,
+                            child: Container(width: 36, height: 36,
+                              color: const Color(0xFF008DD5),
+                              alignment: Alignment.center,
+                              child: const Text('W', style: TextStyle(
+                                color: Colors.white, fontSize: 22,
+                                fontWeight: FontWeight.bold)))),
+                        ]),
+                      )
+                    else
+                      Container(width: 92, height: 92,
+                        decoration: BoxDecoration(
+                          color: VideoToolStyle.teal.withValues(alpha: .10),
+                          borderRadius: BorderRadius.circular(16)),
+                        child: Icon(widget.icon, size: 55,
+                            color: VideoToolStyle.teal)),
                   ]),
                 ],
               ),
@@ -163,7 +193,26 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                 Text('Create or Import', style: TextStyle(color: muted,
                     fontWeight: FontWeight.w500)),
                 const SizedBox(height: 12),
-                Row(children: [
+                if (wordReference) ...[
+                  Row(children: [
+                    Expanded(child: _referenceSourceTile('Scan',
+                      Icons.camera_alt, () {
+                        if (widget.onScan != null) {
+                          widget.onScan!();
+                        }
+                      })),
+                    const SizedBox(width: 9),
+                    Expanded(child: _referenceSourceTile('Gallery',
+                      Icons.image, _importImages)),
+                  ]),
+                  const SizedBox(height: 9),
+                  Row(children: [
+                    Expanded(child: _referenceSourceTile('Device',
+                      Icons.smartphone, widget.allowPdf ? _importPdf : _importImages)),
+                    const SizedBox(width: 9),
+                    const Expanded(child: SizedBox()),
+                  ]),
+                ] else Row(children: [
                   if (widget.onScan != null) ...[
                     Expanded(child: _sourceTile('Scan', Icons.camera_alt_outlined,
                         surfaceColor, () async {
@@ -215,6 +264,22 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
       )),
     ));
   }
+
+  Widget _referenceSourceTile(String label, IconData icon,
+      VoidCallback action) => Material(
+    color: const Color(0xFF4B4B4F),
+    borderRadius: BorderRadius.circular(5),
+    child: InkWell(onTap: _loading ? null : action,
+      borderRadius: BorderRadius.circular(5),
+      child: SizedBox(height: 68,
+        child: Row(children: [
+          const SizedBox(width: 18),
+          Icon(icon, color: VideoToolStyle.teal, size: 23),
+          const SizedBox(width: 13),
+          Flexible(child: Text(label, style: const TextStyle(
+            fontSize: 15, color: Colors.white))),
+        ])),
+    ));
 
   Widget _sourceTile(String label, IconData icon, Color color,
       VoidCallback action) => Material(

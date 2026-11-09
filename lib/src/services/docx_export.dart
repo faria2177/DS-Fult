@@ -38,12 +38,16 @@ class DocxExport {
 
   /// Export the user's reviewed OCR pages without another OCR pass.
   static Future<File> createFromPageTexts(
-      String title, List<String> pageTexts) async {
+      String title, List<String> pageTexts, {
+      double fontSize = 11,
+      double lineSpacing = 1.2,
+      }) async {
     if (pageTexts.isEmpty ||
         pageTexts.every((page) => page.trim().isEmpty)) {
       throw const FormatException('No text to export.');
     }
-    final bytes = buildDocxBytes(title, pageTexts);
+    final bytes = buildDocxBytes(title, pageTexts,
+      fontSize: fontSize, lineSpacing: lineSpacing);
     final directory = await getTemporaryDirectory();
     final name = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final path = p.join(directory.path,
@@ -103,7 +107,12 @@ class DocxExport {
   }
 
   /// Pure conversion is independently unit-testable without ML Kit or Tesseract.
-  static Uint8List buildDocxBytes(String title, List<String> pageTexts) {
+  static Uint8List buildDocxBytes(String title, List<String> pageTexts, {
+    double fontSize = 11,
+    double lineSpacing = 1.2,
+  }) {
+    final sizeHalfPoints = (fontSize.clamp(8.0, 32.0) * 2).round();
+    final lineTwips = (lineSpacing.clamp(1.0, 2.5) * 240).round();
     final archive = Archive();
     archive.addFile(ArchiveFile.string('[Content_Types].xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -127,7 +136,8 @@ class DocxExport {
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
       '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>'
-      '<w:rPr><w:sz w:val="22"/></w:rPr></w:style>'
+      '<w:pPr><w:spacing w:line="$lineTwips" w:lineRule="auto"/></w:pPr>'
+      '<w:rPr><w:sz w:val="$sizeHalfPoints"/></w:rPr></w:style>'
       '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/>'
       '<w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="34"/></w:rPr></w:style>'
       '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>'
