@@ -9,13 +9,14 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/xlsx_export.dart';
+import '../services/unicode_text_pdf_export.dart';
 import '../services/ai_text_gateway.dart';
 import 'ai_text_review_action.dart';
 import 'video_tool_style.dart';
 
-/// Video 381711: interactive, on-device Excel OCR review and genuine XLSX.
-/// The grid is reconstructed from OCR text; it is not a claim of perfect
-/// scanned-table layout reconstruction or a cloud-based AI conversion.
+/// Video 381711: interactive Excel OCR review and genuine XLSX. Source OCR
+/// may be offline or explicitly approved AI vision; no conversion promises
+/// exact original table geometry.
 class ExcelReviewScreen extends StatefulWidget {
   const ExcelReviewScreen({super.key, required this.document,
     required this.pageTexts, this.onTagsChanged, this.aiEngine});
@@ -284,8 +285,14 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
         throw const FormatException('There are no table cells to export.');
       }
       if (texts.any((text) => text.runes.any((rune) => rune > 255))) {
-        throw const FormatException('Text PDF currently supports Latin script. '
-          'Use Share as Excel to preserve বাংলা and other Unicode.');
+        // The raster fallback uses Flutter's Unicode shaping; the XLSX
+        // remains the editable, sortable original-cell export.
+        final file = await UnicodeTextPdfExport.create(
+          widget.document.name, texts, fontSize: _fontSize);
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(file.path, mimeType: 'application/pdf')],
+          subject: widget.document.name));
+        return;
       }
       final pdf = pw.Document();
       for (final page in texts) {

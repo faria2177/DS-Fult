@@ -14,12 +14,20 @@ class AiProvider {
 }
 
 abstract final class AiProviderCatalog {
-  /// Only these three providers have an implemented text-only inference path.
+  /// Only these three providers have implemented inference paths.
   /// Other listed providers currently support secure key storage only.
   static const textModels = <String, String>{
     'gemini': 'gemini-3.5-flash',
     'groq': 'llama-3.3-70b-versatile',
     'openrouter': 'openrouter/free',
+  };
+
+  /// Separate from text settings: a text-only model must never be silently
+  /// sent a scanned image. Users can change each vision model in AI Mode.
+  static const visionModels = <String, String>{
+    'gemini': 'gemini-3.8-flash',
+    'groq': 'qwen/qwen3.8-27b',
+    'openrouter': 'google/gemini-3-flash-preview',
   };
 
   static const providers = <AiProvider>[

@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/docx_export.dart';
+import '../services/unicode_text_pdf_export.dart';
 import '../services/ai_text_gateway.dart';
 import 'ai_text_review_action.dart';
 import 'video_tool_style.dart';
@@ -152,26 +153,28 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
     if (_texts.every((text) => text.trim().isEmpty)) {
       throw const FormatException('There is no text to export.');
     }
-    // Core PDF fonts lack Bengali/other Unicode glyphs. Do not silently
-    // generate unreadable text: DOCX supports these scripts without loss.
+    final File file;
     if (_texts.any((text) => text.runes.any((rune) => rune > 255))) {
-      throw const FormatException('Text PDF currently supports Latin script. '
-          'Use Share as Word for বাংলা or other Unicode text.');
+      // Flutter draws the complex-script glyphs so Bengali PDFs stay legible.
+      // DOCX remains the recommended selectable/editable text format.
+      file = await UnicodeTextPdfExport.create(widget.document.name, _texts,
+        fontSize: _fontSize, lineSpacing: _lineHeight);
+    } else {
+      final pdf = pw.Document();
+      for (final text in _texts) {
+        pdf.addPage(pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(45),
+          build: (_) => [pw.Text(text,
+            style: pw.TextStyle(fontSize: _fontSize,
+              lineSpacing: (_lineHeight - 1) * _fontSize))],
+        ));
+      }
+      final temp = await getTemporaryDirectory();
+      file = File(p.join(temp.path,
+        'ds_word_${DateTime.now().microsecondsSinceEpoch}.pdf'));
+      await file.writeAsBytes(await pdf.save(), flush: true);
     }
-    final pdf = pw.Document();
-    for (final text in _texts) {
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(45),
-        build: (_) => [pw.Text(text,
-          style: pw.TextStyle(fontSize: _fontSize,
-            lineSpacing: (_lineHeight - 1) * _fontSize))],
-      ));
-    }
-    final temp = await getTemporaryDirectory();
-    final file = File(p.join(temp.path,
-      'ds_word_${DateTime.now().microsecondsSinceEpoch}.pdf'));
-    await file.writeAsBytes(await pdf.save(), flush: true);
     await SharePlus.instance.share(ShareParams(
       files: [XFile(file.path, mimeType: 'application/pdf')],
       subject: widget.document.name));
@@ -411,7 +414,9 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
     final normalized = _current.replaceAll('\r\n', '\n').trim();
     final split = normalized.split('\n');
     final heading = split.firstOrNull ?? '';
-    final treatAsHeading = heading.length <= 55 && split.length > 1;
+    final treatAsHeading = heading.length <= 55 && split.length > 1 &&
+        !heading.contains('\t');
+    final lines = treatAsHeading ? split.skip(1).toList() : split;
     return Center(child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 620),
       child: Container(
@@ -431,10 +436,7 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
                         height: _lineHeight)),
                     const SizedBox(height: 44),
                   ],
-                  Text(treatAsHeading ? split.skip(1).join('\n').trimLeft()
-                      : normalized,
-                    style: TextStyle(color: Colors.black87,
-                      fontSize: _fontSize, height: _lineHeight)),
+                  ..._previewParagraphsAndTables(lines),
                   if (normalized.isEmpty) const Text('Tap to edit this page',
                     style: TextStyle(color: Colors.black54)),
                 ],
@@ -447,6 +449,56 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
         ]),
       ),
     ));
+  }
+
+  /// Display tabular AI/OCR rows as a grid instead of merging columns into
+  /// incoherent paragraphs. DOCX export also stores these as editable tables.
+  List<Widget> _previewParagraphsAndTables(List<String> lines) {
+    final widgets = <Widget>[];
+    for (var index = 0; index < lines.length;) {
+      if (!lines[index].contains('\t')) {
+        final paragraph = <String>[];
+        while (index < lines.length && !lines[index].contains('\t')) {
+          paragraph.add(lines[index++]);
+        }
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 13),
+          child: Text(paragraph.join('\n').trimLeft(),
+            style: TextStyle(color: Colors.black87,
+              fontSize: _fontSize, height: _lineHeight)),
+        ));
+        continue;
+      }
+      final rows = <List<String>>[];
+      while (index < lines.length && lines[index].contains('\t')) {
+        rows.add(lines[index++].split('\t'));
+      }
+      final columns = rows.fold<int>(2, (count, row) =>
+          row.length > count ? row.length : count).clamp(2, 16).toInt();
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(bottom: 13),
+        child: SingleChildScrollView(scrollDirection: Axis.horizontal,
+          child: SizedBox(width: columns * 125.0,
+            child: Table(
+              border: TableBorder.all(color: Colors.black54, width: .7),
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: [
+                for (var row = 0; row < rows.length; row++)
+                  TableRow(children: [
+                    for (var column = 0; column < columns; column++)
+                      Padding(padding: const EdgeInsets.all(6),
+                        child: Text(column < rows[row].length
+                            ? rows[row][column] : '',
+                          style: TextStyle(color: Colors.black87,
+                            fontWeight: row == 0 ? FontWeight.w600 : null,
+                            fontSize: _fontSize - 2, height: 1.2))),
+                  ]),
+              ],
+            ),
+          )),
+      ));
+    }
+    return widgets;
   }
 
   @override

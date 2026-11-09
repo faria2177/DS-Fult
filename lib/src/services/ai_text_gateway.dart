@@ -42,7 +42,7 @@ abstract class AiTextEngine {
 class AiTextGateway implements AiTextEngine {
   AiTextGateway({AiCredentialStore? credentialStore, AiTextSender? sender})
       : _vault = credentialStore ?? const SecureAiCredentialStore(),
-        _sender = sender ?? _sendJson;
+        _sender = sender ?? sendJson;
 
   final AiCredentialStore _vault;
   final AiTextSender _sender;
@@ -162,7 +162,8 @@ class AiTextGateway implements AiTextEngine {
     return output.trim();
   }
 
-  static Future<Map<String, dynamic>> _sendJson(Uri endpoint,
+  /// Shared restricted HTTPS transport for text and opt-in image requests.
+  static Future<Map<String, dynamic>> sendJson(Uri endpoint,
       Map<String, String> headers, Map<String, dynamic> body) async {
     // Endpoint hosts are fixed in code. Never send credentials to arbitrary
     // model IDs, redirects or a third-party test URL.

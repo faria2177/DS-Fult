@@ -28,6 +28,7 @@ class _AiModeScreenState extends State<AiModeScreen> {
   bool _enabled = false;
   String? _activeId;
   String? _modelId;
+  String? _visionModelId;
 
   @override
   void initState() {
@@ -52,6 +53,8 @@ class _AiModeScreenState extends State<AiModeScreen> {
         _enabled = enabled && supported && (keys[active] ?? false);
         _modelId = prefs.getString('ai_model_$active') ??
             AiProviderCatalog.textModels[active];
+        _visionModelId = prefs.getString('ai_vision_model_$active') ??
+            AiProviderCatalog.visionModels[active];
         _loading = false;
       });
       if (enabled && (!supported || !(_hasKeys[active] ?? false))) {
@@ -106,15 +109,18 @@ class _AiModeScreenState extends State<AiModeScreen> {
     }
   }
 
-  Future<void> _editModel() async {
+  Future<void> _editModel({bool vision = false}) async {
     final active = _activeId;
     if (active == null || !AiProviderCatalog.textModels.containsKey(active)) return;
-    var draft = _modelId ?? AiProviderCatalog.textModels[active]!;
+    final defaults = vision ? AiProviderCatalog.visionModels
+        : AiProviderCatalog.textModels;
+    var draft = vision ? (_visionModelId ?? defaults[active]!)
+        : (_modelId ?? defaults[active]!);
     final next = await showDialog<String>(context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Text AI model ID'),
+        title: Text(vision ? 'Document vision model ID' : 'Text AI model ID'),
         content: TextFormField(
-          key: const Key('ai-model-editor'),
+          key: Key(vision ? 'ai-vision-model-editor' : 'ai-model-editor'),
           initialValue: draft,
           autocorrect: false,
           decoration: const InputDecoration(
@@ -126,7 +132,7 @@ class _AiModeScreenState extends State<AiModeScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel')),
-          FilledButton(key: const Key('ai-save-model'),
+          FilledButton(key: Key(vision ? 'ai-save-vision-model' : 'ai-save-model'),
             onPressed: () => Navigator.pop(dialogContext, draft),
             child: const Text('Save')),
         ],
@@ -138,9 +144,10 @@ class _AiModeScreenState extends State<AiModeScreen> {
       return;
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ai_model_$active', normalized);
+    await prefs.setString(vision ? 'ai_vision_model_$active'
+        : 'ai_model_$active', normalized);
     await _refresh();
-    _notice('Model ID saved.');
+    _notice(vision ? 'Vision model ID saved.' : 'Text model ID saved.');
   }
 
   Future<void> _edit(AiProvider provider) async {
@@ -199,8 +206,8 @@ class _AiModeScreenState extends State<AiModeScreen> {
                       fontSize: 22,
                     )),
                     SizedBox(height: 6),
-                    Text('Connect your own API key for explicitly approved '
-                      'text corrections. Your credentials stay encrypted '
+                    Text('Connect your own API key for approved text and '
+                      'document image recognition. Your credentials stay encrypted '
                       'on this device.', style: TextStyle(color: Color(0xFFE3F9F7))),
                   ],
                 ),
@@ -226,14 +233,26 @@ class _AiModeScreenState extends State<AiModeScreen> {
                   title: const Text('Text AI model'),
                   subtitle: Text(_modelId ?? 'Choose a model'),
                   trailing: const Icon(Icons.edit_outlined),
-                  onTap: _editModel,
+                  onTap: () => _editModel(),
+                )),
+              if (active != null &&
+                  AiProviderCatalog.visionModels.containsKey(active.id))
+                Card(child: ListTile(
+                  key: const Key('ai-vision-model-tile'),
+                  leading: const Icon(Icons.document_scanner_outlined,
+                    color: dsTeal),
+                  title: const Text('Word / Excel vision model'),
+                  subtitle: Text(_visionModelId ?? 'Choose a vision model'),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: () => _editModel(vision: true),
                 )),
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 10, 4, 12),
                 child: Text(
                   'Google AI Studio, Groq and OpenRouter support optional '
-                  'AI proofreading in text review. Every text request requires '
-                  'a separate Send confirmation. Scanned images never upload. '
+                  'AI proofreading in text review. Word/Excel may use an '
+                  'image-capable model with your separate confirmation for '
+                  'each conversion. On-device OCR stays available. '
                   'Other provider slots store keys only for now.',
                   style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
                 ),

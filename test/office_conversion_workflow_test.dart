@@ -1,11 +1,36 @@
+import 'dart:typed_data';
+
 import 'package:docscanner/src/models.dart';
 import 'package:docscanner/src/screens/office_conversion_screen.dart';
+import 'package:docscanner/src/screens/word_review_screen.dart';
+import 'package:docscanner/src/screens/excel_review_screen.dart';
 import 'package:docscanner/src/screens/pdf_tools_screen.dart';
 import 'package:docscanner/src/screens/signature_screen.dart';
 import 'package:docscanner/src/services/xlsx_export.dart';
+import 'package:docscanner/src/services/ai_document_vision_gateway.dart';
+import 'package:docscanner/src/services/ai_text_gateway.dart';
 import 'package:docscanner/src/storage/document_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _VisionFake implements AiDocumentVisionEngine {
+  int calls = 0;
+  AiDocumentFormat? lastFormat;
+  @override
+  Future<AiTextConfig?> activeConfiguration() async => const AiTextConfig(
+    providerId: 'gemini', providerName: 'Google AI Studio',
+    modelId: 'gemini-test');
+
+  @override
+  Future<String> transcribe({required AiTextConfig config,
+      required AiDocumentFormat format, required Uint8List jpeg}) async {
+    calls++;
+    lastFormat = format;
+    return format == AiDocumentFormat.word
+        ? 'Match schedule\nTeam\tScore\nDhaka\t4'
+        : 'Team\tScore\nDhaka\t4';
+  }
+}
 
 final _document = ScanDocument(
   id: 'doc', name: 'Financial Statement',
@@ -26,6 +51,68 @@ class _PdfStore extends DocumentStore {
 }
 
 void main() {
+  testWidgets('AI Word vision is never called before explicit image consent',
+      (tester) async {
+    final vision = _VisionFake();
+    await tester.pumpWidget(MaterialApp(home: OfficeConversionScreen(
+      document: _document, toExcel: false, visionEngine: vision,
+      prepareAiPage: (_) async => Uint8List.fromList([1, 2, 3]),
+    )));
+    await tester.tap(find.byKey(const Key('office-primary-action')));
+    await tester.pumpAndSettle();
+    expect(find.text('Improve accuracy with AI vision?'), findsOneWidget);
+    expect(vision.calls, 0);
+    await tester.tap(find.byKey(const Key('office-ai-cancel')));
+    await tester.pumpAndSettle();
+    expect(vision.calls, 0);
+    await tester.tap(find.byKey(const Key('office-primary-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('office-ai-send')));
+    await tester.pumpAndSettle();
+    expect(vision.calls, 2);
+    expect(vision.lastFormat, AiDocumentFormat.word);
+    expect(find.byType(WordReviewScreen), findsOneWidget);
+    expect(find.textContaining('Match schedule'), findsOneWidget);
+  });
+
+  testWidgets('Excel AI vision preserves actual tab-delimited rows',
+      (tester) async {
+    final vision = _VisionFake();
+    await tester.pumpWidget(MaterialApp(home: OfficeConversionScreen(
+      document: _document, toExcel: true, visionEngine: vision,
+      prepareAiPage: (_) async => Uint8List.fromList([1, 2, 3]),
+    )));
+    await tester.tap(find.byKey(const Key('office-primary-action')));
+    await tester.pumpAndSettle();
+    expect(vision.calls, 0);
+    await tester.tap(find.byKey(const Key('office-ai-send')));
+    await tester.pumpAndSettle();
+    expect(vision.calls, 2);
+    expect(vision.lastFormat, AiDocumentFormat.excel);
+    expect(find.byType(ExcelReviewScreen), findsOneWidget);
+    expect(find.text('Dhaka'), findsWidgets);
+  });
+
+  testWidgets('Choosing local conversion sends no scanned images',
+      (tester) async {
+    final vision = _VisionFake();
+    var localCalls = 0;
+    await tester.pumpWidget(MaterialApp(home: OfficeConversionScreen(
+      document: _document, toExcel: false, visionEngine: vision,
+      localRecognizer: (_, _) async {
+        localCalls++;
+        return ['Local recognition', 'Second page'];
+      },
+    )));
+    await tester.tap(find.byKey(const Key('office-primary-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('office-ai-local')));
+    await tester.pumpAndSettle();
+    expect(vision.calls, 0);
+    expect(localCalls, 1);
+    expect(find.byType(WordReviewScreen), findsOneWidget);
+    expect(find.textContaining('Local recognition'), findsOneWidget);
+  });
   testWidgets('Word conversion offers page selection, OCR language and preview',
       (tester) async {
     await tester.pumpWidget(MaterialApp(home: OfficeConversionScreen(
@@ -53,7 +140,8 @@ void main() {
     await tester.pump();
     expect(find.text('Convert to editable Excel'), findsOneWidget);
     expect(find.text('Recognize & Preview'), findsOneWidget);
-    expect(find.textContaining('Review the recognized text'), findsOneWidget);
+    expect(find.textContaining('Always review names, dates and numbers'),
+        findsOneWidget);
   });
 
   test('Excel preview uses the exact same column boundaries as export', () {

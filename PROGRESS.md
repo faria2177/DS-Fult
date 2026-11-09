@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
-**Last documented:** 2026-11-09
-**Current candidate release:** `0.5.30+44`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42660360758](https://github.com/faria2177/DS-Fult/actions/runs/42660360758)
-**Baseline commit:** [`ee9d3e6`](https://github.com/faria2177/DS-Fult/commit/ee9d3e6dd5a41df1797a83dff38e1703cd77c798)
+**Last documented:** 2026-11-10
+**Current candidate release:** `0.5.31+45`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42668974043](https://github.com/faria2177/DS-Fult/actions/runs/42668974043)
+**Baseline commit:** [`bbde0a1`](https://github.com/faria2177/DS-Fult/commit/bbde0a15e39142503ffc9dd742a025cc797b47ec)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -49,6 +49,14 @@
 | `0.5.28` | `381711.mp4` To Excel: DS-branded X badge and two-column picker, `Converting with DS AI` offline recognition, spreadsheet-style column letters/row numbers, pinch/pan, per-cell edits, sheet-text edits, undo/redo, multi-sheet navigation, Only tables/All content filtering, DS Formatting persisted to XLSX column width/row height/font/bold first row, genuine XLSX export sheet and editable share; PDF export of Latin-script table cells. | UI + XLSX structure regressions added; CI pending; real-device parity and table reconstruction accuracy need testing |
 | `0.5.29` | Me → AI Mode: add Google AI Studio, Groq Cloud, OpenRouter and nine other optional provider credential slots; encrypt secrets with OS secure storage; choose active provider and opt in via Enable toggle; remove/replace keys. Android Back from the root shell now asks to Cancel/Exit. | Configuration and exit-dialog widget tests added; GitHub CI / Android 16 validation pending. **No AI inference calls or automatic scan uploads in this release.** |
 | `0.5.30` | Explicit opt-in text AI: use saved Gemini/Groq/OpenRouter keys for proofreading one Word or Extract Text page and cleaning one Excel sheet. Display provider/model/character count and text preview before external send; show AI suggestion for Apply/Discard. Preserve Word/Excel Undo and original scanned images. | HTTP adapters, consent UI and mocked-request regressions added. No automatic uploads or silent fallbacks. CI + live credential/device testing pending. |
+| `0.5.31` | Video `381739.mp4` vs `381742.mp4`: opt-in scanned-image AI vision conversion for Word/Excel with separate image-capable model IDs, original image consent, bounded compressed single-page requests to three HTTPS providers, plus English Tesseract fallback for ML Kit native failures. Word TSV becomes actual editable tables in DOCX and a grid in preview; Bengali/Unicode Save as PDF uses a shaped raster fallback. | Code and mocked tests; CI and real phone/vision-API validation pending. Models can misread text; layouts/merged cells are not guaranteed exact. |
+
+### 0.5.31 — Reference conversion accuracy and crash handling
+
+- The CamScanner reference `381739.mp4` keeps a dense tournament schedule's table grid; DocScanner `381742.mp4` shows an Android ML Kit `PlatformException` during recognition, badly scrambled table content, and a Latin-only Save as PDF error. The native exception does **not** identify a confirmed plugin root cause; the new bundled English Tesseract model provides an offline retry and cached recognized text is preserved if available.
+- When AI Mode has a valid Gemini/Groq/OpenRouter key, To Word/To Excel now offers an explicit choice: Cancel, On-device only, or Use AI to upload the selected **page images**. The dialog specifies page count, provider/model and billing/privacy implications before any upload. Image resizing happens in memory; originals stay local and unchanged; a failed AI request does not silently route to a different provider.
+- AI image recognition returns page-ordered text or tab-separated table rows for user correction in the existing Word/Excel editors. Word preserves TSV as real OOXML tables, and Word preview renders visible grids. Mixed Bengali text can be shared as an image-backed PDF (not selectable text), while DOCX and XLSX remain editable.
+- Static checks, mocked HTTP and widget tests are added. Real-world accuracy, account quotas, model support, Android secure storage, API image latency and Unicode PDF rendering need physical HONOR testing before claiming parity.
 
 ### 0.5.30 — Text AI proofread with per-request approval
 

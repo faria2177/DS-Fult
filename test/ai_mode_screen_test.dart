@@ -134,6 +134,30 @@ void main() {
     expect(vault.keys['groq'], 'saved_key');
   });
 
+  testWidgets('vision model is configured independently of text model',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final vault = _FakeAiVault()..keys['groq'] = 'saved_key';
+    SharedPreferences.setMockInitialValues({
+      'ai_mode_active_provider': 'groq', 'ai_mode_enabled': true,
+    });
+    await tester.pumpWidget(MaterialApp(home: AiModeScreen(
+      credentialStore: vault)));
+    await tester.pumpAndSettle();
+    expect(find.text('qwen/qwen3.8-27b'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ai-vision-model-tile')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('ai-vision-model-editor')),
+      'qwen/custom-vision');
+    await tester.tap(find.byKey(const Key('ai-save-vision-model')));
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('ai_vision_model_groq'), 'qwen/custom-vision');
+    expect(prefs.getString('ai_model_groq'), isNull);
+    expect(vault.keys['groq'], 'saved_key');
+  });
+
   testWidgets('Cloudflare requires Account ID for first key', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 980));
     addTearDown(() => tester.binding.setSurfaceSize(null));

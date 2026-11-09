@@ -79,4 +79,18 @@ void main() {
     expect(find.text('A sentence with extra spaces.'), findsOneWidget);
     expect(find.byTooltip('Undo'), findsOneWidget);
   });
+
+  testWidgets('TSV table remains a visible editable grid in Word preview',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: WordReviewScreen(
+      document: _sample,
+      pageTexts: const ['Tournament schedule\nTeam\tScore\nDhaka\t4',
+        'Second page.'],
+    )));
+    await tester.pump();
+    expect(find.byType(Table), findsOneWidget);
+    expect(find.text('Team'), findsOneWidget);
+    expect(find.text('Dhaka'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+  });
 }

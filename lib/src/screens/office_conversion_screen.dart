@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../services/ai_document_vision_gateway.dart';
+import '../services/ai_text_gateway.dart';
 import '../services/docx_export.dart';
 import '../services/xlsx_export.dart';
 import 'excel_review_screen.dart';
@@ -13,11 +16,15 @@ import 'word_review_screen.dart';
 /// Selecting/recognizing here never rewrites the original document pages.
 class OfficeConversionScreen extends StatefulWidget {
   const OfficeConversionScreen({super.key, required this.document,
-      required this.toExcel, this.onTagsChanged});
+      required this.toExcel, this.onTagsChanged, this.visionEngine,
+      this.localRecognizer, this.prepareAiPage});
 
   final ScanDocument document;
   final bool toExcel;
   final Future<void> Function(List<String>)? onTagsChanged;
+  final AiDocumentVisionEngine? visionEngine;
+  final Future<List<String>> Function(ScanDocument, bool)? localRecognizer;
+  final Future<Uint8List> Function(String)? prepareAiPage;
 
   @override
   State<OfficeConversionScreen> createState() => _OfficeConversionScreenState();
@@ -29,7 +36,11 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
   bool _bengali = false;
   bool _recognized = false;
   bool _busy = false;
+  bool _usingOnlineAi = false;
+  int _aiPageNumber = 0;
   String? _currentPageId;
+  late final AiDocumentVisionEngine _vision =
+      widget.visionEngine ?? AiDocumentVisionGateway();
 
   List<ScanPage> get _pages => widget.document.pages
       .where((page) => _selected.contains(page.id)).toList();
@@ -68,41 +79,96 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
 
   Future<void> _recognize() async {
     if (_busy || _pages.isEmpty) return;
-    setState(() => _busy = true);
-    List<String>? reviewTexts;
-    ScanDocument? selectedDocument;
+    final selectedPages = _pages;
+    final selectedDocument = widget.document.copyWith(pages: selectedPages);
+    AiTextConfig? config;
     try {
-      final selectedPages = _pages;
-      final texts = await DocxExport.recognizePageTexts(
-        widget.document.copyWith(pages: selectedPages),
-        bengali: _bengali,
-        forceOcr: true,
+      config = await _vision.activeConfiguration();
+    } catch (_) {
+      // Locked or unavailable secure storage must not disable offline OCR.
+      config = null;
+    }
+    final activeConfig = config;
+    if (!mounted) return;
+    bool useAi = false;
+    if (activeConfig != null) {
+      final choice = await showDialog<bool>(context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Improve accuracy with AI vision?'),
+          content: Text('AI can read the original scanned image, including '
+            'table columns and rows. Sending ${selectedPages.length} selected '
+            'page image(s) to ${activeConfig.providerName} (${activeConfig.modelId}) '
+            'requires internet and may use paid API credits. The images '
+            'will be sent only if you choose Use AI. Check the transcription '
+            'carefully; AI can still misread numbers.'),
+          actions: [
+            TextButton(key: const Key('office-ai-cancel'),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
+            TextButton(key: const Key('office-ai-local'),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('On-device only')),
+            FilledButton(key: const Key('office-ai-send'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Use AI')),
+          ],
+        ),
       );
+      if (!mounted || choice == null) return;
+      useAi = choice;
+    }
+    setState(() {
+      _busy = true;
+      _usingOnlineAi = useAi;
+      _aiPageNumber = 0;
+    });
+    List<String>? reviewTexts;
+    try {
+      final List<String> texts;
+      if (useAi) {
+        texts = [];
+        for (var i = 0; i < selectedPages.length; i++) {
+          if (mounted) setState(() => _aiPageNumber = i + 1);
+          final image = await (widget.prepareAiPage ?? AiPageImage.prepare)(
+            selectedPages[i].path);
+          final text = await _vision.transcribe(config: activeConfig!,
+            format: widget.toExcel ? AiDocumentFormat.excel
+                : AiDocumentFormat.word, jpeg: image);
+          texts.add(text);
+        }
+      } else {
+        texts = await (widget.localRecognizer?.call(selectedDocument, _bengali)
+            ?? DocxExport.recognizePageTexts(selectedDocument,
+              bengali: _bengali, forceOcr: true));
+      }
       if (!mounted) return;
       for (var i = 0; i < selectedPages.length; i++) {
         _editors[selectedPages[i].id]!.text = texts[i];
       }
       reviewTexts = texts;
-      selectedDocument = widget.document.copyWith(pages: selectedPages);
       setState(() {
         _recognized = false;
         _currentPageId = selectedPages.first.id;
       });
     } catch (error) {
       if (mounted) {
+        final message = error is AiTextException ? error.message
+            : error is FormatException ? error.message
+                : 'Could not recognize selected pages. Try on-device OCR '
+                  'or a clearer scan.';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Could not recognize selected pages: $error'),
+          content: Text(message),
         ));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() { _busy = false; _usingOnlineAi = false; });
     }
-    if (!mounted || reviewTexts == null || selectedDocument == null) return;
+    if (!mounted || reviewTexts == null) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => widget.toExcel
-          ? ExcelReviewScreen(document: selectedDocument!,
+          ? ExcelReviewScreen(document: selectedDocument,
               pageTexts: reviewTexts!, onTagsChanged: widget.onTagsChanged)
-          : WordReviewScreen(document: selectedDocument!,
+          : WordReviewScreen(document: selectedDocument,
               pageTexts: reviewTexts!, onTagsChanged: widget.onTagsChanged),
     ));
   }
@@ -276,8 +342,9 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
                   })),
                 ]),
                 const SizedBox(height: 11),
-                const Text('OCR runs privately on this device. Review the '
-                    'recognized text carefully before sharing your file.',
+                const Text('Offline OCR stays on this device. If AI Mode is '
+                    'enabled, you can choose image-based AI recognition with '
+                    'separate consent. Always review names, dates and numbers.',
                   style: TextStyle(color: VideoToolStyle.muted, fontSize: 12)),
                 if (_recognized) ...[
                   const SizedBox(height: 24),
@@ -351,12 +418,15 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
                 size: 38),
             ]),
             const SizedBox(height: 23),
-            const Text('Converting with DS AI', style: TextStyle(
+            Text(_usingOnlineAi ? 'Reading page $_aiPageNumber with AI'
+                : 'Recognizing on device', style: const TextStyle(
               color: Colors.white, fontSize: 19,
               fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            const Text('Private, on-device text recognition',
-              style: TextStyle(color: VideoToolStyle.muted, fontSize: 12)),
+            Text(_usingOnlineAi
+                ? 'Image sent only after your approval'
+                : 'Private, on-device text recognition',
+              style: const TextStyle(color: VideoToolStyle.muted, fontSize: 12)),
           ]),
       )),
       ]),

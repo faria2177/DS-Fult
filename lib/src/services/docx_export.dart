@@ -70,26 +70,57 @@ class DocxExport {
     final texts = <String>[];
     try {
       for (final page in document.pages) {
-        var text = page.recognizedText.trim();
+        final cached = page.recognizedText.trim();
+        var text = cached;
         if (text.isEmpty || forceOcr) {
-          if (bengali) {
-            text = (await FlutterTesseractOcr.extractText(
-              page.path,
-              language: 'ben',
-              args: const {'psm': '3', 'preserve_interword_spaces': '1'},
-            )).trim();
-          } else {
-            latinRecognizer ??= TextRecognizer(script: TextRecognitionScript.latin);
-            final result = await latinRecognizer.processImage(
-              InputImage.fromFilePath(page.path),
-            );
-            text = result.text.trim();
+          if (!await File(page.path).exists()) {
+            if (cached.isEmpty) {
+              throw const FormatException('The selected page image is missing.');
+            }
+            texts.add(cached);
+            continue;
           }
+          try {
+            if (bengali) {
+              text = (await FlutterTesseractOcr.extractText(page.path,
+                language: 'ben+eng',
+                args: const {'psm': '3', 'preserve_interword_spaces': '1'},
+              )).trim();
+            } else {
+              // Some Android releases fail while initializing ML Kit. Retry
+              // with the bundled English Tesseract model, without a network
+              // call or leaking the platform stack trace to the UI.
+              try {
+                latinRecognizer ??= TextRecognizer(
+                  script: TextRecognitionScript.latin);
+                final result = await latinRecognizer.processImage(
+                  InputImage.fromFilePath(page.path));
+                text = result.text.trim();
+              } catch (_) {
+                text = (await FlutterTesseractOcr.extractText(page.path,
+                  language: 'eng',
+                  args: const {'psm': '3', 'preserve_interword_spaces': '1'},
+                )).trim();
+              }
+            }
+          } catch (_) {
+            if (cached.isEmpty) {
+              throw const FormatException('On-device OCR failed on this page. '
+                'Retry with AI vision or import a clearer scan.');
+            }
+            text = cached;
+          }
+          if (text.isEmpty) text = cached;
         }
         texts.add(text);
       }
     } finally {
-      await latinRecognizer?.close();
+      try {
+        await latinRecognizer?.close();
+      } catch (_) {
+        // A broken native ML Kit session must not erase the successful
+        // Tesseract fallback or an already recognized page.
+      }
     }
     if (texts.every((page) => page.isEmpty)) {
       throw const FormatException('No text could be recognized. '
@@ -144,22 +175,32 @@ class DocxExport {
       '<w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>'
       '</w:styles>'));
     archive.addFile(ArchiveFile.string('word/document.xml',
-        _buildDocumentXml(title, pageTexts)));
+        _buildDocumentXml(pageTexts)));
     return ZipEncoder().encodeBytes(archive);
   }
 
-  static String _buildDocumentXml(String title, List<String> pages) {
+  static String _buildDocumentXml(List<String> pages) {
     final out = StringBuffer()
       ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
-      ..write('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>')
-      ..write(_paragraph(title, style: 'Title'));
+      ..write('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>');
     for (var page = 0; page < pages.length; page++) {
-      out.write(_paragraph('Page ${page + 1}', style: 'Heading2'));
       if (pages[page].trim().isEmpty) {
         out.write(_paragraph('[No recognizable text on this page]'));
       } else {
-        for (final line in pages[page].split(RegExp(r'\r?\n'))) {
-          out.write(_paragraph(line));
+        // The AI vision path produces TSV for tabular regions. Render those
+        // rows as real, editable Word tables instead of flat lines of text.
+        // Ordinary OCR paragraphs keep their original order and line breaks.
+        final lines = pages[page].split(RegExp(r'\r?\n'));
+        for (var index = 0; index < lines.length;) {
+          if (!lines[index].contains('\t')) {
+            out.write(_paragraph(lines[index++]));
+            continue;
+          }
+          final rows = <List<String>>[];
+          while (index < lines.length && lines[index].contains('\t')) {
+            rows.add(lines[index++].split('\t'));
+          }
+          out.write(_table(rows));
         }
       }
       if (page != pages.length - 1) {
@@ -170,6 +211,34 @@ class DocxExport {
       ..write('<w:pgMar w:top="1100" w:right="1100" w:bottom="1100" w:left="1100"/></w:sectPr>')
       ..write('</w:body></w:document>');
     return out.toString();
+  }
+
+  static String _table(List<List<String>> rows) {
+    final columns = rows.fold<int>(2, (count, row) =>
+      row.length > count ? row.length : count).clamp(2, 16).toInt();
+    const availableWidth = 9706;
+    final cellWidth = availableWidth ~/ columns;
+    final out = StringBuffer()
+      ..write('<w:tbl><w:tblPr><w:tblW w:w="9706" w:type="dxa"/>')
+      ..write('<w:tblBorders>');
+    for (final edge in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']) {
+      out.write('<w:$edge w:val="single" w:sz="4" w:color="888888"/>');
+    }
+    out.write('</w:tblBorders></w:tblPr><w:tblGrid>');
+    for (var col = 0; col < columns; col++) {
+      out.write('<w:gridCol w:w="$cellWidth"/>');
+    }
+    out.write('</w:tblGrid>');
+    for (final row in rows) {
+      out.write('<w:tr>');
+      for (var col = 0; col < columns; col++) {
+        final cell = col < row.length ? row[col] : '';
+        out.write('<w:tc><w:tcPr><w:tcW w:w="$cellWidth" w:type="dxa"/>');
+        out.write('</w:tcPr>${_paragraph(cell)}</w:tc>');
+      }
+      out.write('</w:tr>');
+    }
+    return (out..write('</w:tbl>')).toString();
   }
 
   static String _paragraph(String text, {String? style}) {
