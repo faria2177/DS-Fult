@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
+import '../services/pdf_import_service.dart';
 import '../storage/document_store.dart';
 import 'video_tool_style.dart';
 
@@ -19,6 +21,7 @@ class VideoToolSourcePicker extends StatefulWidget {
     this.multiSelect = false,
     this.light = false,
     this.allowGallery = false,
+    this.allowPdf = false,
     this.onScan,
   });
 
@@ -29,6 +32,7 @@ class VideoToolSourcePicker extends StatefulWidget {
   final bool multiSelect;
   final bool light;
   final bool allowGallery;
+  final bool allowPdf;
   final Future<void> Function()? onScan;
 
   @override
@@ -36,6 +40,7 @@ class VideoToolSourcePicker extends StatefulWidget {
 }
 
 class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
+  static const _platform = MethodChannel('doclens/methods');
   final Set<String> _selected = {};
   bool _loading = false;
 
@@ -62,6 +67,39 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
         );
       }
     } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _importPdf() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    String? cachedPath;
+    try {
+      cachedPath = await _platform.invokeMethod<String>('pickPdfFile');
+      if (cachedPath == null) return;
+      final document = await PdfImportService.importPdf(
+          cachedPath, widget.store);
+      if (!mounted) return;
+      if (widget.multiSelect) {
+        setState(() => _selected.add(document.id));
+      } else {
+        Navigator.pop(context, [document.id]);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not import PDF: $error')),
+        );
+      }
+    } finally {
+      // The picker returns a separate app-cache copy, never the original SAF
+      // URI. Delete only that known temporary import after rasterization.
+      if (cachedPath != null &&
+          File(cachedPath).uri.pathSegments.last.startsWith('docscanner_pdf_')) {
+        final cacheCopy = File(cachedPath);
+        if (await cacheCopy.exists()) await cacheCopy.delete();
+      }
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -115,6 +153,8 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                 ],
               ),
             )),
+            if (_loading) const LinearProgressIndicator(
+                color: VideoToolStyle.teal),
             Expanded(child: ListView(padding: const EdgeInsets.all(16),
               children: [
                 Text('Create or Import', style: TextStyle(color: muted,
@@ -134,6 +174,12 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                     const SizedBox(width: 8),
                     Expanded(child: _sourceTile('Gallery', Icons.photo_library_outlined,
                         surfaceColor, _importImages)),
+                  ],
+                  if (widget.allowPdf) ...[
+                    const SizedBox(width: 8),
+                    Expanded(child: _sourceTile('PDF File',
+                        Icons.picture_as_pdf_outlined,
+                        surfaceColor, _importPdf)),
                   ],
                 ]),
                 const SizedBox(height: 24),

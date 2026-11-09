@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.18+32`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42539302505](https://github.com/faria2177/DS-Fult/actions/runs/42539302505)
-**Baseline commit:** [`033cc83`](https://github.com/faria2177/DS-Fult/commit/033cc8312847505568b2454a1f0e444694925e3d)
+**Current candidate release:** `0.5.19+33`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42541619956](https://github.com/faria2177/DS-Fult/actions/runs/42541619956)
+**Baseline commit:** [`56a78d7`](https://github.com/faria2177/DS-Fult/commit/56a78d78931aaaa249ddf022e1ce2fdb65840dfb)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -37,6 +37,7 @@
 | `0.5.16` | Three functional on-device image tools: Passport Photo Maker (standard sizes, positioning, background colours, 4×6 print sheets), BG Remover (uniform-background flood fill, transparent/coloured PNG), Image Resizer (custom dimensions, ratio lock, quality and format); removed Edit Text and Split PDF from Tools only | Unit/widget regressions added; CI and real-photo verification pending |
 | `0.5.17` | The `381563.mp4` Extract Text follow-up: Tools/Quick OCR now uses the video-style document/gallery/scan source picker and opens a dedicated editable text screen directly. English/Latin and Bengali can be re-recognized separately, with Copy, Select All, Word and text sharing; document-image Edit Text remains distinct. | New widget tests and Word-content test; CI/device verification pending |
 | `0.5.18` | `381562.mp4` PDF to Long Image workflow: source/gallery picker, scrollable stitched preview, optional watermark footer, Save as New, Share Image, Share as PDF, Share as Images and Save to Gallery. Very tall PDF exports are paginated onto readable A4 sheets. | Synthetic image/PDF and screen tests added; CI and Android Gallery/share verification pending |
+| `0.5.19` | `381560.mp4` PDF to Images: Android Storage Access Framework PDF picker, offline PDF rasterization into image-backed pages, selected-page preview, JPG/PNG export, Save as New/Share/Save to Gallery. Existing document pages also work. | Dart selection and transcode tests; native picker and physical-device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -67,6 +68,14 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.19 — Video PDF to Images (381560.mp4)
+
+- Before this patch, Tools → PDF to Images simply called the Android share sheet for the separate images already stored in DocScanner. It had no PDF import, preview or page selection stage.
+- A new Android `ACTION_OPEN_DOCUMENT` PDF picker copies a selected PDF to a private cache file without requiring broad storage permission. The offline Printing/PDFium renderer then rasterizes up to 80 pages at 150 DPI, and imports them as a new image-backed DocScanner document. Individual PNG staging files are removed after the document store copies them; the original SAF document is untouched.
+- The `PdfToImagesScreen` shows a two-column page grid, per-page zoom and checkboxes, select/deselect all, JPG/PNG choice, and explicit Save as New (new DocScanner document), Share Images (selected page files) and Save to Gallery (MediaStore). Source document pages remain unchanged.
+- `PdfImageExport` transcodes selected images using a background isolate and original dimensions, rather than resizing to thumbnail resolution. Format/dimension unit tests and UI selection widget tests added.
+- **Limitations:** importing a password-protected/damaged/oversize PDF can fail; raster import has an 80-MB source and 80-page conversion limit. Imported PDFs are rasterized into editable images, not parsed as original vector text. Android picker/PDFium behavior and export receivers still need HONOR Android 16 verification.
 
 ### 0.5.18 — Video PDF to Long Image editing flow
 

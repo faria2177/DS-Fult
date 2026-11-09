@@ -24,6 +24,7 @@ import 'id_card_template_screen.dart';
 import 'lock_document_screen.dart';
 import 'long_image_studio_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'pdf_to_images_screen.dart';
 import 'photo_studio_screen.dart';
 import 'qr_code_screen.dart';
 import 'reorder_pages_screen.dart';
@@ -415,7 +416,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.18 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.19 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -540,7 +541,8 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<List<String>?> _chooseVideoIds(String title, String description,
       IconData icon, {bool multiSelect = false, bool light = false,
-      bool allowGallery = false, bool allowScan = false}) =>
+      bool allowGallery = false, bool allowScan = false,
+      bool allowPdf = false}) =>
       Navigator.push<List<String>>(context, MaterialPageRoute(
         builder: (_) => VideoToolSourcePicker(
           store: widget.store,
@@ -550,6 +552,7 @@ class _HomeShellState extends State<HomeShell> {
           multiSelect: multiSelect,
           light: light,
           allowGallery: allowGallery,
+          allowPdf: allowPdf,
           onScan: allowScan ? () async => _capture() : null,
         ),
       ));
@@ -557,9 +560,10 @@ class _HomeShellState extends State<HomeShell> {
   Future<ScanDocument?> _chooseVideoDocument(String title,
       String description, IconData icon,
       {bool light = false, bool allowGallery = false,
-      bool allowScan = false}) async {
+      bool allowScan = false, bool allowPdf = false}) async {
     final ids = await _chooseVideoIds(title, description, icon,
-      light: light, allowGallery: allowGallery, allowScan: allowScan);
+      light: light, allowGallery: allowGallery, allowScan: allowScan,
+      allowPdf: allowPdf);
     if (ids == null || ids.isEmpty) return null;
     return widget.store.byId(ids.first);
   }
@@ -671,13 +675,17 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _shareDocumentImages() async {
-    final doc = await _chooseDocument();
-    if (doc == null) return;
-    try {
-      await DocumentExport.shareImages(doc);
-    } catch (error) {
-      _message('Could not export images: $error');
-    }
+    final doc = await _chooseVideoDocument('PDF to Images',
+      'Select a PDF or document and export pages as images.',
+      Icons.collections_outlined,
+      allowGallery: true,
+      allowPdf: true,
+    );
+    if (doc == null || !mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => PdfToImagesScreen(
+          document: doc, store: widget.store),
+    ));
   }
 
   Future<void> _shareLongImage() async {

@@ -124,6 +124,14 @@
 **Consequences:** More decoded image memory for previews and PDF pagination; existing 15,500px safety cap remains. Validate MediaStore, tall receipts, source preservation and share receivers on device.
 **Related:** `long_image_studio_screen.dart`, `image_tool_operations.dart`, `document_export.dart`, `home_shell.dart` and tests.
 
+## ADR-016 — Device PDF import is offline rasterization for image export
+
+**Status:** Accepted for `0.5.19`; CI and device verification pending.
+**Decision:** Tools → PDF to Images opens the existing source-picker with a new Android document-PDF option. Use the platform Storage Access Framework to read a user-selected PDF into app cache without requesting broad media access. Rasterize locally through the installed `printing` PDF backend, import image pages into local DocScanner storage, and expose a preview/select/export screen with explicit JPG/PNG, Save as New, Share Images and Gallery actions. Bound initial conversion to 80 MB and 80 pages to control resource use. Preserve originals; do not imply image exports are editable vector PDFs.
+**Why:** Reference `381560.mp4` shows opening a PDF and viewing its pages before image export; the previous tool only shared already stored image pages.
+**Consequences:** Android picker lifecycle and PDFium failures require device testing, cached source copies and raster staging must be removed, and converted pages consume local storage. Imported password-protected or very large documents can fail with an actionable error. OCR text and vector graphics are not reconstructed.
+**Related:** `DoclensPlugin.kt`, `pdf_import_service.dart`, `pdf_to_images_screen.dart`, `pdf_image_export.dart`, `video_tool_source_picker.dart` and tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

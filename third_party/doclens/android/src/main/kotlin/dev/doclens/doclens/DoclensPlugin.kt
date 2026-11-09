@@ -31,11 +31,14 @@ import java.io.File
 import java.util.concurrent.Executors
 
 private const val CAMERA_PERMISSION_REQUEST = 0x4F4E
+private const val PDF_PICK_REQUEST = 0x5044
+private const val MAX_PDF_IMPORT_BYTES = 80L * 1024 * 1024
 
 class DoclensPlugin :
     FlutterPlugin,
     ActivityAware,
     MethodChannel.MethodCallHandler,
+    PluginRegistry.ActivityResultListener,
     PluginRegistry.RequestPermissionsResultListener,
     PluginRegistry.NewIntentListener {
 
@@ -55,6 +58,7 @@ class DoclensPlugin :
     private var pendingPermissionInit: (() -> Unit)? = null
     private var nativeUIScanner: NativeUIScanner? = null
     private var levelStream: DeviceLevelStream? = null
+    private var pendingPdfPick: MethodChannel.Result? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -83,6 +87,7 @@ class DoclensPlugin :
         activity = binding.activity
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
+        binding.addActivityResultListener(this)
         binding.addOnNewIntentListener(this)
         val ui = NativeUIScanner(context).also { nativeUIScanner = it }
         binding.addActivityResultListener(ui)
@@ -93,6 +98,7 @@ class DoclensPlugin :
 
     override fun onDetachedFromActivity() {
         activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding?.removeActivityResultListener(this)
         activityBinding?.removeOnNewIntentListener(this)
         nativeUIScanner?.let { activityBinding?.removeActivityResultListener(it) }
         nativeUIScanner = null
@@ -161,6 +167,7 @@ class DoclensPlugin :
                     }
                 }
             }
+            "pickPdfFile" -> pickPdfFile(result)
             "pinDocumentShortcut" -> {
                 val id = call.argument<String>("documentId")
                 val title = call.argument<String>("title")
@@ -187,6 +194,72 @@ class DoclensPlugin :
         activity?.intent = intent
         intent.removeExtra("docscanner_document_id")
         methodChannel.invokeMethod("openPinnedDocument", documentId)
+        return true
+    }
+
+    private fun pickPdfFile(result: MethodChannel.Result) {
+        val foreground = activity
+        if (foreground == null) {
+            result.error("no_activity", "The PDF picker needs an active screen", null)
+            return
+        }
+        if (pendingPdfPick != null) {
+            result.error("picker_busy", "A PDF picker is already open", null)
+            return
+        }
+        pendingPdfPick = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/pdf"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            foreground.startActivityForResult(intent, PDF_PICK_REQUEST)
+        } catch (error: Exception) {
+            pendingPdfPick = null
+            result.error("picker_unavailable", error.message, null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode != PDF_PICK_REQUEST) return false
+        val callback = pendingPdfPick ?: return true
+        pendingPdfPick = null
+        val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
+        if (uri == null) {
+            callback.success(null)
+            return true
+        }
+        backgroundExecutor.execute {
+            val destination = File(context.cacheDir,
+                "docscanner_pdf_${System.nanoTime()}.pdf")
+            try {
+                val stream = context.contentResolver.openInputStream(uri)
+                    ?: throw IllegalArgumentException("Selected PDF cannot be read")
+                stream.use { input ->
+                    destination.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var copied = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            copied += n
+                            if (copied > MAX_PDF_IMPORT_BYTES) {
+                                throw IllegalArgumentException("PDF is larger than 80 MB")
+                            }
+                            output.write(buffer, 0, n)
+                        }
+                    }
+                }
+                if (destination.length() == 0L) {
+                    throw IllegalArgumentException("Selected PDF is empty")
+                }
+                mainHandler.post { callback.success(destination.absolutePath) }
+            } catch (error: Exception) {
+                destination.delete()
+                mainHandler.post { callback.error("pdf_import_failed", error.message, null) }
+            }
+        }
         return true
     }
 
