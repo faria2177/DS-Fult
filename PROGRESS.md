@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.28+42`
+**Current candidate release:** `0.5.29+43`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42567562071](https://github.com/faria2177/DS-Fult/actions/runs/42567562071)
 **Baseline commit:** [`4a237cf`](https://github.com/faria2177/DS-Fult/commit/4a237cfabebd363304b526ec77fd5a793cf1fa97)
 
@@ -47,6 +47,15 @@
 | `0.5.26` | CamScanner-style tool workflows: Edit PDF page chooser with working edit/sign/watermark/rotate/reorder/extract/compress/print/share actions; Sign UI adds ink palette and pen-size controls; To Word/To Excel use PDF/gallery/app source picker, page selection, offline OCR, editable review, real DOCX/XLSX export and Share. | New widget and table-parsing tests added; GitHub CI and physical Android device review pending |
 | `0.5.27` | `381709.mp4` DS visual identity: pastel DS AI Tools banner, dark four-column categories, two-column To Word Scan/Gallery/Device source picker, local `Converting with DS AI` indicator, white-page To Word review with tap-to-edit, undo/redo, page switching, DS Formatting persisted into DOCX, rule-based DS Writing, Word/PDF/original-image sharing, and CS PDF → DS PDF. | Widget regressions added; CI/device pixel comparison pending; Unicode text-PDF limited |
 | `0.5.28` | `381711.mp4` To Excel: DS-branded X badge and two-column picker, `Converting with DS AI` offline recognition, spreadsheet-style column letters/row numbers, pinch/pan, per-cell edits, sheet-text edits, undo/redo, multi-sheet navigation, Only tables/All content filtering, DS Formatting persisted to XLSX column width/row height/font/bold first row, genuine XLSX export sheet and editable share; PDF export of Latin-script table cells. | UI + XLSX structure regressions added; CI pending; real-device parity and table reconstruction accuracy need testing |
+| `0.5.29` | Me → AI Mode: add Google AI Studio, Groq Cloud, OpenRouter and nine other optional provider credential slots; encrypt secrets with OS secure storage; choose active provider and opt in via Enable toggle; remove/replace keys. Android Back from the root shell now asks to Cancel/Exit. | Configuration and exit-dialog widget tests added; GitHub CI / Android 16 validation pending. **No AI inference calls or automatic scan uploads in this release.** |
+
+### 0.5.29 — Optional AI credentials and exit confirmation
+
+- Me contains AI Mode, with 12 categorized provider entries, links to their official key dashboards, a masked API-key editor, Cloudflare Account ID, explicit key replacement and deletion, active-provider selector, and a separate Enable toggle.
+- The provider ID and on/off selection are ordinary local preferences; **API keys and Cloudflare Account ID are stored only in Android Keystore-backed encrypted storage** (`flutter_secure_storage`), never in `SharedPreferences` or document JSON. No secrets are printed or synced by DocScanner.
+- Enabling AI Mode is currently only a saved preference. No scan, image, extracted text, or metadata is transmitted; provider-specific AI requests require a future opt-in integration and transparent usage/billing information. A provider's free tier may change and is never unlimited.
+- The root Back action opens a Cancel / Exit dialog. Confirmed exit invokes Android's app-close navigation command; no “saved” notification is shown.
+- Widget tests use a fake key vault and cover mandatory providers, obscured input, preferences separation, key removal, Cloudflare Account ID, Me navigation and exit confirmation. Check actual encrypted-storage behavior and exit handling on HONOR VKP-NX9 before declaring device-level verification.
 
 ## Verified in the 0.5.10 CI run
 

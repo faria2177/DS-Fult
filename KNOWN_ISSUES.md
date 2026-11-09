@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.28+42` candidate; hardware verification pending.
+**Baseline:** `0.5.29+43` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -24,6 +24,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 | K-014 | Word review vs original document | The video-inspired To Word editor displays OCR text on a styled page; original handwriting, fonts, signatures and exact layout are not reconstructed. DS Writing offers transparent rule-based cleanup, not generative AI. | Add offline structured layout/handwriting support after validated models |
 | K-015 | Edited-text PDF script support | To Word → Save as PDF currently supports Latin text through built-in PDF fonts. It rejects non-Latin/Bengali to avoid missing glyph boxes. DOCX preserves Bengali. Share as Images returns **original scan images**, not rasterized edited text. | Bundle/test licensed Unicode PDF font if needed |
 | K-016 | Excel review PDF script and grid limits | `381711.mp4` Excel review exports complete XLSX rows, but the interactive in-app grid previews at most 85 rows and 14 columns per sheet to keep phone interactions responsive; more data remains editable through sheet text. Save as PDF currently requires Latin script; XLSX preserves Unicode including বাংলা. | Profile long workbooks and bundle a tested Unicode PDF font |
+| K-017 | AI Mode credential configuration only | Me → AI Mode can encrypt and select provider API keys but **does not yet call AI models**. Toggle state is a preference; adding a key never authorizes uploading a scan. Provider prices and free-tier quotas can change. | Add explicitly consented provider calls only after the UX/security design in T-114 |
 
 ## Device-dependent or unverified risks
 
@@ -47,7 +48,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## Intentional exclusions (not bugs)
 
-- No **Ask AI**, account login, cloud backup, cloud sync or paid AI service.
+- No **Ask AI**, account login, cloud backup, cloud sync or built-in paid AI service. Me can optionally store the user's own provider API key; this is not a document upload or an inference service.
 - Removed Tools-grid entries: Mega Scan, Long Document, Driver License, Bank Card, Photo Translation, Scan Code, To PPT, Erase Marks and Restore Photo. Internal helpers or other navigation routes may still exist.
 - Manual shutter is the default; automatic capture is not an assumed requirement.
 - Proprietary CamScanner algorithms, code and graphics are not part of this independently implemented Flutter design.

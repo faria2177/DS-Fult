@@ -1,10 +1,24 @@
 import 'package:doclens/doclens.dart';
 import 'package:docscanner/src/screens/home_shell.dart';
+import 'package:docscanner/src/services/ai_credential_store.dart';
 import 'package:docscanner/src/screens/scan_more_settings_screen.dart';
 import 'package:docscanner/src/storage/document_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _EmptyAiVault implements AiCredentialStore {
+  @override
+  Future<bool> hasKey(String providerId) async => false;
+  @override
+  Future<bool> hasAccountId(String providerId) async => false;
+  @override
+  Future<void> deleteKey(String providerId) async {}
+  @override
+  Future<void> saveKey(String providerId, String apiKey,
+      {String? accountId}) async {}
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +53,78 @@ void main() {
     ]) {
       expect(find.text(title), findsOneWidget);
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Me opens AI Mode with provider key configuration',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1280));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = DocumentStore();
+    addTearDown(store.dispose);
+    await tester.pumpWidget(MaterialApp(home: HomeShell(
+      store: store,
+      darkTheme: false,
+      onThemeChanged: (_) {},
+      aiCredentialStore: _EmptyAiVault(),
+    )));
+    await tester.tap(find.text('Me'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('me-ai-mode')));
+    await tester.pumpAndSettle();
+    expect(find.text('AI Mode'), findsOneWidget);
+    expect(find.text('Google AI Studio (Gemini)'), findsOneWidget);
+    expect(find.text('Groq Cloud'), findsOneWidget);
+    expect(find.text('OpenRouter'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Android back asks for exit confirmation; cancel stays in app',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1280));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = DocumentStore();
+    addTearDown(store.dispose);
+    await tester.pumpWidget(MaterialApp(home: HomeShell(
+      store: store,
+      darkTheme: false,
+      onThemeChanged: (_) {},
+    )));
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Exit DocScanner?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('cancel-exit')));
+    await tester.pumpAndSettle();
+    expect(find.text('Exit DocScanner?'), findsNothing);
+    expect(find.text('DocScanner'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('confirmed exit asks Android to close the application',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1280));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = DocumentStore();
+    addTearDown(store.dispose);
+    String? platformCall;
+    final messenger = TestDefaultBinaryMessengerBinding.instance
+        .defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      platformCall = call.method;
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(
+        SystemChannels.platform, null));
+    await tester.pumpWidget(MaterialApp(home: HomeShell(
+      store: store,
+      darkTheme: false,
+      onThemeChanged: (_) {},
+    )));
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-exit')));
+    await tester.pumpAndSettle();
+    expect(platformCall, 'SystemNavigator.pop');
     expect(tester.takeException(), isNull);
   });
 

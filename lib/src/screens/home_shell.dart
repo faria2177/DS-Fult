@@ -6,11 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
+import '../services/ai_credential_store.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/scan_settings_store.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
+import 'ai_mode_screen.dart';
 import 'camera_screen.dart';
 import 'compress_screen.dart';
 import 'document_detail_screen.dart';
@@ -44,11 +46,13 @@ class HomeShell extends StatefulWidget {
     required this.store,
     required this.darkTheme,
     required this.onThemeChanged,
+    this.aiCredentialStore,
   });
 
   final DocumentStore store;
   final bool darkTheme;
   final ValueChanged<bool> onThemeChanged;
+  final AiCredentialStore? aiCredentialStore;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -61,6 +65,7 @@ class _HomeShellState extends State<HomeShell> {
   String _toolQuery = '';
   bool _toolSearchOpen = false;
   bool _filesSelecting = false;
+  bool _exitDialogOpen = false;
   final _picker = ImagePicker();
 
   @override
@@ -201,9 +206,48 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  Future<void> _openAiMode() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => AiModeScreen(credentialStore: widget.aiCredentialStore),
+    ));
+  }
+
+  Future<void> _confirmExit() async {
+    if (_exitDialogOpen || !mounted) return;
+    _exitDialogOpen = true;
+    try {
+      final exit = await showDialog<bool>(context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Exit DocScanner?'),
+          content: const Text('Are you sure you want to exit the app?'),
+          actions: [
+            TextButton(
+              key: const Key('cancel-exit'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('confirm-exit'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Exit'),
+            ),
+          ],
+        ),
+      );
+      if (exit == true && mounted) await SystemNavigator.pop();
+    } finally {
+      _exitDialogOpen = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmExit();
+      },
+      child: Scaffold(
       body: SafeArea(
         child: AnimatedBuilder(
           animation: widget.store,
@@ -236,6 +280,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: 'Tools'),
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Me'),
         ],
+      ),
       ),
     );
   }
@@ -497,15 +542,23 @@ class _HomeShellState extends State<HomeShell> {
           trailing: const Icon(Icons.chevron_right),
           onTap: _openScanSettings,
         )),
+        Card(child: ListTile(
+          key: const Key('me-ai-mode'),
+          leading: const Icon(Icons.auto_awesome_outlined, color: dsTeal),
+          title: const Text('AI Mode'),
+          subtitle: const Text('Add API keys and select an AI provider'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _openAiMode,
+        )),
         const Card(child: ListTile(
           leading: Icon(Icons.shield_outlined, color: dsTeal),
           title: Text('Private, on-device storage'),
-          subtitle: Text('No account, upload or cloud required'),
+          subtitle: Text('Scans stay local unless you explicitly share them'),
         )),
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.27 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.29 • Md Jahidul Islam'),
         )),
       ]);
 

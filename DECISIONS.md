@@ -13,7 +13,7 @@
 ## ADR-002 — Local-first, no cloud or Ask AI
 
 **Status:** Accepted  
-**Decision:** Store images, index and settings locally; no cloud account/sync/AI-chat surface. Do not include **Ask AI** or paywall controls. The app may invoke Android sharing or externally installed apps when the user selects an action.  
+**Decision:** Store images and document index locally; no automatic cloud account/sync/AI-chat, **Ask AI** or paywall surface. From `0.5.29`, users may *optionally configure* their own API credentials in Me without any upload or inference integration. The app may invoke Android sharing or externally installed apps when the user selects an action.  
 **Why:** User preference for an offline scanner, privacy and predictable operation.  
 **Consequences:** A real public share link or cross-device sync cannot be promised without a separately authorized service.  
 **Related:** `document_store.dart`, `document_export.dart`, `home_shell.dart`.
@@ -193,6 +193,14 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 **Why:** The former Excel workflow exposed raw OCR text and a small table preview, lacking the video-style spreadsheet interaction.
 **Consequences:** OCR text splitting alone cannot reconstruct arbitrary merged cells, ruled table geometry, colours or complex formatting. The interactive grid renders at most 85 rows and 14 columns for mobile performance, while full-sheet text editing and XLSX export retain the complete content. Save as PDF currently rejects unsupported Unicode instead of outputting corrupt glyphs. No cloud or proprietary code/assets are introduced.
 **Related:** `excel_review_screen.dart`, `office_conversion_screen.dart`, `xlsx_export.dart`, `test/excel_review_screen_test.dart`.
+
+## ADR-025 — Optional AI credential setup with explicit no-upload boundary
+
+**Status:** Accepted for `0.5.29`; real-device Android secure-storage verification pending.  
+**Decision:** Me → AI Mode may store user-provided keys for Google AI Studio, Groq Cloud, OpenRouter and other catalog providers. Use OS-backed `flutter_secure_storage` for API keys and Cloudflare Account ID; use `SharedPreferences` solely for non-secret enabled/provider-ID state. Keys are never logged, placed in document metadata, read back into visible text or included in exports. The Android root Back action must require explicit Exit confirmation.  
+**Why:** The user explicitly requested personal API configuration and an exit prompt without requesting cloud processing or automatic transfer of existing scans.  
+**Consequences:** `Enable AI Mode` is currently a preference, not a working model request. No external upload, Gmail login, provider fallback, remote OCR, or guaranteed free usage is implied. Before enabling real inference, require a feature-specific user action, provider model selection, clear data-sharing disclosure, error handling and rate/billing protection. Verify encrypted key storage, Android backup/restore and removal on a real device.  
+**Related:** `ai_mode_screen.dart`, `ai_credential_store.dart`, `ai_provider_catalog.dart`, `home_shell.dart`, `test/ai_mode_screen_test.dart`.
 
 ## How to change a decision
 
