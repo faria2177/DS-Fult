@@ -28,6 +28,7 @@ abstract final class AiTextReviewAction {
         'OpenRouter, and enable AI Mode. Other provider keys are setup-only.');
       return null;
     }
+    final AiTextConfig active = config;
     if (text.trim().isEmpty || text.length > AiTextGateway.maxInputCharacters) {
       await _message(context, 'Text length',
         'Choose non-empty text of up to 12,000 characters per request.');
@@ -41,8 +42,8 @@ abstract final class AiTextReviewAction {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Provider: ${config.providerName}'),
-            Text('Model: ${config.modelId}'),
+            Text('Provider: ${active.providerName}'),
+            Text('Model: ${active.modelId}'),
             Text('Text length: ${text.length} characters'),
             const SizedBox(height: 11),
             const Text('The current page\'s editable OCR text will be '
@@ -69,10 +70,10 @@ abstract final class AiTextReviewAction {
     if (!context.mounted || consent != true) return null;
 
     try {
-      final proposal = await gateway.rewrite(config: config, task: task,
+      final proposal = await gateway.rewrite(config: active, task: task,
         text: text);
       if (!context.mounted) return null;
-      return showDialog<String>(context: context,
+      return await showDialog<String>(context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Review AI suggestion'),
           content: SizedBox(width: double.maxFinite,
