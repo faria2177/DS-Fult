@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
-**Last documented:** 2026-11-08  
-**Current candidate release:** `0.5.16+30`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42488745515](https://github.com/faria2177/DS-Fult/actions/runs/42488745515)
-**Baseline commit:** [`bcdcc72`](https://github.com/faria2177/DS-Fult/commit/bcdcc72db595d3f4ec232ba011fa1d51bf74bd58)
+**Last documented:** 2026-11-09
+**Current candidate release:** `0.5.17+31`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42504186822](https://github.com/faria2177/DS-Fult/actions/runs/42504186822)
+**Baseline commit:** [`983ab13`](https://github.com/faria2177/DS-Fult/commit/983ab134c1632e465a4d0d4102b82eb330e4adfa)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -35,6 +35,7 @@
 | `0.5.14` | Video `381530.mp4`: prefer a coherent coloured document over an elongated chair-frame false detection, adaptive jitter damping with stronger switch confirmation, reset tracking after camera lifecycle changes, remove permanent preview border | Kotlin/Dart tests and complete GitHub CI passed in #42486007998; physical-camera confirmation pending |
 | `0.5.15` | Video `381536.mp4`: fix controller's raw-quad fallback that resurrected rejected detections; reject camera-border contenders, delay abrupt border takeovers, add tiny-motion deadband and persistent pale-green fill inside accepted quad | Native/Flutter CI passed in #42488745515; physical-device confirmation pending |
 | `0.5.16` | Three functional on-device image tools: Passport Photo Maker (standard sizes, positioning, background colours, 4×6 print sheets), BG Remover (uniform-background flood fill, transparent/coloured PNG), Image Resizer (custom dimensions, ratio lock, quality and format); removed Edit Text and Split PDF from Tools only | Unit/widget regressions added; CI and real-photo verification pending |
+| `0.5.17` | The `381563.mp4` Extract Text follow-up: Tools/Quick OCR now uses the video-style document/gallery/scan source picker and opens a dedicated editable text screen directly. English/Latin and Bengali can be re-recognized separately, with Copy, Select All, Word and text sharing; document-image Edit Text remains distinct. | New widget tests and Word-content test; CI/device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -65,6 +66,13 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.17 — Video Extract Text direct flow
+
+- The Tools `Extract Text` action previously opened a selected document and instructed users to find Edit Text elsewhere. That was inconsistent with the `381563.mp4` reference and awkward after removing the Tools `Edit Text` tile.
+- Tools and Home Quick OCR now open the video-inspired source picker, then `ExtractTextScreen` immediately processes the chosen document. Editing stays in a dedicated plain-text workspace, separate from overlay-on-image editing.
+- Re-recognize in English or Bengali using the offline ML Kit/Tesseract pipeline; switch language performs a fresh OCR pass even if a previous cached transcript exists. Failed re-recognition preserves the user's edited text. Clipboard, Select All, DOCX built from the **edited** content, and TXT share actions remain explicit.
+- Native OCR recognition and Android receiving-app behavior must still be checked on HONOR Android 16; this change does not claim all five source-video flows are finished.
 
 ### 0.5.16 — New image-editing Tools and five reference clips
 

@@ -1,6 +1,6 @@
 # DocScanner — Architecture Decision Records (ADRs)
 
-**Last reviewed:** 2026-11-08. These decisions summarize current implementation and user-confirmed constraints. A new decision should include date, context, choice, consequences, alternatives and affected code; do not silently reverse an accepted decision.
+**Last reviewed:** 2026-11-09. These decisions summarize current implementation and user-confirmed constraints. A new decision should include date, context, choice, consequences, alternatives and affected code; do not silently reverse an accepted decision.
 
 ## ADR-001 — Flutter UI, Android-native scanner
 
@@ -107,6 +107,14 @@
 **Why:** Replaces two nonfunctional Tools placeholders and a limited resize dialog without adding cloud services, proprietary models, hidden payment requirements or risky automatic overwrites.
 **Consequences:** Rough boundaries on detailed hair or patterned backgrounds and country-specific passport acceptance checks remain outside the current implementation. An AI segmenter or larger offline model would require separate quality, license and APK-size evaluation.
 **Related:** `home_shell.dart`, `photo_studio_screen.dart`, `photo_studio_operations.dart` and new photo-tool tests.
+
+## ADR-014 — Extract Text and Edit Text are separate destinations
+
+**Status:** Accepted for `0.5.17`; physical-device verification pending.
+**Decision:** The Tools `Extract Text` entry and Home Quick OCR should select or import a source image/document and open a dedicated editable transcript directly. Keep the removed Tools-grid `Edit Text` tile absent while preserving document-level image-text editing. Explicit English/Bengali selection forces recognition in that language; exporting to Word must use the user's corrected transcript rather than re-running OCR. No autosave or cloud upload occurs.
+**Why:** Video `381563.mp4` demonstrates OCR-to-text, copy and Word export, and the old action redirected users to an Edit Text menu entry instead of performing that workflow.
+**Consequences:** Users choose explicit Copy, Share Text or To Word; native OCR still requires device testing. Reloading the source intentionally re-recognizes it; unsaved edits remain local to the current editor screen until exported.
+**Related:** `extract_text_screen.dart`, `home_shell.dart`, `docx_export.dart` and tests.
 
 ## How to change a decision
 

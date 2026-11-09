@@ -13,6 +13,21 @@ import '../models.dart';
 /// Generates a standard, editable OpenXML Word document from scanned-page OCR.
 /// The document contents are processed locally, never uploaded to a service.
 class DocxExport {
+  /// Export text edited in Extract Text without silently running OCR again or
+  /// discarding the user's corrections.
+  static Future<File> createFromText(String title, String text) async {
+    if (text.trim().isEmpty) {
+      throw const FormatException('There is no text to export.');
+    }
+    final bytes = buildDocxBytes(title, [text]);
+    final directory = await getTemporaryDirectory();
+    final safeTitle = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final file = File(p.join(directory.path,
+        '${safeTitle}_${DateTime.now().microsecondsSinceEpoch}.docx'));
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
   static Future<File> createFile(
     ScanDocument document, {
     bool bengali = false,
@@ -32,6 +47,7 @@ class DocxExport {
   static Future<List<String>> recognizePageTexts(
     ScanDocument document, {
     bool bengali = false,
+    bool forceOcr = false,
   }) async {
     if (document.pages.isEmpty) {
       throw const FormatException('This document has no pages.');
@@ -41,7 +57,7 @@ class DocxExport {
     try {
       for (final page in document.pages) {
         var text = page.recognizedText.trim();
-        if (text.isEmpty) {
+        if (text.isEmpty || forceOcr) {
           if (bengali) {
             text = (await FlutterTesseractOcr.extractText(
               page.path,

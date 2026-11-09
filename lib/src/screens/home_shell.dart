@@ -17,6 +17,7 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'compress_screen.dart';
 import 'document_detail_screen.dart';
+import 'extract_text_screen.dart';
 import 'files_workspace.dart';
 import 'files_merge_screen.dart';
 import 'id_card_screen.dart';
@@ -414,7 +415,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.16 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.17 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -469,10 +470,17 @@ class _HomeShellState extends State<HomeShell> {
       );
 
   Future<void> _startOcr() async {
-    final doc = await _chooseDocument();
+    final doc = await _chooseVideoDocument(
+      'Extract Text',
+      'Recognize text from scanned pages or images on your device.',
+      Icons.text_fields,
+      allowGallery: true,
+      allowScan: true,
+    );
     if (doc == null || !mounted) return;
-    await _open(doc.id);
-    if (mounted) _message('Tap Edit, then Edit Text or Extract Text.');
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ExtractTextScreen(document: doc),
+    ));
   }
 
   Future<ScanDocument?> _chooseDocument() async {
