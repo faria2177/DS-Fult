@@ -46,6 +46,7 @@ class QuadSmoother {
   Quad? _tracked;
   int _consecutiveMisses = 0;
   int _unmatchedFrames = 0;
+  bool _outlineSuppressed = false;
 
   void reset() {
     _buffer.clear();
@@ -53,6 +54,7 @@ class QuadSmoother {
     _tracked = null;
     _consecutiveMisses = 0;
     _unmatchedFrames = 0;
+    _outlineSuppressed = false;
   }
 
   /// Add [quad] (or null for a missed frame) and return the smoothed quad.
@@ -63,12 +65,12 @@ class QuadSmoother {
       // A missing/invalid frame breaks a run of incompatible observations.
       // Otherwise several isolated chair detections, separated by genuine
       // misses, can accumulate into a false "lost document" state.
-      _unmatchedFrames = 0;
+      if (!_outlineSuppressed) _unmatchedFrames = 0;
       _challenger.clear();
       if (_consecutiveMisses >= missesBeforeReset) {
         reset();
       }
-      return _unmatchedFrames >= maxUnmatchedFrames ? null : _tracked;
+      return _outlineSuppressed ? null : _tracked;
     }
     _consecutiveMisses = 0;
     if (_tracked == null) {
@@ -80,6 +82,7 @@ class QuadSmoother {
     if (_sameDocument(_tracked!, quad)) {
       _challenger.clear();
       _unmatchedFrames = 0;
+      _outlineSuppressed = false;
       _append(quad);
       final distance = _tracked!.maxCornerDistance(quad);
       // ~3-4 preview pixels of hand tremor must not animate all four edges.
@@ -122,6 +125,7 @@ class QuadSmoother {
       _tracked = _median();
       _challenger.clear();
       _unmatchedFrames = 0;
+      _outlineSuppressed = false;
       return _tracked;
     }
 
@@ -130,10 +134,12 @@ class QuadSmoother {
     // (often 8 frames), so the ordinary 6-frame hide threshold must not make
     // the box blink out just before that confirmation finishes.
     // Incoherent alternatives still hide the old outline promptly.
-    if (_unmatchedFrames >= maxUnmatchedFrames && _challenger.length < 2) {
+    if (_unmatchedFrames >= maxUnmatchedFrames &&
+        _challenger.length < switchConfirmationFrames) {
+      _outlineSuppressed = true;
       return null;
     }
-    return _tracked;
+    return _outlineSuppressed ? null : _tracked;
   }
 
   bool _isValid(Quad quad) {
