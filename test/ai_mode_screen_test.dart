@@ -109,6 +109,11 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('ai_mode_active_provider'), isNull);
     expect(prefs.getBool('ai_mode_enabled'), isFalse);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('ai-mode-switch')), -180,
+    );
+    await tester.ensureVisible(find.byKey(const Key('ai-mode-switch')));
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(find.byKey(const Key('ai-mode-switch')))
         .value, isFalse);
     expect(tester.takeException(), isNull);
