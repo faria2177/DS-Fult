@@ -82,9 +82,11 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
         _currentPageId = selectedPages.first.id;
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Could not recognize selected pages: $error'),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not recognize selected pages: $error'),
+        ));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -111,9 +113,11 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
         await DocxExport.shareFile(result, widget.document.name);
       }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Office export failed: $error'),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Office export failed: $error'),
+        ));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
