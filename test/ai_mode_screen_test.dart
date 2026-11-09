@@ -115,6 +115,8 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const Key('ai-provider-cloudflare')), 210,
     );
+    await tester.ensureVisible(find.byKey(const Key('ai-provider-cloudflare')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('ai-provider-cloudflare')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('ai-key-input-cloudflare')),
