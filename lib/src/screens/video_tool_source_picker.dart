@@ -22,6 +22,7 @@ class VideoToolSourcePicker extends StatefulWidget {
     this.light = false,
     this.allowGallery = false,
     this.allowPdf = false,
+    this.importsOnly = false,
     this.onScan,
   });
 
@@ -33,6 +34,8 @@ class VideoToolSourcePicker extends StatefulWidget {
   final bool light;
   final bool allowGallery;
   final bool allowPdf;
+  /// Hide existing documents when this entry point is strictly for imports.
+  final bool importsOnly;
   final Future<void> Function()? onScan;
 
   @override
@@ -168,7 +171,8 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                         })),
                     const SizedBox(width: 8),
                   ],
-                  Expanded(child: _sourceTile('Device', Icons.smartphone,
+                  Expanded(child: _sourceTile(widget.importsOnly
+                      ? 'Images' : 'Device', Icons.smartphone,
                       surfaceColor, _importImages)),
                   if (widget.allowGallery) ...[
                     const SizedBox(width: 8),
@@ -182,12 +186,14 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                         surfaceColor, _importPdf)),
                   ],
                 ]),
-                const SizedBox(height: 24),
-                Text('Select from This App', style: TextStyle(color: muted,
-                    fontWeight: FontWeight.w500)),
-                const SizedBox(height: 12),
-                for (final document in documents)
-                  _documentTile(document, surfaceColor, ink, muted),
+                if (!widget.importsOnly) ...[
+                  const SizedBox(height: 24),
+                  Text('Select from This App', style: TextStyle(color: muted,
+                      fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 12),
+                  for (final document in documents)
+                    _documentTile(document, surfaceColor, ink, muted),
+                ],
               ],
             )),
             if (widget.multiSelect)

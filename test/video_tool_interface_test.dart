@@ -6,6 +6,7 @@ import 'package:docscanner/src/screens/video_tool_style.dart';
 import 'package:docscanner/src/services/image_text_processor.dart';
 import 'package:docscanner/src/storage/document_store.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
@@ -44,6 +45,37 @@ void main() {
     await tester.pump();
     expect(find.text('Merge (2)'), findsOneWidget);
     expect(find.byType(Checkbox), findsNWidgets(2));
+  });
+
+  testWidgets('Import File shows PDF/image import without existing-doc picker',
+      (tester) async {
+    var pdfPickerOpened = false;
+    const channel = MethodChannel('doclens/methods');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel, (call) async {
+        if (call.method == 'pickPdfFile') pdfPickerOpened = true;
+        return null; // User cancels the native document picker.
+      },
+    );
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    await tester.pumpWidget(MaterialApp(home: VideoToolSourcePicker(
+      store: _PickerStore(), title: 'Import File',
+      description: 'Import a PDF or images from your phone, offline.',
+      icon: Icons.upload_file_outlined,
+      allowPdf: true, importsOnly: true,
+    )));
+    await tester.pump();
+    expect(find.text('Import File'), findsOneWidget);
+    expect(find.text('Images'), findsOneWidget);
+    expect(find.text('PDF File'), findsOneWidget);
+    expect(find.text('Select from This App'), findsNothing);
+    expect(find.text('Front Page'), findsNothing);
+    expect(find.text('Back Page'), findsNothing);
+    await tester.tap(find.text('PDF File'));
+    await tester.pump();
+    expect(pdfPickerOpened, isTrue);
+    expect(find.text('Import File'), findsOneWidget);
   });
 
   testWidgets('reference-video tool bottom bar keeps close and done controls',

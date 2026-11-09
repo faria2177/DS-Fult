@@ -1,7 +1,7 @@
 # DocScanner — Bug and Regression Register
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.21+35` (candidate; physical-device verification pending)
+**Baseline:** `0.5.22+36` (candidate; physical-device verification pending)
 **Scope:** Reproducible failures, historical regressions and their fix status. Potential limitations belong in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), not automatically in the Open list.
 
 ## Status rules

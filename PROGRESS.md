@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.21+35`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42552472493](https://github.com/faria2177/DS-Fult/actions/runs/42552472493)
-**Baseline commit:** [`0cda067`](https://github.com/faria2177/DS-Fult/commit/0cda06721bd2f5298c97d5c0da6de20cc94000b8)
+**Current candidate release:** `0.5.22+36`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42553909768](https://github.com/faria2177/DS-Fult/actions/runs/42553909768)
+**Baseline commit:** [`afa8297`](https://github.com/faria2177/DS-Fult/commit/afa82975777e3bb4016e99db38c406460f6c1456)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -40,6 +40,7 @@
 | `0.5.19` | `381560.mp4` PDF to Images: Android Storage Access Framework PDF picker, offline PDF rasterization into image-backed pages, selected-page preview, JPG/PNG export, Save as New/Share/Save to Gallery. Existing document pages also work. | Dart selection and transcode tests; native picker and physical-device verification pending |
 | `0.5.20` | `381564.mp4` Extract PDF Pages: direct source/gallery/PDF selection, page preview and checkboxes, select all/clear all, Extract as New Document with opened result. Existing PDF Tools extract action also routes to the same screen. | Widget tests for selective extraction/order and original preservation; CI and Android UI verification pending |
 | `0.5.21` | `381565.mp4` Rotate Pages: Tools/PDF Tools source → multi-select page thumbnails → 90° left/right, 180°, reset, zoom preview → explicit Done to update only changed pages and open document. Rotation preserves original image paths and PNG transparency. | Staging/undo widget tests, asymmetric image-orientation and transparent PNG tests; fresh CI and device verification pending |
+| `0.5.22` | Tools → Import File now offers device PDF and images rather than a placeholder toast. The imported pages are saved locally and the result opens in document preview. | UI/native-picker cancellation regression added; CI pending, physical Android SAF and large PDF tests remain |
 
 ## Verified in the 0.5.10 CI run
 
@@ -70,6 +71,13 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.22 — Tools Import File
+
+- Previously tapping Tools → Import File showed a `planned` message. It now opens an import-only source sheet with PDF File and Images. Existing document records are hidden to avoid confusing a fresh import with opening an already saved scan.
+- PDF import reuses the Android system Storage Access Framework picker and local PDF-to-image rasterization added in `0.5.19`; selecting gallery images copies them into private DocScanner storage. On success the new document preview opens, with no extra duplicate import.
+- User-cancelled picker actions keep the import screen open. No cloud or broad device-storage permission was added. Widget tests check that PDF picker invocation works and existing library documents remain hidden.
+- Limits: PDFs are flattened to image pages (up to 80 pages / 80 MB). DOCX/PPTX and other non-PDF files are not parsed. Test PDF picker, error recovery and oversized PDFs on Android 16 before confirming device-level completion.
 
 ### 0.5.21 — Video Rotate Pages (381565.mp4)
 

@@ -134,6 +134,25 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  /// Tools → Import File imports a fresh PDF or image set into local storage.
+  /// The shared picker already owns Android SAF/PDF rasterization and gallery
+  /// import; its imports-only mode does not offer an existing library item.
+  Future<void> _importFile() async {
+    final ids = await Navigator.push<List<String>>(context, MaterialPageRoute(
+      builder: (_) => VideoToolSourcePicker(
+        store: widget.store,
+        title: 'Import File',
+        description: 'Import a PDF or images from your phone, offline.',
+        icon: Icons.upload_file_outlined,
+        allowPdf: true,
+        importsOnly: true,
+      ),
+    ));
+    if (ids == null || ids.isEmpty || !mounted) return;
+    final document = widget.store.byId(ids.first);
+    if (document != null) await _open(document.id);
+  }
+
   Future<void> _create(List<String> paths) async {
     try {
       final doc = await widget.store.createFromPaths(paths);
@@ -303,7 +322,7 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Scan', Icons.document_scanner_outlined, _capture),
         _Tool('ID Cards', Icons.badge_outlined, () => _openCard(DocumentKind.idCard)),
         _Tool('Import Images', Icons.photo_library_outlined, _import),
-        _Tool('Import File', Icons.upload_file_outlined, () => _notReady('Import File')),
+        _Tool('Import File', Icons.upload_file_outlined, _importFile),
         _Tool('Extract Text', Icons.text_fields, _startOcr),
         _Tool('Passport Photo Maker', Icons.portrait_outlined,
             () => _openPhotoStudio(PhotoStudioMode.passport)),
@@ -789,8 +808,6 @@ class _HomeShellState extends State<HomeShell> {
     ));
     if (id != null && mounted) await _open(id);
   }
-
-  void _notReady(String feature) => _message('$feature is planned; this tool is not yet implemented.');
 
   Future<String?> _inputDialog(String title, String hint, {String initial = ''}) {
     final controller = TextEditingController(text: initial);

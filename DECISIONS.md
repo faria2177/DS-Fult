@@ -148,6 +148,14 @@
 **Consequences:** Original file paths stay available for recovery, which can increase local storage; interrupted index writes retain the existing K-009 risk. Large rotated pages may take time, and imported PDFs are rasterized first. UI and export orientation require on-device review.
 **Related:** `rotate_pages_screen.dart`, `document_store.dart`, `image_processor.dart`, `home_shell.dart`, `pdf_tools_screen.dart`, page-rotation tests.
 
+## ADR-019 — Import File uses existing offline PDF and gallery pipelines
+
+**Status:** Accepted for `0.5.22`, device test pending.
+**Decision:** Tools → Import File offers Android PDF SAF selection and image-gallery selection in an import-only source sheet. Save imported pages in local DocScanner storage and open the result. Do not show previously saved documents as possible imports. Reuse the already-tested PDF rasterizer and its size/page safeguards rather than introducing a second file permission or parser implementation.
+**Why:** The old Tools entry was a visible placeholder, while an appropriate offline PDF/image import workflow already existed behind PDF to Images. One shared path reduces inconsistent file cleanup and permission handling.
+**Consequences:** PDF vector text and fonts are not preserved; the import is a local image-backed document. DOCX/PPTX are not supported in this flow. Native SAF intent, cancellation, large files and file readability need Android 16 verification.
+**Related:** `home_shell.dart`, `video_tool_source_picker.dart`, `pdf_import_service.dart`, picker widget tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
