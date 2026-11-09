@@ -52,11 +52,15 @@ void main() {
         find.byKey(const Key('extract-confirm')));
     expect(extract.onPressed, isNull);
 
-    await tester.ensureVisible(find.text('Page 3'));
+    // GridView.builder is lazy: Page 3 may not exist in the element tree
+    // until the page grid has been scrolled past the first row.
+    await tester.scrollUntilVisible(find.text('Page 3'), 220,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Page 3'));
     await tester.pump();
     expect(find.text('1/3 selected'), findsOneWidget);
-    await tester.ensureVisible(find.text('Page 1'));
+    await tester.scrollUntilVisible(find.text('Page 1'), -220,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Page 1'));
     await tester.pump();
     expect(find.text('2/3 selected'), findsOneWidget);
