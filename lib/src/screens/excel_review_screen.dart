@@ -22,6 +22,12 @@ class ExcelReviewScreen extends StatefulWidget {
   final List<String> pageTexts;
   final Future<void> Function(List<String>)? onTagsChanged;
 
+  static List<List<String>> parseRows(String text) => text
+      .replaceAll('\r\n', '\n')
+      .split('\n')
+      .map((line) => XlsxExport.cellsFromLine(line.trimRight()))
+      .toList();
+
   @override
   State<ExcelReviewScreen> createState() => _ExcelReviewScreenState();
 }
@@ -42,12 +48,6 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
   double _rowHeight = 36;
   double _fontSize = 12;
 
-  static List<List<String>> parseRows(String text) => text
-      .replaceAll('\r\n', '\n')
-      .split('\n')
-      .map((line) => XlsxExport.cellsFromLine(line.trimRight()))
-      .toList();
-
   static List<List<List<String>>> _clone(List<List<List<String>>> source) =>
       [for (final sheet in source)
         [for (final row in sheet) List<String>.of(row)]];
@@ -55,7 +55,8 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
   @override
   void initState() {
     super.initState();
-    _sheets = [for (final text in widget.pageTexts) parseRows(text)];
+    _sheets = [for (final text in widget.pageTexts)
+      ExcelReviewScreen.parseRows(text)];
     _tags = List.of(widget.document.tags);
     // Preview nine or ten columns at a glance on a phone, then pinch to edit.
     _zoom.value = Matrix4.diagonal3Values(.48, .48, 1);
@@ -182,7 +183,7 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
       ),
     );
     if (!mounted || result == null) return;
-    final next = _clone(_sheets)..[_page] = parseRows(result);
+    final next = _clone(_sheets)..[_page] = ExcelReviewScreen.parseRows(result);
     _commit(next);
   }
 
@@ -201,8 +202,10 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
     try {
       return await task();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Could not export: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not export: $error')));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -265,12 +268,12 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
       }
       final pdf = pw.Document();
       for (final page in texts) {
-        final rows = parseRows(page);
+        final rows = ExcelReviewScreen.parseRows(page);
         final maxColumns = rows.fold<int>(1, (count, row) =>
             row.length > count ? row.length : count).clamp(1, 12).toInt();
         pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4.landscape,
           margin: const pw.EdgeInsets.all(26),
-          build: (_) => [pw.Table.fromTextArray(
+          build: (_) => [pw.TableHelper.fromTextArray(
             headerCount: 0, cellStyle: pw.TextStyle(fontSize: _fontSize),
             cellPadding: const pw.EdgeInsets.all(5),
             data: [for (final row in rows)
@@ -584,7 +587,7 @@ class _ExcelReviewScreenState extends State<ExcelReviewScreen> {
                 style: TextStyle(fontSize: 12,
                   color: VideoToolStyle.muted)),
             ])),
-          )),
+          ))),
       ])),
     ));
 
