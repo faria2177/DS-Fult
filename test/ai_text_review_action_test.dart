@@ -82,16 +82,21 @@ void main() {
   testWidgets('Word AI proofreading changes only reviewed page and can undo',
       (tester) async {
     final ai = _FakeTextAi();
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(MaterialApp(home: WordReviewScreen(
       document: _doc, pageTexts: const ['Ocr text.'], aiEngine: ai,
     )));
     await tester.tap(find.text('DS Writing'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('word-ai-proofread')));
+    await tester.ensureVisible(find.byKey(const Key('word-ai-proofread')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('word-ai-proofread')));
+    // An indeterminate progress bar runs while the review is open.
+    await tester.pump(const Duration(milliseconds: 400));
     expect(ai.calls, 0);
     await tester.tap(find.byKey(const Key('ai-confirm-send')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byKey(const Key('ai-apply-result')));
     await tester.pumpAndSettle();
     expect(find.text('Corrected page.'), findsOneWidget);
@@ -104,14 +109,17 @@ void main() {
   testWidgets('Excel sends sheet text only after consent and applies tabular AI',
       (tester) async {
     final ai = _FakeTextAi();
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(MaterialApp(home: ExcelReviewScreen(
       document: _doc, pageTexts: const ['Name\tScore\nA\t3'], aiEngine: ai,
     )));
     await tester.tap(find.byKey(const Key('excel-ai-clean')));
-    await tester.pumpAndSettle();
+    // Excel's busy overlay animates until the user accepts or cancels.
+    await tester.pump(const Duration(milliseconds: 400));
     expect(ai.calls, 0);
     await tester.tap(find.byKey(const Key('ai-confirm-send')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(ai.sentTask, AiTextTask.tableCleanup);
     await tester.tap(find.byKey(const Key('ai-apply-result')));
     await tester.pumpAndSettle();
