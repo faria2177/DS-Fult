@@ -67,16 +67,13 @@ class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
 
   void _move(int from, int to) {
     if (_busy || from == to || from < 0 || to < 0 ||
-        from >= _order.length || to >= _order.length) return;
+        from >= _order.length || to >= _order.length) {
+      return;
+    }
     setState(() {
       final id = _order.removeAt(from);
       _order.insert(to, id);
     });
-  }
-
-  void _onReorder(int from, int to) {
-    if (from < to) to--;
-    _move(from, to);
   }
 
   Future<void> _run(Future<void> Function(Uint8List, String) operation) async {
@@ -229,7 +226,7 @@ class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
           buildDefaultDragHandles: false,
           padding: const EdgeInsets.only(bottom: 6),
           itemCount: _order.length,
-          onReorder: _busy ? (_, _) {} : _onReorder,
+          onReorderItem: _busy ? (_, _) {} : _move,
           itemBuilder: (_, index) => _pageTile(byId[_order[index]]!, index),
         )),
         if (_error != null) Padding(
