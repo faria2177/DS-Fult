@@ -33,9 +33,19 @@ class DocxExport {
     bool bengali = false,
   }) async {
     final texts = await recognizePageTexts(document, bengali: bengali);
-    final bytes = buildDocxBytes(document.name, texts);
+    return createFromPageTexts(document.name, texts);
+  }
+
+  /// Export the user's reviewed OCR pages without another OCR pass.
+  static Future<File> createFromPageTexts(
+      String title, List<String> pageTexts) async {
+    if (pageTexts.isEmpty ||
+        pageTexts.every((page) => page.trim().isEmpty)) {
+      throw const FormatException('No text to export.');
+    }
+    final bytes = buildDocxBytes(title, pageTexts);
     final directory = await getTemporaryDirectory();
-    final name = document.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final name = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final path = p.join(directory.path,
         '${name}_${DateTime.now().microsecondsSinceEpoch}.docx');
     final file = File(path);

@@ -223,11 +223,13 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
     child: InkWell(onTap: _loading ? null : action,
       borderRadius: BorderRadius.circular(widget.light ? 12 : 4),
       child: Padding(padding: const EdgeInsets.symmetric(
-        vertical: 16, horizontal: 9),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: VideoToolStyle.teal, size: 19),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 14)),
+        vertical: 12, horizontal: 3),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: VideoToolStyle.teal, size: 22),
+          const SizedBox(height: 7),
+          Text(label, textAlign: TextAlign.center, maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12)),
         ]),
       ),
     ),

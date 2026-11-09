@@ -13,14 +13,29 @@ import 'docx_export.dart';
 /// Columns are inferred only from tabs or repeated spaces; OCR table structure
 /// cannot be reconstructed with complete fidelity from a plain transcript.
 class XlsxExport {
+  /// Matches the actual XLSX cell-splitting rules so the preview can show
+  /// the same columns the exported workbook will contain.
+  static List<String> cellsFromLine(String line) => line.contains('\t')
+      ? line.split('\t') : line.split(RegExp(r' {2,}'));
+
   static Future<File> createFile(
     ScanDocument document, {
     bool bengali = false,
   }) async {
     final texts = await DocxExport.recognizePageTexts(document, bengali: bengali);
-    final bytes = buildXlsxBytes(texts);
+    return createFromPageTexts(document.name, texts);
+  }
+
+  /// Export manually corrected OCR cells; do not silently re-recognize them.
+  static Future<File> createFromPageTexts(
+      String title, List<String> pageTexts) async {
+    if (pageTexts.isEmpty ||
+        pageTexts.every((page) => page.trim().isEmpty)) {
+      throw const FormatException('No table data to export.');
+    }
+    final bytes = buildXlsxBytes(pageTexts);
     final directory = await getTemporaryDirectory();
-    final name = document.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final name = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final file = File(p.join(directory.path,
         '${name}_${DateTime.now().microsecondsSinceEpoch}.xlsx'));
     await file.writeAsBytes(bytes, flush: true);
@@ -90,9 +105,7 @@ class XlsxExport {
       final rowNumber = y + 1;
       out.write('<row r="$rowNumber">');
       final line = lines[y];
-      final cells = line.contains('\t')
-          ? line.split('\t')
-          : line.split(RegExp(r' {2,}'));
+      final cells = cellsFromLine(line);
       for (var x = 0; x < cells.length; x++) {
         final reference = '${_columnLetters(x)}$rowNumber';
         out.write('<c r="$reference" t="inlineStr"><is><t xml:space="preserve">'

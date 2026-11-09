@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.25+39`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42563091513](https://github.com/faria2177/DS-Fult/actions/runs/42563091513)
-**Baseline commit:** [`917889f`](https://github.com/faria2177/DS-Fult/commit/917889f79a0c84db8a71d74fecfeafa33136ec5d)
+**Current candidate release:** `0.5.26+40`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42567562071](https://github.com/faria2177/DS-Fult/actions/runs/42567562071)
+**Baseline commit:** [`4a237cf`](https://github.com/faria2177/DS-Fult/commit/4a237cfabebd363304b526ec77fd5a793cf1fa97)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -44,6 +44,7 @@
 | `0.5.23` | Tools → Image to PDF now selects/gallery-imports photos, selects and reorders pages, previews an actual multi-page A4 PDF, supports editable output name, Save PDF via Android SAF and Share PDF. | UI selection/order/export tests and file-name tests added; CI and Android Save As integration pending |
 | `0.5.24` | Live green quad stability follow-up: faint green fill is actually enabled on the Single/Batch camera; identity smoother resets outlier streaks after missing frames and prevents a coherent delayed border challenger from making the box blink before confirmation. | Two synthetic regression tests added; CI and HONOR Android 16 video/CPU acceptance pending |
 | `0.5.25` | Scan/Batch filled green four-corner border increased from 2.5 to 3.5 logical pixels, retaining the delicate mint interior, manual shutter and existing tracking. | Constructor regression test added; APK/real-camera visual verification pending |
+| `0.5.26` | CamScanner-style tool workflows: Edit PDF page chooser with working edit/sign/watermark/rotate/reorder/extract/compress/print/share actions; Sign UI adds ink palette and pen-size controls; To Word/To Excel use PDF/gallery/app source picker, page selection, offline OCR, editable review, real DOCX/XLSX export and Share. | New widget and table-parsing tests added; GitHub CI and physical Android device review pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -74,6 +75,13 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.26 — Four professional Tools workflows
+
+- **Tools → Edit PDF** now accepts app documents, imported images and locally rasterized PDF files; shows a selectable-page strip and grouped editing/organizing/export controls. Every action routes into an existing implementation. Imported PDF vector fonts and selectable text are not preserved by editing; the app operates on image-backed pages.
+- **Tools → Sign** uses the shared source picker, then a dark signing canvas with page preview, black/blue/red/green ink, adjustable stroke size, Undo/Clear and explicit Apply Signature. This is a visible image signature applied to a page, not an encrypted/certificate-backed PDF signature.
+- **Tools → To Word / To Excel** now uses Scan/Gallery/PDF/app source selection, toggles which pages to convert, selects English/Latin versus Bengali offline OCR, and previews/edit recognized page text before sharing genuine `.docx`/`.xlsx` files. Excel's table preview uses the same tab/double-space column splitting as its exporter. Edited OCR text is exported without re-running OCR; source image pages are not overwritten.
+- Full original CamScanner layout, table cells, embedded graphics, handwriting, font/paragraph positioning, and merged Excel headings are **not** guaranteed to match scanned originals. That requires document layout understanding beyond local text-only OCR. No cloud or proprietary CamScanner processing was added.
 
 ### 0.5.25 — More visible green document frame
 

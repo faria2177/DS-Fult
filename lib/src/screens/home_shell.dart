@@ -8,9 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
-import '../services/docx_export.dart';
 import '../services/scan_settings_store.dart';
-import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
@@ -25,6 +23,7 @@ import 'id_card_template_screen.dart';
 import 'image_to_pdf_screen.dart';
 import 'lock_document_screen.dart';
 import 'long_image_studio_screen.dart';
+import 'office_conversion_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'pdf_to_images_screen.dart';
 import 'photo_studio_screen.dart';
@@ -338,7 +337,7 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('PDF to Long Image', Icons.panorama_vertical_outlined, _shareLongImage),
       ],
       'Edit': [
-        _Tool('Edit PDF', Icons.edit_document, () => _openExisting('pdf')),
+        _Tool('Edit PDF', Icons.edit_document, _editPdf),
         _Tool('BG Remover', Icons.wallpaper_outlined,
             () => _openPhotoStudio(PhotoStudioMode.backgroundRemover)),
         _Tool('Image Resizer', Icons.photo_size_select_large_outlined,
@@ -438,7 +437,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.20 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.26 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -611,7 +610,10 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _startSign() async {
-    final document = await _chooseDocument();
+    final document = await _chooseVideoDocument('Sign',
+      'Choose a document, PDF or photo to add your signature.',
+      Icons.draw_outlined, allowGallery: true, allowPdf: true,
+      allowScan: true);
     if (document == null || !mounted) return;
     final page = await _choosePage(document, 'Choose a page to sign');
     if (page == null || !mounted) return;
@@ -629,59 +631,32 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _exportExcel() => _exportOffice(toExcel: true);
 
   Future<void> _exportOffice({required bool toExcel}) async {
-    final document = await _chooseDocument();
+    final document = await _chooseVideoDocument(
+      toExcel ? 'To Excel' : 'To Word',
+      toExcel ? 'Recognize rows and columns, review and export XLSX.'
+          : 'Recognize text, review and export an editable DOCX.',
+      toExcel ? Icons.table_chart_outlined : Icons.description_outlined,
+      allowGallery: true, allowPdf: true, allowScan: true,
+    );
     if (document == null || !mounted) return;
-    final bengali = await showDialog<bool>(context: context,
-      builder: (dialog) => SimpleDialog(
-        title: Text('${toExcel ? 'Excel' : 'Word'} OCR language'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: const Text('English / Latin'),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(dialog, true),
-            child: const Text('বাংলা / Bengali'),
-          ),
-        ],
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => OfficeConversionScreen(
+        document: document, toExcel: toExcel,
       ),
-    );
-    if (bengali == null || !mounted) return;
-    showDialog<void>(context: context, barrierDismissible: false,
-      builder: (_) => const PopScope(canPop: false, child: AlertDialog(
-        title: Text('Converting document'),
-        content: Row(children: [
-          CircularProgressIndicator(),
-          SizedBox(width: 18),
-          Expanded(child: Text('Recognizing text on your device…')),
-        ]),
-      )),
-    );
-    File? result;
-    Object? failure;
-    try {
-      result = toExcel
-          ? await XlsxExport.createFile(document, bengali: bengali)
-          : await DocxExport.createFile(document, bengali: bengali);
-    } catch (error) {
-      failure = error;
-    } finally {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    }
-    if (!mounted) return;
-    if (failure != null) {
-      _message('To ${toExcel ? 'Excel' : 'Word'} failed: $failure');
-    } else if (result != null) {
-      try {
-        if (toExcel) {
-          await XlsxExport.shareFile(result, document.name);
-        } else {
-          await DocxExport.shareFile(result, document.name);
-        }
-      } catch (error) {
-        _message('Could not share converted document: $error');
-      }
-    }
+    ));
+  }
+
+  Future<void> _editPdf() async {
+    final document = await _chooseVideoDocument('Edit PDF',
+      'Edit, organize, annotate and export pages on your device.',
+      Icons.edit_document, allowGallery: true, allowPdf: true,
+      allowScan: true);
+    if (document == null || !mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => PdfToolsScreen(
+        store: widget.store, documentId: document.id,
+      ),
+    ));
   }
 
   Future<void> _textToPdf() async {

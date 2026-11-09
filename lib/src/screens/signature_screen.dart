@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../storage/document_store.dart';
-import '../theme.dart';
+import 'video_tool_style.dart';
 
 /// Draws a visible handwritten signature over an image-backed document page.
 /// This is an electronic image signature, not an X.509 PDF digital signature.
@@ -133,9 +133,9 @@ class _SignatureScreenState extends State<SignatureScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => Theme(data: VideoToolStyle.dark, child: Scaffold(
     appBar: AppBar(
-      title: Text(widget.brushMode ? 'Brush' : 'Sign Document'),
+      title: Text(widget.brushMode ? 'Brush' : 'Sign PDF'),
       actions: [
         IconButton(onPressed: _strokes.isEmpty || _busy ? null : _undo,
             tooltip: 'Undo last stroke', icon: const Icon(Icons.undo)),
@@ -150,17 +150,36 @@ class _SignatureScreenState extends State<SignatureScreen> {
     ),
     body: SafeArea(child: Column(children: [
       if (_busy) const LinearProgressIndicator(),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: Text(widget.brushMode
-            ? 'Draw directly on the page. Choose ink color and brush size. '
-                'Every stroke keeps its own settings.'
-            : 'Draw your signature on the page with a finger. '
-                'Changes are saved only when you tap Apply.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: dsMuted)),
+      Container(
+        width: double.infinity,
+        color: VideoToolStyle.header,
+        padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+        child: Row(children: [
+          Container(width: 44, height: 44,
+            decoration: BoxDecoration(color: VideoToolStyle.teal
+                .withValues(alpha: .15),
+              borderRadius: BorderRadius.circular(13)),
+            child: const Icon(Icons.draw_outlined,
+                color: VideoToolStyle.teal)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Text(widget.brushMode ? 'Draw on document' : 'Add your signature',
+              style: const TextStyle(fontSize: 17,
+                  fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(widget.brushMode
+                ? 'Draw directly on the page using your finger.'
+                : 'Sign on the page. Preview each stroke before applying.',
+              style: const TextStyle(color: VideoToolStyle.muted,
+                  fontSize: 12)),
+          ])),
+        ]),
       ),
-      Expanded(child: Center(child: _path == null
+      Expanded(child: Container(
+        color: VideoToolStyle.background,
+        padding: const EdgeInsets.all(12),
+        child: Center(child: _path == null
           ? const CircularProgressIndicator()
           : LayoutBuilder(builder: (context, constraints) {
               final width = (constraints.maxHeight * _aspectRatio)
@@ -170,7 +189,12 @@ class _SignatureScreenState extends State<SignatureScreen> {
               return SizedBox(
                 width: width,
                 height: height,
-                child: GestureDetector(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: VideoToolStyle.teal
+                        .withValues(alpha: .4), width: 1.2),
+                  ),
+                  child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onPanStart: (details) => _start(details, size),
                   onPanUpdate: (details) => _update(details, size),
@@ -187,59 +211,84 @@ class _SignatureScreenState extends State<SignatureScreen> {
                         if (_activeStroke != null) _strokeScale],
                     )),
                   ]),
+                  ),
                 ),
               );
-            }))),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Text('Ink:'),
-          const SizedBox(width: 14),
-          for (final color in widget.brushMode
-              ? [Colors.black, const Color(0xFF1244A2), Colors.red,
-                  Colors.green, Colors.white]
-              : [Colors.black, const Color(0xFF1244A2)])
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(28),
-                onTap: () => setState(() => _ink = color),
-                child: CircleAvatar(
-                  backgroundColor: color,
-                  radius: _ink == color ? 19 : 16,
-                  child: _ink == color
-                      ? Icon(Icons.check, size: 18,
-                          color: color == Colors.white ? Colors.black : Colors.white)
-                      : null,
-                ),
-              ),
-            ),
-        ]),
-      ),
-      if (widget.brushMode)
-        Row(children: [
-          const SizedBox(width: 18),
-          const Text('Brush size'),
-          Expanded(child: Slider(
-            value: _strokeScale,
-            min: .002, max: .025,
-            activeColor: dsTeal,
-            onChanged: (size) => setState(() => _strokeScale = size),
-          )),
-        ]),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
-        child: FilledButton.icon(
+            })),
+      )),
+      Container(
+        padding: const EdgeInsets.fromLTRB(18, 13, 18, 15),
+        decoration: const BoxDecoration(color: VideoToolStyle.header,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('Ink color',
+              style: TextStyle(fontWeight: FontWeight.w700))),
+            TextButton.icon(
+              onPressed: _busy || _strokes.isEmpty ? null : _undo,
+              icon: const Icon(Icons.undo, size: 19), label: const Text('Undo')),
+            TextButton.icon(
+              onPressed: _busy || _strokes.isEmpty ? null : () => setState(() {
+                _strokes.clear();
+                _strokeColors.clear();
+                _strokeScales.clear();
+              }),
+              icon: const Icon(Icons.delete_outline, size: 19),
+              label: const Text('Clear')),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            for (final entry in <(String, Color)>[
+              ('Black', Colors.black),
+              ('Blue', const Color(0xFF1244A2)),
+              ('Red', const Color(0xFFDD3246)),
+              ('Green', const Color(0xFF008F68)),
+              if (widget.brushMode) ('White', Colors.white),
+            ]) ...[
+              Semantics(label: '${entry.$1} ink', button: true,
+                selected: _ink == entry.$2,
+                child: InkWell(
+                  onTap: _busy ? null : () => setState(() => _ink = entry.$2),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(width: 40, height: 40,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(color: entry.$2,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _ink == entry.$2
+                          ? VideoToolStyle.teal : Colors.white38,
+                          width: _ink == entry.$2 ? 3 : 1)),
+                    child: _ink == entry.$2 ? const Icon(Icons.check,
+                      size: 19, color: Colors.white) : null,
+                  ),
+                )),
+            ],
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            const Text('Pen size', style: TextStyle(fontSize: 13)),
+            const SizedBox(width: 8),
+            const Icon(Icons.circle, size: 7),
+            Expanded(child: Slider(
+              value: _strokeScale, min: .002, max: .025,
+              activeColor: VideoToolStyle.teal,
+              onChanged: _busy ? null : (size) => setState(() =>
+                  _strokeScale = size),
+            )),
+            const Icon(Icons.circle, size: 19),
+          ]),
+          const SizedBox(height: 5),
+          SizedBox(width: double.infinity, child: FilledButton.icon(
           onPressed: _busy || _strokes.isEmpty ? null : _save,
           icon: const Icon(Icons.check),
           label: Text(_busy ? 'Applying…' : widget.brushMode
               ? 'Apply Brush' : 'Apply Signature'),
-          style: FilledButton.styleFrom(backgroundColor: dsTeal,
-              minimumSize: const Size(double.infinity, 50)),
-        ),
+          style: VideoToolStyle.tealButton,
+          )),
+        ]),
       ),
     ])),
-  );
+  ));
 }
 
 /// One painter is used for the on-screen preview and final full-resolution

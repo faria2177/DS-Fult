@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.25+39` candidate; hardware verification pending.
+**Baseline:** `0.5.26+40` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -51,7 +51,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.24+38` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42563091513](https://github.com/faria2177/DS-Fult/actions/runs/42563091513). The new `0.5.25+39` border-only visual change requires fresh CI and real-device comparison. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
+The latest verified baseline `0.5.25+39` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42567562071](https://github.com/faria2177/DS-Fult/actions/runs/42567562071). The new `0.5.26+40` Office and PDF/Sign UI workflows require fresh CI and real-device comparison. Word/Excel conversion remains OCR-text based: the native structure, merged tables, handwriting and precise geometry of the original PDF may be lost; edited PDFs are image-backed, and Sign is an image overlay, not a certificate-backed digital signature. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, Office application compatibility, visual page selection or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

@@ -172,6 +172,14 @@
 **Consequences:** A coherent new document can keep the previous box visible slightly longer before an intentional switch; this is a temporal UI tradeoff and does not prove correct recognition of a fabric-versus-chair boundary. The green overlay is visual feedback, not an input mask or a reliability boost to the detector. Verify actual device positioning, low-light behavior and CPU/FPS before claiming improved scan accuracy.
 **Related:** `quad_smoother.dart`, `quad_overlay.dart`, `camera_screen.dart`, `quad_smoother_test.dart`, `BUGS.md` B-011.
 
+## ADR-022 — Review OCR and local PDF edits before explicit export
+
+**Status:** Accepted for `0.5.26`; Android hardware and Office-file fidelity checks pending.
+**Decision:** Tools → Edit PDF and Sign should use page-specific, actually implemented offline editing actions. Tools → To Word and To Excel should first let users choose app, photo, PDF or scan sources, select pages and OCR language, then inspect/edit recognized text before creating the genuine DOCX/XLSX and opening the share sheet. The Excel table preview and exporter must agree on inferred column delimiters. Do not silently overwrite source document pages with OCR corrections or use cloud conversion.
+**Why:** A bare file chooser + blocking spinner + immediate share gave users no chance to review OCR errors, column structure or page selection. Sign and Edit PDF lacked a consolidated professional editing surface.
+**Consequences:** Text and table reconstruction remain limited by offline OCR and whitespace heuristics. Image-backed PDF edits do not keep vector/source text layers; drawn electronic signatures do not add certificate cryptography. UI accuracy, Android share destinations, OCR performance and Excel/Word fidelity need real-device acceptance.
+**Related:** `home_shell.dart`, `office_conversion_screen.dart`, `pdf_tools_screen.dart`, `signature_screen.dart`, `video_tool_source_picker.dart`, `docx_export.dart`, `xlsx_export.dart` and `office_conversion_workflow_test.dart`.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
