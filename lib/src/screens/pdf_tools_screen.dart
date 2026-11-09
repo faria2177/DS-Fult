@@ -6,7 +6,7 @@ import '../services/document_export.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'compress_screen.dart';
-import 'document_screen.dart';
+import 'extract_pdf_pages_screen.dart';
 
 /// Organize and export the current image-backed document as a PDF.
 class PdfToolsScreen extends StatefulWidget {
@@ -25,50 +25,10 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
   Future<void> _extract() async {
     final doc = widget.store.byId(widget.documentId);
     if (doc == null || doc.pages.isEmpty) return;
-    final selected = <int>{};
-    final indices = await showDialog<List<int>>(
-      context: context,
-      builder: (dialog) => StatefulBuilder(
-        builder: (dialog, refresh) => AlertDialog(
-          title: const Text('Extract PDF pages'),
-          content: SizedBox(width: 310, child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: doc.pages.length,
-            itemBuilder: (_, index) => CheckboxListTile(
-              title: Text('Page ${index + 1}'),
-              value: selected.contains(index),
-              onChanged: (checked) => refresh(() {
-                if (checked == true) {
-                  selected.add(index);
-                } else {
-                  selected.remove(index);
-                }
-              }),
-            ),
-          )),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialog),
-                child: const Text('Cancel')),
-            FilledButton(
-              onPressed: selected.isEmpty ? null : () => Navigator.pop(dialog,
-                  selected.toList()..sort()),
-              child: const Text('Extract'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (indices == null) return;
-    await _run(() async {
-      final extracted = await widget.store.duplicatePages(widget.documentId,
-          indices, '${doc.name} - Extracted');
-      if (mounted) {
-        await Navigator.push<void>(context, MaterialPageRoute(
-          builder: (_) => DocumentScreen(
-            store: widget.store, documentId: extracted.id),
-        ));
-      }
-    });
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ExtractPdfPagesScreen(
+          store: widget.store, documentId: doc.id),
+    ));
   }
 
   Future<void> _watermark() async {

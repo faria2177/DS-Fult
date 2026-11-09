@@ -132,6 +132,14 @@
 **Consequences:** Android picker lifecycle and PDFium failures require device testing, cached source copies and raster staging must be removed, and converted pages consume local storage. Imported password-protected or very large documents can fail with an actionable error. OCR text and vector graphics are not reconstructed.
 **Related:** `DoclensPlugin.kt`, `pdf_import_service.dart`, `pdf_to_images_screen.dart`, `pdf_image_export.dart`, `video_tool_source_picker.dart` and tests.
 
+## ADR-017 — Extract selected pages into a new image-backed document
+
+**Status:** Accepted for `0.5.20`; CI and Android UI verification pending.
+**Decision:** Tools → Extract PDF Pages should select an unlocked existing/Android-imported PDF document, display visual page thumbnails with checkboxes and Select All, then create a distinct local DocScanner document containing only selected pages in their original order. Use the same screen from PDF Tools instead of a second, text-only selection dialog. Do not remove or overwrite source pages automatically.
+**Why:** Video `381564.mp4` shows a document picker, page checkboxes, explicit extract confirmation and a resulting document preview; the older UI hid this within an unrelated PDF Tools screen.
+**Consequences:** A real PDF is rasterized before this extraction using ADR-016, so editable PDF text/vector structure is not preserved. Thumbnail scrolling and extract/save navigation need physical Android 16 checks.
+**Related:** `extract_pdf_pages_screen.dart`, `home_shell.dart`, `pdf_tools_screen.dart`, `document_store.dart` and widget tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.19+33`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42541619956](https://github.com/faria2177/DS-Fult/actions/runs/42541619956)
-**Baseline commit:** [`56a78d7`](https://github.com/faria2177/DS-Fult/commit/56a78d78931aaaa249ddf022e1ce2fdb65840dfb)
+**Current candidate release:** `0.5.20+34`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42549661898](https://github.com/faria2177/DS-Fult/actions/runs/42549661898)
+**Baseline commit:** [`58cdb24`](https://github.com/faria2177/DS-Fult/commit/58cdb24167e60a188dcfc1b7a8f75088742f8f28)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -38,6 +38,7 @@
 | `0.5.17` | The `381563.mp4` Extract Text follow-up: Tools/Quick OCR now uses the video-style document/gallery/scan source picker and opens a dedicated editable text screen directly. English/Latin and Bengali can be re-recognized separately, with Copy, Select All, Word and text sharing; document-image Edit Text remains distinct. | New widget tests and Word-content test; CI/device verification pending |
 | `0.5.18` | `381562.mp4` PDF to Long Image workflow: source/gallery picker, scrollable stitched preview, optional watermark footer, Save as New, Share Image, Share as PDF, Share as Images and Save to Gallery. Very tall PDF exports are paginated onto readable A4 sheets. | Synthetic image/PDF and screen tests added; CI and Android Gallery/share verification pending |
 | `0.5.19` | `381560.mp4` PDF to Images: Android Storage Access Framework PDF picker, offline PDF rasterization into image-backed pages, selected-page preview, JPG/PNG export, Save as New/Share/Save to Gallery. Existing document pages also work. | Dart selection and transcode tests; native picker and physical-device verification pending |
+| `0.5.20` | `381564.mp4` Extract PDF Pages: direct source/gallery/PDF selection, page preview and checkboxes, select all/clear all, Extract as New Document with opened result. Existing PDF Tools extract action also routes to the same screen. | Widget tests for selective extraction/order and original preservation; CI and Android UI verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -68,6 +69,13 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.20 — Video Extract PDF Pages (381564.mp4)
+
+- Previously Tools → Extract PDF Pages opened the general PDF Tools page, where the user had to press a second Extract button and choose page numbers in a small text-only checkbox dialog. The video shows a document picker, visual page checkboxes and Extract as New Document.
+- Tools now launches `VideoToolSourcePicker` with app documents, gallery import and the `0.5.19` Android PDF file picker, then `ExtractPdfPagesScreen` with scrollable page thumbnails, zoom, selection count and Select All / Deselect All.
+- The new page-confirmation action copies selected pages into an independent editable document, preserving source order and original document pages. It opens the newly created document preview after explicit confirmation. PDF Tools' existing Extract Pages button also launches this same screen.
+- Widget tests cover disabled extraction when nothing is selected, choosing noncontiguous pages in ascending order, preserving source pages and select/deselect-all staging. CI and a physical Android 16 acceptance comparison against `381564.mp4` remain pending.
 
 ### 0.5.19 — Video PDF to Images (381560.mp4)
 

@@ -17,6 +17,7 @@ import 'camera_screen.dart';
 import 'compress_screen.dart';
 import 'document_detail_screen.dart';
 import 'extract_text_screen.dart';
+import 'extract_pdf_pages_screen.dart';
 import 'files_workspace.dart';
 import 'files_merge_screen.dart';
 import 'id_card_screen.dart';
@@ -325,7 +326,7 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Add Watermark', Icons.branding_watermark_outlined, _startWatermark),
         _Tool('Smart Erase', Icons.auto_fix_high_outlined, _startErase),
         _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('reorder')),
-        _Tool('Extract PDF Pages', Icons.content_copy_outlined, () => _openExisting('pdf')),
+        _Tool('Extract PDF Pages', Icons.content_copy_outlined, _extractPdfPages),
         _Tool('Rotate PDF', Icons.rotate_90_degrees_ccw_outlined,
             () => _openExisting('document')),
         _Tool('Lock PDF', Icons.lock_outline, () => _openExisting('lock')),
@@ -416,7 +417,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.19 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.20 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -698,6 +699,20 @@ class _HomeShellState extends State<HomeShell> {
     await Navigator.push<void>(context, MaterialPageRoute(
       builder: (_) => LongImageStudioScreen(
           document: doc, store: widget.store),
+    ));
+  }
+
+  Future<void> _extractPdfPages() async {
+    final doc = await _chooseVideoDocument('Extract PDF Pages',
+      'Select the pages to extract into a separate document.',
+      Icons.content_copy_outlined,
+      allowGallery: true,
+      allowPdf: true,
+    );
+    if (doc == null || !mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ExtractPdfPagesScreen(
+          store: widget.store, documentId: doc.id),
     ));
   }
 
