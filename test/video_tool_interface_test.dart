@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:docscanner/src/models.dart';
 import 'package:docscanner/src/screens/video_tool_source_picker.dart';
 import 'package:docscanner/src/screens/video_tool_style.dart';
