@@ -159,4 +159,34 @@ void main() {
     }
     expect(tracker.add(chair), chair);
   });
+
+  test('default tracker never blinks during a coherent delayed challenger', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    final cloth = rectangle(.20, .20, width: .35, height: .40);
+    final nearBorder = rectangle(.015, .10, width: .65, height: .73);
+    expect(tracker.add(cloth), cloth);
+    // With the default six-frame stale-outline limit and an eight-frame
+    // border confirmation, the older implementation hid the green outline
+    // for frames 6 and 7 even though the new candidate was consistent.
+    for (var i = 0; i < 7; i++) {
+      expect(tracker.add(nearBorder), cloth,
+          reason: 'Do not blink during delayed takeover frame ${i + 1}');
+    }
+    final switched = tracker.add(nearBorder);
+    expect(switched, isNotNull);
+    expect(switched!.maxCornerDistance(nearBorder), lessThan(.005));
+  });
+
+  test('null observations interrupt an incompatible contender streak', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    final cloth = rectangle(.16, .15, width: .30, height: .40);
+    tracker.add(cloth);
+    for (var i = 0; i < 4; i++) {
+      expect(tracker.add(rectangle(.55, .38, width: .35)), cloth);
+      expect(tracker.add(rectangle(.32, .38, width: .35)), cloth);
+      expect(tracker.add(null), cloth,
+          reason: 'One blank camera frame must not compound false switches');
+    }
+    expect(tracker.add(cloth), cloth);
+  });
 }

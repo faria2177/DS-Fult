@@ -60,6 +60,10 @@ class QuadSmoother {
   Quad? add(Quad? quad) {
     if (quad == null || !_isValid(quad)) {
       _consecutiveMisses++;
+      // A missing/invalid frame breaks a run of incompatible observations.
+      // Otherwise several isolated chair detections, separated by genuine
+      // misses, can accumulate into a false "lost document" state.
+      _unmatchedFrames = 0;
       _challenger.clear();
       if (_consecutiveMisses >= missesBeforeReset) {
         reset();
@@ -121,9 +125,12 @@ class QuadSmoother {
       return _tracked;
     }
 
-    // Rapid camera movement can produce a different candidate each frame.
-    // In that case a stale outline is worse than displaying no outline.
-    if (_unmatchedFrames >= maxUnmatchedFrames) {
+    // Only hide a stale document when the detector has no *coherent* new
+    // target. A near-border challenger intentionally needs extra confirmation
+    // (often 8 frames), so the ordinary 6-frame hide threshold must not make
+    // the box blink out just before that confirmation finishes.
+    // Incoherent alternatives still hide the old outline promptly.
+    if (_unmatchedFrames >= maxUnmatchedFrames && _challenger.length < 2) {
       return null;
     }
     return _tracked;

@@ -247,7 +247,9 @@ class _QuadOverlayPainter extends CustomPainter {
         _strokePath(canvas, path);
         break;
       case _QuadStyle.filled:
-        _fillPath(canvas, path, alpha: 0.12);
+        // A barely visible mint overlay, like the page-selection feedback
+        // in the reference scan. This colour does not affect detection.
+        _fillPath(canvas, path, alpha: 0.065);
         _strokePath(canvas, path);
         break;
       case _QuadStyle.corners:

@@ -545,7 +545,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   retakeLabel: 'Retake',
                   accentColor: _outlineColor,
                   warningColor: _outlineColor,
-                  overlayStyle: QuadOverlayStyle.outline,
+                  overlayStyle: QuadOverlayStyle.filled,
                   enableAutoCapture: !widget.cardMode && _settings.autoCapture &&
                       !_settings.useSystemCamera,
                   enablePerspectiveWarp: widget.cardMode ||

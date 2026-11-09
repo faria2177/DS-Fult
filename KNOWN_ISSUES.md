@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.23+37` candidate; hardware verification pending.
+**Baseline:** `0.5.24+38` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -26,7 +26,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 | ID | Area | What still needs checking |
 | --- | --- | --- |
-| R-001 | Auto Crop accuracy and live tracking | `0.5.13` adds still-only contrast segmentation; `0.5.15` rejects some frame-boundary live false positives and runs a small colour-mask check on every normal live frame. These may improve textile tracking but can hide an extremely close page or increase per-frame CPU. Patterned backgrounds, glare, low-contrast paper edges and partially off-frame sheets can still defeat detection. Originals/manual four-corner review remain the fallback. Validate A4/Letter/Legal, ID Card and receipts on device. |
+| R-001 | Auto Crop accuracy and live tracking | `0.5.13` adds still-only contrast segmentation; `0.5.15` rejects some frame-boundary live false positives and runs a small colour-mask check on every normal live frame; `0.5.24` fixes two temporal overlay blink/miss-count edge cases and enables a faint green accepted-quad tint. These may improve visual stability but **do not establish** that textile or low-contrast pages are detected accurately. Patterned backgrounds, glare, low-contrast edges and partially off-frame sheets remain difficult. Originals/manual four-corner review remain the fallback. Validate A4/Letter/Legal, ID Card and receipts on device and measure CPU/FPS. |
 | R-002 | Mode switching | Some configuration changes intentionally rebind the native camera. Verify no unwanted reflection/black flash on the target HONOR Android 16 device. |
 | R-003 | Reference video fidelity | Similar Flutter UI and interaction flow do **not** guarantee pixel-identical colors, typography, motion, overlays or native processing output across screen sizes. |
 | R-004 | Navigation/safe areas | Verify toolbar and dialog positioning with Android gesture navigation and three-button navigation. |
@@ -51,7 +51,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.22+36` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42556274183](https://github.com/faria2177/DS-Fult/actions/runs/42556274183). The new `0.5.23+37` Image to PDF Save As flow requires fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
+The latest verified baseline `0.5.23+37` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42558781567](https://github.com/faria2177/DS-Fult/actions/runs/42558781567). The new `0.5.24+38` live tracker overlay changes require fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

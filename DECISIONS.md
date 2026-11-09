@@ -164,6 +164,14 @@
 **Consequences:** Imported/source photos remain in the DocScanner image-backed library; a saved PDF is a separate external file, not editable vector text. Android providers, PDF viewer, high-page-count memory and sharing receivers need real-device verification. No encryption or cloud hosting is implied.
 **Related:** `image_to_pdf_screen.dart`, `document_export.dart`, `pdf_file_delivery.dart`, `DoclensPlugin.kt` and widget tests.
 
+## ADR-021 — Preserve overlay continuity while confirming border challengers
+
+**Status:** Accepted for `0.5.24`; physical camera comparison pending.
+**Decision:** The Single/Batch scanner should render a barely tinted green interior within an already accepted quad, separately from edge classification. In the Dart `QuadSmoother`, an invalid or missing observation terminates the run of incompatible contenders. A coherent challenger awaiting the stricter near-border confirmation should not make the current quad disappear due to the shorter generic lost-target timeout; wildly inconsistent alternatives may still hide it. Preserve the manual shutter, old still-image crop preference and current native OpenCV detector.
+**Why:** The camera previously passed the outline-only style even though a filled style existed. With the default six-frame mismatch hide limit and eight-frame frame-edge challenger confirmation, a continuous valid candidate could cause a two-frame green-box blink. Adjacent nulls also allowed separated false positives to accumulate toward an artificial disappearance.
+**Consequences:** A coherent new document can keep the previous box visible slightly longer before an intentional switch; this is a temporal UI tradeoff and does not prove correct recognition of a fabric-versus-chair boundary. The green overlay is visual feedback, not an input mask or a reliability boost to the detector. Verify actual device positioning, low-light behavior and CPU/FPS before claiming improved scan accuracy.
+**Related:** `quad_smoother.dart`, `quad_overlay.dart`, `camera_screen.dart`, `quad_smoother_test.dart`, `BUGS.md` B-011.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

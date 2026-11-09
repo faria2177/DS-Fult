@@ -1,7 +1,7 @@
 # DocScanner — Bug and Regression Register
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.23+37` (candidate; physical-device verification pending)
+**Baseline:** `0.5.24+38` (candidate; physical-device verification pending)
 **Scope:** Reproducible failures, historical regressions and their fix status. Potential limitations belong in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), not automatically in the Open list.
 
 ## Status rules
@@ -16,7 +16,7 @@
 | ID | Evidence | Observed behavior | Current status | Required confirmation |
 | --- | --- | --- | --- | --- |
 | B-010 | Video `381526.mp4`, ~00:18–00:28, HONOR Android 16 screen recording | Single Scan live outline follows the entire blue Grameenphone poster; shutter review, editor and saved thumbnail contain only the smaller yellow inner label | OPEN — confirmed in video. Post-`0.5.13` still-only saturated outer-panel candidate and orientation-independent compact-crop guard added; CI/device results pending | Install an APK containing this patch; scan the same poster. Expect full-board auto-crop if boundaries are reliable, otherwise full-original corner review. Log still/live quads and compare all four edges to CamScanner's accepted scan |
-| B-011 | Videos `381530.mp4` and `381536.mp4` (00:02, 00:07, 00:13–00:15), HONOR Android 16 | The green quad intermittently leaves the blue textile for the chair or a preview-edge-spanning rectangle, then jumps back; earlier scan also cropped only the inner motif | OPEN — reproduced on video. `0.5.14` native/Dart CI passed. `0.5.15`: fixed raw-quad reappearance after smoothing returned null; new frame-edge rejection, persistent panel comparison, conservative challenger confirmation, deadband and pale-green valid-quad tint; fresh CI/device check pending | Recreate 381536 scene while moving and stopping repeatedly; green quad must remain near the cloth, not jump to camera edges; rejection should display no false outline. Measure FPS/frame cost; verify full cloth remains in captured review and compare with CamScanner |
+| B-011 | Videos `381530.mp4` and `381536.mp4` (00:02, 00:07, 00:13–00:15), HONOR Android 16 | The green quad intermittently leaves the blue textile for the chair or a preview-edge-spanning rectangle, then jumps back; earlier scan also cropped only the inner motif | OPEN — reproduced on video. `0.5.15` suppresses rejected raw quads and adds near-edge confirmation/deadband. `0.5.24` actually enables a very pale green fill in the camera overlay and fixes two temporal gap/blink cases in Dart, with new synthetic tests; real-device outcome is unverified | Recreate 381536 scene while moving and stopping repeatedly; green quad must remain near the cloth, not jump to camera edges; rejection should display no false outline. Measure FPS/frame cost; verify full cloth remains in captured review and compare with CamScanner |
 
 ## Historical fixes requiring targeted hardware retest
 

@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.23+37`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42556274183](https://github.com/faria2177/DS-Fult/actions/runs/42556274183)
-**Baseline commit:** [`51ebb53`](https://github.com/faria2177/DS-Fult/commit/51ebb531d4d0ac5a09eb2effc379c0f370c6e693)
+**Current candidate release:** `0.5.24+38`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42558781567](https://github.com/faria2177/DS-Fult/actions/runs/42558781567)
+**Baseline commit:** [`54234fe`](https://github.com/faria2177/DS-Fult/commit/54234fe737f9aed5cf8146587baa79ab3d97ff0d)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -42,6 +42,7 @@
 | `0.5.21` | `381565.mp4` Rotate Pages: Tools/PDF Tools source → multi-select page thumbnails → 90° left/right, 180°, reset, zoom preview → explicit Done to update only changed pages and open document. Rotation preserves original image paths and PNG transparency. | Staging/undo widget tests, asymmetric image-orientation and transparent PNG tests; fresh CI and device verification pending |
 | `0.5.22` | Tools → Import File now offers device PDF and images rather than a placeholder toast. The imported pages are saved locally and the result opens in document preview. | UI/native-picker cancellation regression added; CI pending, physical Android SAF and large PDF tests remain |
 | `0.5.23` | Tools → Image to PDF now selects/gallery-imports photos, selects and reorders pages, previews an actual multi-page A4 PDF, supports editable output name, Save PDF via Android SAF and Share PDF. | UI selection/order/export tests and file-name tests added; CI and Android Save As integration pending |
+| `0.5.24` | Live green quad stability follow-up: faint green fill is actually enabled on the Single/Batch camera; identity smoother resets outlier streaks after missing frames and prevents a coherent delayed border challenger from making the box blink before confirmation. | Two synthetic regression tests added; CI and HONOR Android 16 video/CPU acceptance pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -72,6 +73,12 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.24 — Live quad jitter/blink follow-up
+
+- `camera_screen.dart` still requested `QuadOverlayStyle.outline` even though the user had asked for a pale green accepted-quad interior in the Scan preview. Normal Scan/Batch now uses the filled outline style with a very low alpha, without painting an all-screen reticle or changing document-detection inputs.
+- The identity-aware `QuadSmoother` had a mismatch between a six-frame stale-box hide threshold and its eight-frame confirmation for a coherent frame-edge challenger: the box could blink off for two frames, then suddenly return as the challenger. A consistent contender now stays in the confirmation state without that intermediate blank. Alternating/unstable contenders still hide after the configured miss threshold.
+- A missing/invalid detection now resets the incompatible-candidate streak. Isolated false contours separated by missed detections cannot cumulatively cause the old outline to disappear. Synthetic tests cover both the default border-delay behavior and interrupted mismatch sequences. Real camera accuracy and device framerate have **not** been measured; this is not a claim of CamScanner algorithm equivalence.
 
 ### 0.5.23 — Image to PDF conversion and export
 
