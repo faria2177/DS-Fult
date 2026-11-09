@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.20+34` candidate; hardware verification pending.
+**Baseline:** `0.5.21+35` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -38,6 +38,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 | R-010 | Long image preview/print fidelity | `0.5.18` adds a preview, an opt-in watermark footer, local Save as New, individual-page image share, paginated A4 PDF share and Android Gallery export. Confirm image orientation, output pixel dimensions, long-receipt readability, MediaStore permissions and share receivers on HONOR Android 16. Direct import of arbitrary external PDFs is not supported by this image-backed conversion flow (K-008). |
 | R-011 | PDF import and rasterization | `0.5.19` imports device PDFs via Storage Access Framework and rasterizes up to 80 pages at 150 DPI, using a private temporary copy capped at 80 MB. Verify permission handling, cancellation, password-protected PDFs, complex embedded fonts, rotated/landscape pages and OCR-uncertain output on HONOR Android 16. Original PDF vector/text layers are not preserved in JPG/PNG. |
 | R-012 | Extract PDF Pages preview and copy | `0.5.20` uses the same PDF/gallery source selection, image-backed thumbnails and per-page selection. Verify that zoom/selection hit targets work on small Android screens, extracts from a real imported PDF keep the correct page order, and source documents remain unchanged. The extracted copy is image-based, not a native PDF vector extraction. |
+| R-013 | Rotate Pages preview and saved orientation | `0.5.21` adds multi-page staged rotation, zoom, and batch image replacement for selected pages. Verify the direction, EXIF orientation, long-page legibility, PNG transparency, memory/latency and resulting image/PDF orientation on HONOR Android 16. Existing app index writes remain non-atomic (K-009), and the old originals remain stored for recovery. |
 
 ## Intentional exclusions (not bugs)
 
@@ -48,7 +49,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.19+33` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42549661898](https://github.com/faria2177/DS-Fult/actions/runs/42549661898). The new `0.5.20+34` Extract PDF Pages flow requires fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
+The latest verified baseline `0.5.20+34` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42552472493](https://github.com/faria2177/DS-Fult/actions/runs/42552472493). The new `0.5.21+35` Rotate Pages flow requires fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

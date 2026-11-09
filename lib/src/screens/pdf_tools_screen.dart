@@ -7,6 +7,8 @@ import '../storage/document_store.dart';
 import '../theme.dart';
 import 'compress_screen.dart';
 import 'extract_pdf_pages_screen.dart';
+import 'rotate_pages_screen.dart';
+import 'document_detail_screen.dart';
 
 /// Organize and export the current image-backed document as a PDF.
 class PdfToolsScreen extends StatefulWidget {
@@ -29,6 +31,23 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
       builder: (_) => ExtractPdfPagesScreen(
           store: widget.store, documentId: doc.id),
     ));
+  }
+
+  Future<void> _rotate() async {
+    final doc = widget.store.byId(widget.documentId);
+    if (doc == null || doc.pages.isEmpty) return;
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => RotatePagesScreen(
+        store: widget.store, documentId: doc.id,
+      ),
+    ));
+    if (saved == true && mounted) {
+      await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => DocumentDetailScreen(
+          store: widget.store, documentId: doc.id,
+        ),
+      ));
+    }
   }
 
   Future<void> _watermark() async {
@@ -118,6 +137,9 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
               OutlinedButton.icon(onPressed: _busy ? null : _extract,
                   icon: const Icon(Icons.file_copy_outlined),
                   label: const Text('Extract Pages')),
+              OutlinedButton.icon(onPressed: _busy ? null : _rotate,
+                  icon: const Icon(Icons.rotate_right),
+                  label: const Text('Rotate Pages')),
               OutlinedButton.icon(onPressed: _busy ? null : _compress,
                   icon: const Icon(Icons.compress),
                   label: const Text('Compress PDF')),

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models.dart';
+import '../services/image_processor.dart';
 
 /// Local-only storage: the image files and index never leave the device.
 class DocumentStore extends ChangeNotifier {
@@ -119,6 +120,73 @@ class DocumentStore extends ChangeNotifier {
           clearWatermark: !asWatermark);
     }).toList(growable: false);
     await _replace(doc.copyWith(pages: pages));
+  }
+
+  /// Apply all selected clockwise quarter-turns in one document-index update.
+  /// The caller stages rotations in the UI; no saved page changes until this
+  /// method is explicitly called. Original captures remain available for crop
+  /// recovery and no existing backing image is overwritten.
+  Future<void> rotatePages(
+      String documentId, Map<String, int> clockwiseQuarterTurns) async {
+    final document = byId(documentId);
+    if (document == null) throw StateError('Document not found');
+    if (document.lockHash != null) {
+      throw StateError('Unlock this document before rotating pages');
+    }
+    final ids = document.pages.map((page) => page.id).toSet();
+    if (clockwiseQuarterTurns.keys.any((id) => !ids.contains(id))) {
+      throw ArgumentError('Rotation includes a page outside this document');
+    }
+    final turns = <String, int>{};
+    for (final entry in clockwiseQuarterTurns.entries) {
+      final normalized = entry.value % 4;
+      if (normalized != 0) turns[entry.key] = normalized;
+    }
+    if (turns.isEmpty) return;
+
+    final newPaths = <String>[];
+    final replacements = <String, String>{};
+    var committing = false;
+    try {
+      for (final page in document.pages) {
+        final quarters = turns[page.id];
+        if (quarters == null) continue;
+        final bytes = await File(page.path).readAsBytes();
+        final preservePng = p.extension(page.path).toLowerCase() == '.png';
+        final rotated = await ImageProcessor.process(
+          bytes, rotateDegrees: quarters * 90, outputPng: preservePng,
+        );
+        final destination = p.join(_images.path,
+            '${_uuid.v4()}${preservePng ? '.png' : '.jpg'}');
+        newPaths.add(destination);
+        await File(destination).writeAsBytes(rotated, flush: true);
+        replacements[page.id] = destination;
+      }
+      // Keep previous images and originalPath references intact. All changed
+      // page records are committed in one persist operation.
+      committing = true;
+      await _replace(document.copyWith(pages: [
+        for (final page in document.pages)
+          replacements.containsKey(page.id)
+              ? page.copyWith(path: replacements[page.id], clearWatermark: true)
+              : page,
+      ]));
+    } catch (_) {
+      // If staging fails, none of the stored page records was touched. Do not
+      // delete prepared images after a failed index commit: in-memory records
+      // may already refer to them and are safer to recover than missing files.
+      if (!committing) {
+        for (final path in newPaths) {
+          try {
+            final file = File(path);
+            if (await file.exists()) await file.delete();
+          } catch (_) {
+            // Leave an unreachable staging file rather than hide the error.
+          }
+        }
+      }
+      rethrow;
+    }
   }
 
   /// Restore the image from just before the last watermark. Other edits clear

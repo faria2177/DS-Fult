@@ -81,6 +81,7 @@ class ImageProcessor {
     CropQuad? crop,
     ScanFilter filter = ScanFilter.original,
     int rotateDegrees = 0,
+    bool outputPng = false,
   }) async {
     if (crop == null && filter == ScanFilter.original && rotateDegrees == 0) {
       return source;
@@ -90,6 +91,7 @@ class ImageProcessor {
       'crop': crop?.toData(),
       'filter': filter.name,
       'rotate': rotateDegrees,
+      'outputPng': outputPng,
     });
   }
 }
@@ -112,7 +114,9 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
   }
   final filter = ScanFilter.values.byName(options['filter'] as String);
   if (filter != ScanFilter.original) image = _filterImage(image, filter);
-  return Uint8List.fromList(img.encodeJpg(image, quality: 94));
+  return Uint8List.fromList(options['outputPng'] == true
+      ? img.encodePng(image)
+      : img.encodeJpg(image, quality: 94));
 }
 
 img.Image _filterImage(img.Image input, ScanFilter filter) {

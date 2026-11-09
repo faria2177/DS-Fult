@@ -42,6 +42,44 @@ void main() {
     expect(result.height, greaterThan(30));
   });
 
+  test('Page rotation changes dimensions and preserves corner orientation', () async {
+    final input = img.Image(width: 80, height: 50);
+    img.fill(input, color: img.ColorRgb8(240, 240, 240));
+    for (var y = 0; y < 18; y++) {
+      for (var x = 0; x < 18; x++) {
+        input.setPixelRgb(x, y, 245, 10, 10);
+        input.setPixelRgb(79 - x, 49 - y, 10, 10, 245);
+      }
+    }
+    final source = Uint8List.fromList(img.encodePng(input));
+    final right = img.decodeImage(await ImageProcessor.process(
+      source, rotateDegrees: 90,
+    ))!;
+    expect((right.width, right.height), (50, 80));
+    // A clockwise turn moves the original top-left red mark to top-right.
+    expect(right.getPixel(42, 8).r, greaterThan(180));
+    expect(right.getPixel(8, 72).b, greaterThan(180));
+
+    final halfTurn = img.decodeImage(await ImageProcessor.process(
+      source, rotateDegrees: 180,
+    ))!;
+    expect((halfTurn.width, halfTurn.height), (80, 50));
+    expect(halfTurn.getPixel(72, 42).r, greaterThan(180));
+    expect(halfTurn.getPixel(8, 8).b, greaterThan(180));
+  });
+
+  test('PNG rotation retains transparency for background-removed pages', () async {
+    final input = img.Image(width: 18, height: 30, numChannels: 4);
+    img.fill(input, color: img.ColorRgba8(255, 0, 0, 0));
+    input.setPixelRgba(1, 1, 15, 200, 40, 255);
+    final result = img.decodePng(await ImageProcessor.process(
+      Uint8List.fromList(img.encodePng(input)),
+      rotateDegrees: 90, outputPng: true,
+    ))!;
+    expect((result.width, result.height), (30, 18));
+    expect(result.getPixel(10, 10).a, 0);
+  });
+
   test('Convex skewed document corners are accepted', () {
     final quad = CropQuad(const [
       Offset(.08, .18), Offset(.88, .06),

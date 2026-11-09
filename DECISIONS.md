@@ -140,6 +140,14 @@
 **Consequences:** A real PDF is rasterized before this extraction using ADR-016, so editable PDF text/vector structure is not preserved. Thumbnail scrolling and extract/save navigation need physical Android 16 checks.
 **Related:** `extract_pdf_pages_screen.dart`, `home_shell.dart`, `pdf_tools_screen.dart`, `document_store.dart` and widget tests.
 
+## ADR-018 — Stage page rotation and persist one document update
+
+**Status:** Accepted for `0.5.21`; Android device acceptance pending.
+**Decision:** Tools → Rotate PDF and PDF Tools → Rotate Pages lead to the same multi-select, image-backed page preview. Left/Right/180°/Reset operate solely on staged quarter-turns; Cancel/Back discard them. Done transforms only net-changed pages, retains original capture paths and unchanged page IDs/order, and replaces the complete list of changed page records in a single index persist. Prepared page images are written separately to avoid overwriting the prior versions. Preserve PNG alpha rather than flattening transparency to JPEG.
+**Why:** Video `381565.mp4` shows visual selection, direction controls and a confirmation phase; the former Tools route only opened the document viewer. Batch saving prevents partially applied page rotations when decoding fails midway.
+**Consequences:** Original file paths stay available for recovery, which can increase local storage; interrupted index writes retain the existing K-009 risk. Large rotated pages may take time, and imported PDFs are rasterized first. UI and export orientation require on-device review.
+**Related:** `rotate_pages_screen.dart`, `document_store.dart`, `image_processor.dart`, `home_shell.dart`, `pdf_tools_screen.dart`, page-rotation tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

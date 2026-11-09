@@ -29,6 +29,7 @@ import 'pdf_to_images_screen.dart';
 import 'photo_studio_screen.dart';
 import 'qr_code_screen.dart';
 import 'reorder_pages_screen.dart';
+import 'rotate_pages_screen.dart';
 import 'scan_more_settings_screen.dart';
 import 'smart_erase_screen.dart';
 import 'signature_screen.dart';
@@ -328,7 +329,7 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Reorder Pages', Icons.swap_vert, () => _openExisting('reorder')),
         _Tool('Extract PDF Pages', Icons.content_copy_outlined, _extractPdfPages),
         _Tool('Rotate PDF', Icons.rotate_90_degrees_ccw_outlined,
-            () => _openExisting('document')),
+            _rotatePdfPages),
         _Tool('Lock PDF', Icons.lock_outline, () => _openExisting('lock')),
         _Tool('Compress PDF', Icons.compress, () => _openExisting('compress')),
       ],
@@ -714,6 +715,22 @@ class _HomeShellState extends State<HomeShell> {
       builder: (_) => ExtractPdfPagesScreen(
           store: widget.store, documentId: doc.id),
     ));
+  }
+
+  Future<void> _rotatePdfPages() async {
+    final doc = await _chooseVideoDocument('Rotate Pages',
+      'Select one or more pages and rotate them before saving.',
+      Icons.rotate_90_degrees_ccw_outlined,
+      allowGallery: true,
+      allowPdf: true,
+    );
+    if (doc == null || !mounted) return;
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => RotatePagesScreen(
+        store: widget.store, documentId: doc.id,
+      ),
+    ));
+    if (saved == true && mounted) await _open(doc.id);
   }
 
   Future<void> _openPhotoStudio(PhotoStudioMode mode) async {

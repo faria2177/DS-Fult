@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.20+34`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42549661898](https://github.com/faria2177/DS-Fult/actions/runs/42549661898)
-**Baseline commit:** [`58cdb24`](https://github.com/faria2177/DS-Fult/commit/58cdb24167e60a188dcfc1b7a8f75088742f8f28)
+**Current candidate release:** `0.5.21+35`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42552472493](https://github.com/faria2177/DS-Fult/actions/runs/42552472493)
+**Baseline commit:** [`0cda067`](https://github.com/faria2177/DS-Fult/commit/0cda06721bd2f5298c97d5c0da6de20cc94000b8)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -39,6 +39,7 @@
 | `0.5.18` | `381562.mp4` PDF to Long Image workflow: source/gallery picker, scrollable stitched preview, optional watermark footer, Save as New, Share Image, Share as PDF, Share as Images and Save to Gallery. Very tall PDF exports are paginated onto readable A4 sheets. | Synthetic image/PDF and screen tests added; CI and Android Gallery/share verification pending |
 | `0.5.19` | `381560.mp4` PDF to Images: Android Storage Access Framework PDF picker, offline PDF rasterization into image-backed pages, selected-page preview, JPG/PNG export, Save as New/Share/Save to Gallery. Existing document pages also work. | Dart selection and transcode tests; native picker and physical-device verification pending |
 | `0.5.20` | `381564.mp4` Extract PDF Pages: direct source/gallery/PDF selection, page preview and checkboxes, select all/clear all, Extract as New Document with opened result. Existing PDF Tools extract action also routes to the same screen. | Widget tests for selective extraction/order and original preservation; CI and Android UI verification pending |
+| `0.5.21` | `381565.mp4` Rotate Pages: Tools/PDF Tools source → multi-select page thumbnails → 90° left/right, 180°, reset, zoom preview → explicit Done to update only changed pages and open document. Rotation preserves original image paths and PNG transparency. | Staging/undo widget tests, asymmetric image-orientation and transparent PNG tests; fresh CI and device verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -69,6 +70,13 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.21 — Video Rotate Pages (381565.mp4)
+
+- Tools → Rotate PDF previously opened the document viewer without a page rotation workspace. It now offers existing unlocked documents, Gallery images or a local PDF picker, followed by a visual page grid with Select All, multi-page rotation controls and per-page zoom.
+- Left 90°, Right 90°, 180° and Reset change **only local preview state**, including visible orientation badges. Cancel/Back does not write image files or the document index. Four successive quarter-turns cancel out, avoiding unnecessary JPEG re-encoding.
+- Done processes changed pages off the UI isolate, preserving original scans, page IDs and order. Files are staged before the updated page records are persisted as one document update; PNG pages retain transparency. Tools and PDF Tools open the updated document preview after Done.
+- Tests cover multi-select, rotation direction, Reset/Cancel/net-zero changes, PNG transparency and image corner orientation. Verify actual imported PDFs and Android file viewers on HONOR Android 16 before claiming end-to-end parity.
 
 ### 0.5.20 — Video Extract PDF Pages (381564.mp4)
 
