@@ -36,6 +36,7 @@ import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
 import 'watermark_screen.dart';
 import 'video_tool_source_picker.dart';
+import 'video_tool_style.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -58,6 +59,7 @@ class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   String _query = '';
   String _toolQuery = '';
+  bool _toolSearchOpen = false;
   bool _filesSelecting = false;
   final _picker = ImagePicker();
 
@@ -321,11 +323,13 @@ class _HomeShellState extends State<HomeShell> {
       'Scan': [
         _Tool('Scan', Icons.document_scanner_outlined, _capture),
         _Tool('ID Cards', Icons.badge_outlined, () => _openCard(DocumentKind.idCard)),
-        _Tool('Import Images', Icons.photo_library_outlined, _import),
-        _Tool('Import File', Icons.upload_file_outlined, _importFile),
         _Tool('Extract Text', Icons.text_fields, _startOcr),
         _Tool('Passport Photo Maker', Icons.portrait_outlined,
             () => _openPhotoStudio(PhotoStudioMode.passport)),
+      ],
+      'Import': [
+        _Tool('Import Images', Icons.photo_library_outlined, _import),
+        _Tool('Import File', Icons.upload_file_outlined, _importFile),
       ],
       'Convert': [
         _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
@@ -357,25 +361,85 @@ class _HomeShellState extends State<HomeShell> {
         _Tool('Create QR Code', Icons.qr_code_2_outlined, _createQrCode),
       ],
     };
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 18, 16, 25), children: [
-      const Text('Tools', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 29)),
-      const SizedBox(height: 6),
-      const Text('Scan • Convert • Edit • Utilities', style: TextStyle(color: dsMuted)),
-      const SizedBox(height: 18),
-      TextField(
-        onChanged: (value) => setState(() => _toolQuery = value.trim().toLowerCase()),
-        decoration: InputDecoration(
-          hintText: 'Search all tools',
-          prefixIcon: const Icon(Icons.search),
-          filled: true,
-          fillColor: Theme.of(context).colorScheme.surface,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide.none),
+    const iconColors = [Color(0xFF20C7B0), Color(0xFF3D91FA),
+      Color(0xFF4EC4D7), Color(0xFFF08058)];
+    return Theme(data: VideoToolStyle.dark,
+      child: ColoredBox(color: VideoToolStyle.background,
+        child: ListView(padding: const EdgeInsets.fromLTRB(16, 18, 16, 25),
+          children: [
+      Row(children: [
+        const Expanded(child: Text('Tools', style: TextStyle(
+          fontWeight: FontWeight.bold, fontSize: 29,
+          color: Colors.white))),
+        TextButton.icon(onPressed: () => showDialog<void>(context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('What\'s New in DS'),
+            content: const Text('Editable Word conversion, on-device OCR, '
+              'PDF tools and modern document workflows.'),
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'))],
+          )),
+          icon: const Icon(Icons.article_outlined, size: 18),
+          label: const Text('What\'s New')),
+        IconButton(tooltip: 'Search tools',
+          onPressed: () => setState(() {
+            _toolSearchOpen = !_toolSearchOpen;
+            if (!_toolSearchOpen) _toolQuery = '';
+          }), icon: const Icon(Icons.search, color: Colors.white)),
+      ]),
+      if (_toolSearchOpen) ...[
+        const SizedBox(height: 8),
+        TextField(
+          onChanged: (value) => setState(() =>
+              _toolQuery = value.trim().toLowerCase()),
+          decoration: InputDecoration(
+            hintText: 'Search all tools',
+            prefixIcon: const Icon(Icons.search),
+            filled: true,
+            fillColor: VideoToolStyle.panel,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
+          ),
         ),
+      ],
+      const SizedBox(height: 17),
+      Container(
+        height: 132,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFFF3F8FF), Color(0xFFE8F5FE), Color(0xFFD2FFF1)]),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Stack(children: [
+          Positioned(right: 17, top: 19, child: Transform.rotate(
+            angle: -.12,
+            child: Container(width: 86, height: 86,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [
+                    Color(0xFF062641), Color(0xFF095C62)]),
+                border: Border.all(color: Colors.white, width: 5),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [BoxShadow(color: Color(0x3359D3CB),
+                  blurRadius: 16, offset: Offset(0, 6))]),
+              child: const Icon(Icons.auto_awesome,
+                size: 39, color: Color(0xFF73F6DD))),
+          )),
+          const Positioned(left: 20, top: 25, child: Text('DS AI ✦',
+            style: TextStyle(fontSize: 34, color: Color(0xFF131B23),
+                fontWeight: FontWeight.w800))),
+          const Positioned(left: 20, right: 99, bottom: 22,
+            child: Text('Smart document workflows for work and life.',
+              maxLines: 2, style: TextStyle(fontSize: 13,
+                color: Color(0xFF26383F)))),
+        ]),
       ),
+      const SizedBox(height: 18),
       for (final group in groups.entries) ...[
         if (group.value.any((tool) => tool.title.toLowerCase().contains(_toolQuery)))
-          Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: _sectionTitle(group.key)),
+          Padding(padding: const EdgeInsets.fromLTRB(9, 13, 9, 12),
+            child: Text(group.key, style: const TextStyle(color: Colors.white,
+              fontSize: 17, fontWeight: FontWeight.bold))),
         if (group.value.any((tool) => tool.title.toLowerCase().contains(_toolQuery)))
         GridView.builder(
           shrinkWrap: true,
@@ -394,18 +458,22 @@ class _HomeShellState extends State<HomeShell> {
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Container(
                   width: 49, height: 49,
-                  decoration: BoxDecoration(color: dsTeal.withValues(alpha: .10), borderRadius: BorderRadius.circular(15)),
-                  child: Icon(tool.icon, color: dsTeal, size: 26),
+                  decoration: BoxDecoration(
+                    color: iconColors[i % iconColors.length].withValues(alpha: .14),
+                    shape: BoxShape.circle),
+                  child: Icon(tool.icon, color: iconColors[i % iconColors.length],
+                    size: 25),
                 ),
                 const SizedBox(height: 7),
                 Text(tool.title, textAlign: TextAlign.center, maxLines: 2,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                    style: const TextStyle(fontSize: 11,
+                      color: Colors.white, fontWeight: FontWeight.w500)),
               ]),
             );
           },
         ),
       ],
-    ]);
+    ])));
   }
 
   Widget _meTab() => ListView(padding: const EdgeInsets.all(18), children: [
@@ -437,7 +505,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.26 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.27 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -642,6 +710,7 @@ class _HomeShellState extends State<HomeShell> {
     await Navigator.push<void>(context, MaterialPageRoute(
       builder: (_) => OfficeConversionScreen(
         document: document, toExcel: toExcel,
+        onTagsChanged: (tags) => widget.store.setTags(document.id, tags),
       ),
     ));
   }

@@ -391,7 +391,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
   Widget _editorTools() {
     final tools = switch (_editTab) {
       0 => <Widget>[
-        _editorTool(Icons.picture_as_pdf_outlined, 'CS PDF', _pdfTools),
+        _editorTool(Icons.picture_as_pdf_outlined, 'DS PDF', _pdfTools),
         _editorTool(Icons.crop_rotate, 'Crop', _crop),
         _editorTool(Icons.tune, 'Filter', () => setState(() => _editTab = 3)),
         _editorTool(Icons.text_fields, 'Edit Text', _ocr),

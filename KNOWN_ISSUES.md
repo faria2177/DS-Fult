@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.26+40` candidate; hardware verification pending.
+**Baseline:** `0.5.27+41` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -21,6 +21,8 @@ This list separates **confirmed implementation limits** from **risks that need p
 | K-011 | Public share links | Without a cloud host, DocScanner cannot generate a public document URL; local Android sharing is available. | Retain offline explanation unless cloud scope changes |
 | K-012 | BG Remover quality | The offline colour/flood-fill remover handles relatively uniform edge-connected backgrounds. It does not reconstruct hair, transparent objects or complex indoor scenes like an AI portrait segmentation model. | Evaluate a licensed on-device segmentation model only if quality requirements justify extra APK size and device cost |
 | K-013 | Passport photo acceptance | The presets set nominal pixel sizes at 300 DPI but cannot automatically verify face position, expression, lighting or country-specific biometric requirements. Users must manually frame and confirm photos before official use. | Add country-specific rule templates, face measurements and preview validation if requested |
+| K-014 | Word review vs original document | The video-inspired To Word editor displays OCR text on a styled page; original handwriting, fonts, signatures and exact layout are not reconstructed. DS Writing offers transparent rule-based cleanup, not generative AI. | Add offline structured layout/handwriting support after validated models |
+| K-015 | Edited-text PDF script support | To Word → Save as PDF currently supports Latin text through built-in PDF fonts. It rejects non-Latin/Bengali to avoid missing glyph boxes. DOCX preserves Bengali. Share as Images returns **original scan images**, not rasterized edited text. | Bundle/test licensed Unicode PDF font if needed |
 
 ## Device-dependent or unverified risks
 

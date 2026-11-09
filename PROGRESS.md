@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.26+40`
+**Current candidate release:** `0.5.27+41`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42567562071](https://github.com/faria2177/DS-Fult/actions/runs/42567562071)
 **Baseline commit:** [`4a237cf`](https://github.com/faria2177/DS-Fult/commit/4a237cfabebd363304b526ec77fd5a793cf1fa97)
 
@@ -45,6 +45,7 @@
 | `0.5.24` | Live green quad stability follow-up: faint green fill is actually enabled on the Single/Batch camera; identity smoother resets outlier streaks after missing frames and prevents a coherent delayed border challenger from making the box blink before confirmation. | Two synthetic regression tests added; CI and HONOR Android 16 video/CPU acceptance pending |
 | `0.5.25` | Scan/Batch filled green four-corner border increased from 2.5 to 3.5 logical pixels, retaining the delicate mint interior, manual shutter and existing tracking. | Constructor regression test added; APK/real-camera visual verification pending |
 | `0.5.26` | CamScanner-style tool workflows: Edit PDF page chooser with working edit/sign/watermark/rotate/reorder/extract/compress/print/share actions; Sign UI adds ink palette and pen-size controls; To Word/To Excel use PDF/gallery/app source picker, page selection, offline OCR, editable review, real DOCX/XLSX export and Share. | New widget and table-parsing tests added; GitHub CI and physical Android device review pending |
+| `0.5.27` | `381709.mp4` DS visual identity: pastel DS AI Tools banner, dark four-column categories, local `Converting with DS AI` indicator, dedicated white-page To Word review with tap-to-edit, undo/redo, page switching, functional DS Formatting and rule-based DS Writing sheets, Word/PDF/original-image sharing, and CS PDF → DS PDF. | Widget regressions added; CI/device pixel comparison pending; Unicode text-PDF limited |
 
 ## Verified in the 0.5.10 CI run
 

@@ -6,15 +6,17 @@ import '../models.dart';
 import '../services/docx_export.dart';
 import '../services/xlsx_export.dart';
 import 'video_tool_style.dart';
+import 'word_review_screen.dart';
 
 /// Local OCR -> editable review -> genuine Office file -> Android share sheet.
 /// Selecting/recognizing here never rewrites the original document pages.
 class OfficeConversionScreen extends StatefulWidget {
   const OfficeConversionScreen({super.key, required this.document,
-      required this.toExcel});
+      required this.toExcel, this.onTagsChanged});
 
   final ScanDocument document;
   final bool toExcel;
+  final Future<void> Function(List<String>)? onTagsChanged;
 
   @override
   State<OfficeConversionScreen> createState() => _OfficeConversionScreenState();
@@ -66,6 +68,8 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
   Future<void> _recognize() async {
     if (_busy || _pages.isEmpty) return;
     setState(() => _busy = true);
+    List<String>? wordTexts;
+    ScanDocument? selectedDocument;
     try {
       final selectedPages = _pages;
       final texts = await DocxExport.recognizePageTexts(
@@ -77,8 +81,12 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
       for (var i = 0; i < selectedPages.length; i++) {
         _editors[selectedPages[i].id]!.text = texts[i];
       }
+      if (!widget.toExcel) {
+        wordTexts = texts;
+        selectedDocument = widget.document.copyWith(pages: selectedPages);
+      }
       setState(() {
-        _recognized = true;
+        _recognized = widget.toExcel;
         _currentPageId = selectedPages.first.id;
       });
     } catch (error) {
@@ -90,6 +98,11 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+    if (!mounted || wordTexts == null || selectedDocument == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => WordReviewScreen(document: selectedDocument!,
+        pageTexts: wordTexts!, onTagsChanged: widget.onTagsChanged),
+    ));
   }
 
   Future<void> _export() async {
@@ -209,7 +222,7 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
           label: const Text('Re-OCR'),
         ),
       ]),
-      body: SafeArea(child: Column(children: [
+      body: Stack(children: [SafeArea(child: Column(children: [
         if (_busy) const LinearProgressIndicator(color: VideoToolStyle.teal),
         Expanded(child: ListView(children: [
           Container(padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
@@ -324,6 +337,27 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
           )),
         ),
       ])),
+      if (_busy && !excel) Positioned.fill(child: ColoredBox(
+        color: const Color(0xEB1A1A1D),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Stack(alignment: Alignment.center, children: [
+              SizedBox(width: 92, height: 92,
+                child: CircularProgressIndicator(
+                  color: VideoToolStyle.teal, strokeWidth: 3)),
+              Icon(Icons.auto_awesome, color: VideoToolStyle.teal,
+                size: 38),
+            ]),
+            const SizedBox(height: 23),
+            const Text('Converting with DS AI', style: TextStyle(
+              color: Colors.white, fontSize: 19,
+              fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            const Text('Private, on-device text recognition',
+              style: TextStyle(color: VideoToolStyle.muted, fontSize: 12)),
+          ]),
+      )),
+      ]),
     ));
   }
 

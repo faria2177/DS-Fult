@@ -180,6 +180,12 @@
 **Consequences:** Text and table reconstruction remain limited by offline OCR and whitespace heuristics. Image-backed PDF edits do not keep vector/source text layers; drawn electronic signatures do not add certificate cryptography. UI accuracy, Android share destinations, OCR performance and Excel/Word fidelity need real-device acceptance.
 **Related:** `home_shell.dart`, `office_conversion_screen.dart`, `pdf_tools_screen.dart`, `signature_screen.dart`, `video_tool_source_picker.dart`, `docx_export.dart`, `xlsx_export.dart` and `office_conversion_workflow_test.dart`.
 
+## ADR-023 — Video-inspired DS Word workflow remains local and honest
+
+**Status:** Accepted for `0.5.27`; Android screenshot/receiver verification pending.
+
+The `381709.mp4` CamScanner reference informs the DS AI banner, transition indicator, white-page editable Word preview, local formatting and sharing sheets. Original Flutter widgets, not proprietary assets/code, implement the appearance. On-device OCR and real DOCX generation preserve edited text. DS Writing is clearly rule-based cleanup, no cloud or generative AI. Unsupported non-Latin text-to-PDF is rejected rather than silently dropping glyphs. Original scanned images remain unchanged by Word edits.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
