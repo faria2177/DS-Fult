@@ -22,6 +22,7 @@ import 'files_workspace.dart';
 import 'files_merge_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
+import 'image_to_pdf_screen.dart';
 import 'lock_document_screen.dart';
 import 'long_image_studio_screen.dart';
 import 'pdf_tools_screen.dart';
@@ -329,7 +330,7 @@ class _HomeShellState extends State<HomeShell> {
       ],
       'Convert': [
         _Tool('Merge PDF', Icons.merge_type, _mergeDocuments),
-        _Tool('Image to PDF', Icons.picture_as_pdf_outlined, _import),
+        _Tool('Image to PDF', Icons.picture_as_pdf_outlined, _imageToPdf),
         _Tool('Text to PDF', Icons.text_snippet_outlined, _textToPdf),
         _Tool('To Word', Icons.description_outlined, _exportWord),
         _Tool('To Excel', Icons.table_chart_outlined, _exportExcel),
@@ -733,6 +734,18 @@ class _HomeShellState extends State<HomeShell> {
     await Navigator.push<void>(context, MaterialPageRoute(
       builder: (_) => ExtractPdfPagesScreen(
           store: widget.store, documentId: doc.id),
+    ));
+  }
+
+  Future<void> _imageToPdf() async {
+    final doc = await _chooseVideoDocument('Image to PDF',
+      'Select photos or an existing document to create a PDF.',
+      Icons.picture_as_pdf_outlined,
+      allowGallery: true,
+    );
+    if (doc == null || !mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => ImageToPdfScreen(document: doc),
     ));
   }
 

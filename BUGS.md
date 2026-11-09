@@ -1,7 +1,7 @@
 # DocScanner — Bug and Regression Register
 
 **Last reviewed:** 2026-11-08  
-**Baseline:** `0.5.22+36` (candidate; physical-device verification pending)
+**Baseline:** `0.5.23+37` (candidate; physical-device verification pending)
 **Scope:** Reproducible failures, historical regressions and their fix status. Potential limitations belong in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), not automatically in the Open list.
 
 ## Status rules
@@ -30,6 +30,7 @@
 | B-006 | Long-press Files selection action/checkmark visibility and bottom-bar overlap | `0.5.5`: selection controls, safe-area-aware Files navigation | FIX IN CODE — device pending | Select 1 and many files on Android 16 with gesture/3-button navigation |
 | B-008 | Video `381334.mp4`: ID card over a bank form is cropped with background strips and clipped text; final A4 cards are oversized | `0.5.11`: card-aware native quad ranking, safe original-image re-crop and smaller A4 print slots | FIX IN CODE — CI verified; device pending | On HONOR VKP-NX9, scan both sides over a busy form, inspect corners, adjust/reopen Crop, verify no lost text and one-page PDF |
 | B-009 | Video `381360.mp4` and image `381362.jpg`: Single Scan live preview outlines the portrait letter, but captured still selects only the middle horizontal text band; Reset/Continue buttons are too close to Android navigation bar | `0.5.12`: preserve full still on suspicious inner strip; use recent live outline only as an editable hint and put corner controls inside SafeArea. `0.5.13`: add a separate still-image background/paper mask and more complete outer-page candidate search to recover automatic cropping where safe | FIX IN CODE — 0.5.12 CI verified, 0.5.13 CI/device pending | Scan same letter on HONOR VKP-NX9: header, closing and signature must remain visible; verify automatically cropped page or safe full-original review, plus reachable buttons and complete final output |
+| B-012 | Tools → Image to PDF only opened the ordinary image importer/editor without PDF Preview/Save/Share | `0.5.23`: explicit selected-page PDF builder, preview, SAF Save As and Share | FIX IN CODE — CI/device pending | Convert 2–3 pictures, reorder, Save as PDF to Downloads and reopen in a PDF viewer; confirm page count and preserved originals |
 
 ## Resolved build/publishing incident
 

@@ -156,6 +156,14 @@
 **Consequences:** PDF vector text and fonts are not preserved; the import is a local image-backed document. DOCX/PPTX are not supported in this flow. Native SAF intent, cancellation, large files and file readability need Android 16 verification.
 **Related:** `home_shell.dart`, `video_tool_source_picker.dart`, `pdf_import_service.dart`, picker widget tests.
 
+## ADR-020 — Image to PDF writes only to explicitly chosen destinations
+
+**Status:** Accepted for `0.5.23`; CI and device acceptance pending.
+**Decision:** Tools → Image to PDF selects/gallery-imports pictures, stages selected-page order and builds an independent image-backed A4 PDF via the existing offline exporter. Use an inline PDF viewer for preview, Android `ACTION_CREATE_DOCUMENT` for a real user-chosen PDF save destination, and Android share targets for sharing. The native Save As bridge accepts only PDFs produced in DocScanner app cache and copies the bytes to the explicitly selected `content://` URI; cancellation is a non-save. Do not overwrite original images or add broad storage permissions.
+**Why:** The previous Tools action imported images but never produced the requested PDF. A cache-only PDF is not a durable saved document, so the explicit SAF destination is needed to satisfy Save PDF.
+**Consequences:** Imported/source photos remain in the DocScanner image-backed library; a saved PDF is a separate external file, not editable vector text. Android providers, PDF viewer, high-page-count memory and sharing receivers need real-device verification. No encryption or cloud hosting is implied.
+**Related:** `image_to_pdf_screen.dart`, `document_export.dart`, `pdf_file_delivery.dart`, `DoclensPlugin.kt` and widget tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

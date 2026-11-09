@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.22+36`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42553909768](https://github.com/faria2177/DS-Fult/actions/runs/42553909768)
-**Baseline commit:** [`afa8297`](https://github.com/faria2177/DS-Fult/commit/afa82975777e3bb4016e99db38c406460f6c1456)
+**Current candidate release:** `0.5.23+37`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42556274183](https://github.com/faria2177/DS-Fult/actions/runs/42556274183)
+**Baseline commit:** [`51ebb53`](https://github.com/faria2177/DS-Fult/commit/51ebb531d4d0ac5a09eb2effc379c0f370c6e693)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -41,6 +41,7 @@
 | `0.5.20` | `381564.mp4` Extract PDF Pages: direct source/gallery/PDF selection, page preview and checkboxes, select all/clear all, Extract as New Document with opened result. Existing PDF Tools extract action also routes to the same screen. | Widget tests for selective extraction/order and original preservation; CI and Android UI verification pending |
 | `0.5.21` | `381565.mp4` Rotate Pages: Tools/PDF Tools source → multi-select page thumbnails → 90° left/right, 180°, reset, zoom preview → explicit Done to update only changed pages and open document. Rotation preserves original image paths and PNG transparency. | Staging/undo widget tests, asymmetric image-orientation and transparent PNG tests; fresh CI and device verification pending |
 | `0.5.22` | Tools → Import File now offers device PDF and images rather than a placeholder toast. The imported pages are saved locally and the result opens in document preview. | UI/native-picker cancellation regression added; CI pending, physical Android SAF and large PDF tests remain |
+| `0.5.23` | Tools → Image to PDF now selects/gallery-imports photos, selects and reorders pages, previews an actual multi-page A4 PDF, supports editable output name, Save PDF via Android SAF and Share PDF. | UI selection/order/export tests and file-name tests added; CI and Android Save As integration pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -71,6 +72,13 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.23 — Image to PDF conversion and export
+
+- Before this change Tools → Image to PDF only imported photos and opened the regular page editor; no PDF conversion/export destination was offered. The new flow selects photos or an existing unlocked image-backed document, lets the user include/exclude individual pages and reorder them with a drag handle or up/down arrows, then generates a separate PDF for preview and export.
+- **Preview PDF** uses the existing offline PDF renderer. **Save PDF** opens Android's standard `ACTION_CREATE_DOCUMENT` Save As dialog and writes a real `.pdf` to the user-chosen folder, returning without a success toast if cancelled. **Share PDF** sends an `application/pdf` attachment through the Android share sheet.
+- A native bridge only accepts generated PDFs staged within app cache before writing to the user-selected SAF URI; no broad storage permission or cloud service is needed. User-edited PDF filename is sanitized and `.pdf` is not appended twice.
+- Image content is placed on individual A4 PDF pages, regardless of the original document kind. Deselect/reorder and preview leave the source scans untouched. Screen tests cover selection/reorder/export order, filename normalization, cancelled Save As and original-page preservation. Android 16 destination providers, large-image memory and PDF rendering remain to be verified physically.
 
 ### 0.5.22 — Tools Import File
 

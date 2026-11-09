@@ -32,6 +32,7 @@ import java.util.concurrent.Executors
 
 private const val CAMERA_PERMISSION_REQUEST = 0x4F4E
 private const val PDF_PICK_REQUEST = 0x5044
+private const val PDF_SAVE_REQUEST = 0x5045
 private const val MAX_PDF_IMPORT_BYTES = 80L * 1024 * 1024
 
 class DoclensPlugin :
@@ -59,6 +60,7 @@ class DoclensPlugin :
     private var nativeUIScanner: NativeUIScanner? = null
     private var levelStream: DeviceLevelStream? = null
     private var pendingPdfPick: MethodChannel.Result? = null
+    private var pendingPdfSave: Pair<MethodChannel.Result, String>? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -168,6 +170,7 @@ class DoclensPlugin :
                 }
             }
             "pickPdfFile" -> pickPdfFile(result)
+            "savePdfFile" -> savePdfFile(call, result)
             "pinDocumentShortcut" -> {
                 val id = call.argument<String>("documentId")
                 val title = call.argument<String>("title")
@@ -221,7 +224,73 @@ class DoclensPlugin :
         }
     }
 
+    /** Writes only a generated, app-cache PDF to a user-chosen SAF document. */
+    private fun savePdfFile(call: MethodCall, result: MethodChannel.Result) {
+        val foreground = activity
+        if (foreground == null) {
+            result.error("no_activity", "The PDF save dialog needs an active screen", null)
+            return
+        }
+        if (pendingPdfSave != null) {
+            result.error("save_busy", "A PDF save dialog is already open", null)
+            return
+        }
+        val source = call.argument<String>("sourcePath")?.let { File(it) }
+        val safe = try {
+            val cacheRoot = context.cacheDir.canonicalPath + File.separator
+            source != null && source.isFile &&
+                source.name.endsWith(".pdf", ignoreCase = true) &&
+                source.canonicalPath.startsWith(cacheRoot)
+        } catch (_: Exception) { false }
+        if (!safe || source == null) {
+            result.error("invalid_pdf", "Expected a generated PDF inside app cache", null)
+            return
+        }
+        val requested = call.argument<String>("fileName") ?: "DocScanner.pdf"
+        val basename = requested.replace(Regex("[\\\\/\\r\\n]"), "_")
+            .trim().take(100).ifBlank { "DocScanner.pdf" }
+        val filename = if (basename.endsWith(".pdf", ignoreCase = true)) basename
+            else "$basename.pdf"
+        pendingPdfSave = result to source.absolutePath
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_TITLE, filename)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+        try {
+            foreground.startActivityForResult(intent, PDF_SAVE_REQUEST)
+        } catch (error: Exception) {
+            pendingPdfSave = null
+            result.error("save_unavailable", error.message, null)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == PDF_SAVE_REQUEST) {
+            val pending = pendingPdfSave ?: return true
+            pendingPdfSave = null
+            val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
+            if (uri == null) {
+                pending.first.success(false)
+                return true
+            }
+            backgroundExecutor.execute {
+                try {
+                    val output = context.contentResolver.openOutputStream(uri, "wt")
+                        ?: throw IllegalStateException("Selected destination cannot be written")
+                    File(pending.second).inputStream().use { input ->
+                        output.use { input.copyTo(it) }
+                    }
+                    mainHandler.post { pending.first.success(true) }
+                } catch (error: Exception) {
+                    mainHandler.post {
+                        pending.first.error("pdf_save_failed", error.message, null)
+                    }
+                }
+            }
+            return true
+        }
         if (requestCode != PDF_PICK_REQUEST) return false
         val callback = pendingPdfPick ?: return true
         pendingPdfPick = null

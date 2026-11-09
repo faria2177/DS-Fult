@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.22+36` candidate; hardware verification pending.
+**Baseline:** `0.5.23+37` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -40,6 +40,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 | R-012 | Extract PDF Pages preview and copy | `0.5.20` uses the same PDF/gallery source selection, image-backed thumbnails and per-page selection. Verify that zoom/selection hit targets work on small Android screens, extracts from a real imported PDF keep the correct page order, and source documents remain unchanged. The extracted copy is image-based, not a native PDF vector extraction. |
 | R-013 | Rotate Pages preview and saved orientation | `0.5.21` adds multi-page staged rotation, zoom, and batch image replacement for selected pages. Verify the direction, EXIF orientation, long-page legibility, PNG transparency, memory/latency and resulting image/PDF orientation on HONOR Android 16. Existing app index writes remain non-atomic (K-009), and the old originals remain stored for recovery. |
 | R-014 | Tools Import File PDF/gallery integration | `0.5.22` routes Import File to image selection or Android SAF PDF import, reusing the bounded PDF-to-images engine. Verify native picker cancellation, large/image-heavy/password-protected PDFs, imported thumbnail preview and storage cleanup on HONOR Android 16. Office documents and arbitrary file types are not supported. |
+| R-015 | Image to PDF Save As and output | `0.5.23` uses Android's document-provider Save As dialog to persist an actual PDF; cancelling must not show a saved notification. Confirm provider compatibility, output name, image orientation/resolution, page order, PDF viewer and sharing on HONOR Android 16. High-resolution multipage PDFs can increase memory/CPU and file size; PDF pages are flattened bitmap images, not editable source objects. |
 
 ## Intentional exclusions (not bugs)
 
@@ -50,7 +51,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.21+35` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42553909768](https://github.com/faria2177/DS-Fult/actions/runs/42553909768). The new `0.5.22+36` Import File flow requires fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
+The latest verified baseline `0.5.22+36` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42556274183](https://github.com/faria2177/DS-Fult/actions/runs/42556274183). The new `0.5.23+37` Image to PDF Save As flow requires fresh CI and real-device tests. Automated checks **do not** prove live CameraX behavior, Android PDF picker permissions, PDFium fidelity, visual page selection or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 
