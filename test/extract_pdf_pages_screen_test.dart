@@ -52,16 +52,15 @@ void main() {
         find.byKey(const Key('extract-confirm')));
     expect(extract.onPressed, isNull);
 
-    // GridView.builder is lazy: Page 3 may not exist in the element tree
-    // until the page grid has been scrolled past the first row.
-    await tester.scrollUntilVisible(find.text('Page 3'), 220,
-        scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Page 3'));
+    // On the 800x600 test surface the first row's image thumbnails are
+    // visible, but their text labels can be underneath the fixed action bar.
+    // Tap inside each thumbnail, selecting page 2 before page 1, to verify
+    // extraction restores the document's original page order.
+    final cards = find.byType(Card);
+    await tester.tapAt(tester.getTopLeft(cards.at(1)) + const Offset(90, 90));
     await tester.pump();
     expect(find.text('1/3 selected'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Page 1'), -220,
-        scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Page 1'));
+    await tester.tapAt(tester.getTopLeft(cards.at(0)) + const Offset(90, 90));
     await tester.pump();
     expect(find.text('2/3 selected'), findsOneWidget);
     extract = tester.widget<FilledButton>(
@@ -70,10 +69,10 @@ void main() {
 
     await tester.tap(find.byKey(const Key('extract-confirm')));
     await tester.pump();
-    expect(store.selected, [0, 2]);
+    expect(store.selected, [0, 1]);
     expect(store.source.pages.length, 3);
     expect(store.extracted?.pages.map((page) => page.id).toList(),
-        ['one', 'three']);
+        ['one', 'two']);
   });
 
   testWidgets('select all and deselect all only alter staged selection',
