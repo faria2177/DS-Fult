@@ -20,15 +20,20 @@ class DocumentExport {
   static Future<int> saveImagesToGallery(ScanDocument document) async {
     var saved = 0;
     for (final page in document.pages) {
-      final success = await _galleryChannel.invokeMethod<bool>(
-          'saveImageToGallery', {'imagePath': page.path});
-      if (success != true) {
-        throw StateError('Could not save page ${saved + 1} to Gallery. '
-            'Android 10 or newer is required.');
-      }
+      await saveImageFileToGallery(page.path);
       saved++;
     }
     return saved;
+  }
+
+  /// Used by tools that create a new image but have not yet saved a document.
+  static Future<void> saveImageFileToGallery(String imagePath) async {
+    final success = await _galleryChannel.invokeMethod<bool>(
+        'saveImageToGallery', {'imagePath': imagePath});
+    if (success != true) {
+      throw StateError('Could not save image to Gallery. '
+          'Android 10 or newer is required.');
+    }
   }
   static Future<Uint8List> toPdf(
     ScanDocument document, {

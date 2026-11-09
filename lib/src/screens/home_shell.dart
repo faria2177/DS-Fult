@@ -9,7 +9,6 @@ import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/docx_export.dart';
-import '../services/image_tool_operations.dart';
 import '../services/scan_settings_store.dart';
 import '../services/xlsx_export.dart';
 import '../storage/document_store.dart';
@@ -23,6 +22,7 @@ import 'files_merge_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'lock_document_screen.dart';
+import 'long_image_studio_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'photo_studio_screen.dart';
 import 'qr_code_screen.dart';
@@ -415,7 +415,7 @@ class _HomeShellState extends State<HomeShell> {
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.17 • Md Jahidul Islam'),
+              subtitle: Text('Version 0.5.18 • Md Jahidul Islam'),
         )),
       ]);
 
@@ -681,13 +681,16 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _shareLongImage() async {
-    final doc = await _chooseDocument();
-    if (doc == null) return;
-    try {
-      await ImageToolOperations.shareLongImage(doc);
-    } catch (error) {
-      _message('Could not create long image: $error');
-    }
+    final doc = await _chooseVideoDocument('PDF to Long Image',
+      'Combine document pages into one long image.',
+      Icons.panorama_vertical_outlined,
+      allowGallery: true,
+    );
+    if (doc == null || !mounted) return;
+    await Navigator.push<void>(context, MaterialPageRoute(
+      builder: (_) => LongImageStudioScreen(
+          document: doc, store: widget.store),
+    ));
   }
 
   Future<void> _openPhotoStudio(PhotoStudioMode mode) async {

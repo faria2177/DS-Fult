@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.17+31`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42504186822](https://github.com/faria2177/DS-Fult/actions/runs/42504186822)
-**Baseline commit:** [`983ab13`](https://github.com/faria2177/DS-Fult/commit/983ab134c1632e465a4d0d4102b82eb330e4adfa)
+**Current candidate release:** `0.5.18+32`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42539302505](https://github.com/faria2177/DS-Fult/actions/runs/42539302505)
+**Baseline commit:** [`033cc83`](https://github.com/faria2177/DS-Fult/commit/033cc8312847505568b2454a1f0e444694925e3d)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -36,6 +36,7 @@
 | `0.5.15` | Video `381536.mp4`: fix controller's raw-quad fallback that resurrected rejected detections; reject camera-border contenders, delay abrupt border takeovers, add tiny-motion deadband and persistent pale-green fill inside accepted quad | Native/Flutter CI passed in #42488745515; physical-device confirmation pending |
 | `0.5.16` | Three functional on-device image tools: Passport Photo Maker (standard sizes, positioning, background colours, 4×6 print sheets), BG Remover (uniform-background flood fill, transparent/coloured PNG), Image Resizer (custom dimensions, ratio lock, quality and format); removed Edit Text and Split PDF from Tools only | Unit/widget regressions added; CI and real-photo verification pending |
 | `0.5.17` | The `381563.mp4` Extract Text follow-up: Tools/Quick OCR now uses the video-style document/gallery/scan source picker and opens a dedicated editable text screen directly. English/Latin and Bengali can be re-recognized separately, with Copy, Select All, Word and text sharing; document-image Edit Text remains distinct. | New widget tests and Word-content test; CI/device verification pending |
+| `0.5.18` | `381562.mp4` PDF to Long Image workflow: source/gallery picker, scrollable stitched preview, optional watermark footer, Save as New, Share Image, Share as PDF, Share as Images and Save to Gallery. Very tall PDF exports are paginated onto readable A4 sheets. | Synthetic image/PDF and screen tests added; CI and Android Gallery/share verification pending |
 
 ## Verified in the 0.5.10 CI run
 
@@ -66,6 +67,14 @@
 ## Next milestone definition
 
 The next release should close **at least one P0 task** in [TODO.md](TODO.md) with reproducible before/after evidence from the real device. Each code change needs `flutter analyze`, `flutter test`, relevant native tests and an APK build. Update this file, the issues register and the release version only after validation.
+
+### 0.5.18 — Video PDF to Long Image editing flow
+
+- The Tools action previously sent an existing image-backed document straight to the Android share sheet. Video `381562.mp4` instead shows a source-selection and **long-image preview** stage with a watermark switch and separate save/export choices.
+- The new `LongImageStudioScreen` accepts an unlocked existing document or images through the gallery-backed `VideoToolSourcePicker`. Preview and output are stitched on a background isolate; enabling the watermark appends a 56-pixel white footer with a small DocScanner label without covering the original content.
+- **Save as New** creates a separate image-backed document and opens its document detail; **Share Image** sends the stitched JPEG; **Share as Images** sends the original separate image pages; **Save to Gallery** uses Android MediaStore. No output is saved until explicitly requested.
+- **Share as PDF** slices the stitched result into consecutive readable A4 pages to avoid squeezing a very tall strip into one illegible A4 thumbnail. Original saved pages are not mutated. Existing direct long-image sharing from the Files/document menus still works unchanged.
+- *Scope limitation:* these flows operate on DocScanner's image-backed documents or newly imported images. Lossless rasterization of an arbitrary external PDF is still not implemented (K-008). Real-device output quality, long-receipt memory, Android Gallery and share receivers remain to be verified.
 
 ### 0.5.17 — Video Extract Text direct flow
 

@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.17+31` candidate; hardware verification pending.
+**Baseline:** `0.5.18+32` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -35,6 +35,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 | R-007 | APK size/third-party binaries | Native `.so` libraries and OCR/model assets increase APK size. Audit ABI packaging, binary provenance and license/redistribution rights before public distribution. Do not delete detector dependencies without dependency mapping. |
 | R-008 | General mode limits | UI allows many General pages, but very long sessions may use significant RAM and storage; test large batches on low-memory hardware. |
 | R-009 | Extract Text device OCR and share | `0.5.17` opens a direct editable text workflow and uses the offline Latin/Bengali recognizers. Verify actual OCR performance, Bengali model presence, keyboard/safe areas, clipboard, DOCX receivers and direct picker/camera transitions on HONOR Android 16. Edited OCR text is exported or copied explicitly; it does not silently rewrite the original document's saved transcript. |
+| R-010 | Long image preview/print fidelity | `0.5.18` adds a preview, an opt-in watermark footer, local Save as New, individual-page image share, paginated A4 PDF share and Android Gallery export. Confirm image orientation, output pixel dimensions, long-receipt readability, MediaStore permissions and share receivers on HONOR Android 16. Direct import of arbitrary external PDFs is not supported by this image-backed conversion flow (K-008). |
 
 ## Intentional exclusions (not bugs)
 
@@ -45,7 +46,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 
 ## What “verified” means
 
-The latest verified baseline `0.5.16+30` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42504186822](https://github.com/faria2177/DS-Fult/actions/runs/42504186822). The new `0.5.17+31` Extract Text flow requires a fresh CI run and real-device output testing. Automated checks **do not** prove live CameraX behavior, OCR fidelity, external share behavior or screenshot identity on a physical phone.
+The latest verified baseline `0.5.17+31` completed native tests, `flutter analyze`, `flutter test` and release APK building in [GitHub Actions #42539302505](https://github.com/faria2177/DS-Fult/actions/runs/42539302505). The new `0.5.18+32` Long Image flow requires a fresh CI run and real-device output testing. Automated checks **do not** prove live CameraX behavior, Gallery/MediaStore permissions, long-image memory stability, external share behavior or screenshot identity on a physical phone.
 
 ## Reporting a newly observed issue
 

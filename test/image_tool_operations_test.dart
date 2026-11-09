@@ -36,6 +36,41 @@ void main() {
     );
   });
 
+  test('long image watermark has its own footer and preserves page pixels', () {
+    final page = img.Image(width: 20, height: 15);
+    img.fill(page, color: img.ColorRgb8(210, 30, 30));
+    final input = Uint8List.fromList(img.encodePng(page));
+    final plain = img.decodeJpg(
+        ImageToolOperations.buildLongImageBytes([input]))!;
+    final marked = img.decodeJpg(
+        ImageToolOperations.buildLongImageBytes([input], watermark: true))!;
+
+    expect(plain.height, 825);
+    expect(marked.height, plain.height + 56);
+    expect(marked.getPixel(20, 20).r, greaterThan(180));
+    final footerPixel = marked.getPixel(10, marked.height - 10);
+    expect(footerPixel.r, greaterThan(220));
+    expect(footerPixel.g, greaterThan(220));
+  });
+
+  test('long image cannot be created without source pages', () {
+    expect(() => ImageToolOperations.buildLongImageBytes([]),
+        throwsFormatException);
+  });
+
+  test('long image PDF splits tall content into readable A4 pages', () async {
+    final page = img.Image(width: 20, height: 35);
+    img.fill(page, color: img.ColorRgb8(70, 120, 160));
+    final jpg = ImageToolOperations.buildLongImageBytes([
+      Uint8List.fromList(img.encodePng(page)),
+    ]);
+    final pdf = await ImageToolOperations.longImagePdfBytes(jpg);
+    expect(String.fromCharCodes(pdf.take(5)), '%PDF-');
+    final body = String.fromCharCodes(pdf);
+    expect(RegExp(r'/Type\s*/Page\b').allMatches(body).length,
+        greaterThan(1));
+  });
+
   test('collage lays out pages in a two-column grid', () {
     final red = img.Image(width: 30, height: 20);
     final blue = img.Image(width: 30, height: 20);

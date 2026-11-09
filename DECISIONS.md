@@ -116,6 +116,14 @@
 **Consequences:** Users choose explicit Copy, Share Text or To Word; native OCR still requires device testing. Reloading the source intentionally re-recognizes it; unsaved edits remain local to the current editor screen until exported.
 **Related:** `extract_text_screen.dart`, `home_shell.dart`, `docx_export.dart` and tests.
 
+## ADR-015 — Preview long images before a requested export
+
+**Status:** Accepted for `0.5.18`; CI/device verification pending.
+**Decision:** Keep existing direct long-image sharing from document-level menus, but make Tools → PDF to Long Image a separate source-picker and scrollable preview/editor flow. Use the same offline stitching engine with an optional, content-safe footer watermark. Provide explicit Save as New (no overwrite), Share Long Image, Share as Images (original separate source pages), Save to Gallery (Android MediaStore), and Share as PDF (continuation split into readable A4 pages). Do not present image-backed document input as arbitrary binary PDF import.
+**Why:** Video `381562.mp4` shows a preview and distinct save/share actions; instantly opening Share from Tools hid the content and omitted important decisions.
+**Consequences:** More decoded image memory for previews and PDF pagination; existing 15,500px safety cap remains. Validate MediaStore, tall receipts, source preservation and share receivers on device.
+**Related:** `long_image_studio_screen.dart`, `image_tool_operations.dart`, `document_export.dart`, `home_shell.dart` and tests.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
