@@ -83,6 +83,8 @@ void main() {
     )));
     await tester.tap(find.text('Tools'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Search tools'));
+    await tester.pumpAndSettle();
     final search = find.byType(TextField);
     expect(search, findsOneWidget);
     for (final name in const [

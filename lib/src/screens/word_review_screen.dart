@@ -71,7 +71,7 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
 
   Future<void> _editCurrent() async {
     if (_busy) return;
-    final controller = TextEditingController(text: _current);
+    var draft = _current;
     final updated = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -92,13 +92,14 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
                 TextButton(onPressed: () => Navigator.pop(sheetContext),
                     child: const Text('Cancel')),
                 FilledButton(key: const Key('word-apply-edit'),
-                  onPressed: () => Navigator.pop(sheetContext, controller.text),
+                  onPressed: () => Navigator.pop(sheetContext, draft),
                   child: const Text('Done')),
               ])),
             Expanded(child: Padding(padding: const EdgeInsets.all(14),
-              child: TextField(
+              child: TextFormField(
                 key: const Key('word-edit-field'),
-                controller: controller,
+                initialValue: draft,
+                onChanged: (value) => draft = value,
                 autofocus: true,
                 expands: true, minLines: null, maxLines: null,
                 textAlignVertical: TextAlignVertical.top,
@@ -115,7 +116,6 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
         )),
       ),
     );
-    controller.dispose();
     if (!mounted || updated == null) return;
     final next = List<String>.of(_texts)..[_page] = updated;
     _commit(next);
@@ -201,11 +201,12 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
   }
 
   Future<void> _editTags() async {
-    final controller = TextEditingController(text: _tags.join(', '));
+    var draft = _tags.join(', ');
     final tags = await showDialog<String>(context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Document tags'),
-        content: TextField(controller: controller, autofocus: true,
+        content: TextFormField(initialValue: draft, autofocus: true,
+          onChanged: (value) => draft = value,
           decoration: const InputDecoration(
             labelText: 'Tags separated by commas',
             border: OutlineInputBorder())),
@@ -213,11 +214,10 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
           TextButton(onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel')),
           FilledButton(onPressed: () =>
-              Navigator.pop(dialogContext, controller.text),
+              Navigator.pop(dialogContext, draft),
             child: const Text('Save')),
         ],
       ));
-    controller.dispose();
     if (!mounted || tags == null) return;
     final next = tags.split(',').map((tag) => tag.trim())
         .where((tag) => tag.isNotEmpty).toSet().toList();
