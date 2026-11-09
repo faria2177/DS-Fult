@@ -92,6 +92,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(find.byKey(const Key('ai-mode-switch')))
         .value, isTrue);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('ai-provider-groq')), 180,
+    );
+    await tester.ensureVisible(find.byKey(const Key('ai-provider-groq')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('ai-provider-groq')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('ai-remove-key')));
