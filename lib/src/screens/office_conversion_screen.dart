@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/docx_export.dart';
 import '../services/xlsx_export.dart';
+import 'excel_review_screen.dart';
 import 'video_tool_style.dart';
 import 'word_review_screen.dart';
 
@@ -68,7 +69,7 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
   Future<void> _recognize() async {
     if (_busy || _pages.isEmpty) return;
     setState(() => _busy = true);
-    List<String>? wordTexts;
+    List<String>? reviewTexts;
     ScanDocument? selectedDocument;
     try {
       final selectedPages = _pages;
@@ -81,12 +82,10 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
       for (var i = 0; i < selectedPages.length; i++) {
         _editors[selectedPages[i].id]!.text = texts[i];
       }
-      if (!widget.toExcel) {
-        wordTexts = texts;
-        selectedDocument = widget.document.copyWith(pages: selectedPages);
-      }
+      reviewTexts = texts;
+      selectedDocument = widget.document.copyWith(pages: selectedPages);
       setState(() {
-        _recognized = widget.toExcel;
+        _recognized = false;
         _currentPageId = selectedPages.first.id;
       });
     } catch (error) {
@@ -98,10 +97,13 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (!mounted || wordTexts == null || selectedDocument == null) return;
+    if (!mounted || reviewTexts == null || selectedDocument == null) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => WordReviewScreen(document: selectedDocument!,
-        pageTexts: wordTexts!, onTagsChanged: widget.onTagsChanged),
+      builder: (_) => widget.toExcel
+          ? ExcelReviewScreen(document: selectedDocument!,
+              pageTexts: reviewTexts!, onTagsChanged: widget.onTagsChanged)
+          : WordReviewScreen(document: selectedDocument!,
+              pageTexts: reviewTexts!, onTagsChanged: widget.onTagsChanged),
     ));
   }
 
@@ -337,7 +339,7 @@ class _OfficeConversionScreenState extends State<OfficeConversionScreen> {
           )),
         ),
       ])),
-      if (_busy && !excel) Positioned.fill(child: ColoredBox(
+      if (_busy) Positioned.fill(child: ColoredBox(
         color: const Color(0xEB1A1A1D),
         child: Column(mainAxisAlignment: MainAxisAlignment.center,
           children: [

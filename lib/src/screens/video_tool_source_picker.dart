@@ -109,7 +109,9 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final excelReference = widget.title == 'To Excel' && !widget.light;
     final wordReference = widget.title == 'To Word' && !widget.light;
+    final officeReference = wordReference || excelReference;
     final light = widget.light;
     final muted = light ? const Color(0xFF656877) : VideoToolStyle.muted;
     final headerColor = light ? const Color(0xFFF7F8FB) : VideoToolStyle.header;
@@ -140,7 +142,7 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                     Expanded(child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(wordReference ? 'To Word ✦' : widget.title,
+                        Text(officeReference ? '${widget.title} ✦' : widget.title,
                           style: TextStyle(color: ink,
                           fontSize: 28, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 8),
@@ -148,7 +150,7 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                           color: muted, fontSize: 13)),
                       ],
                     )),
-                    if (wordReference)
+                    if (officeReference)
                       Container(width: 108, height: 115,
                         color: Colors.white,
                         child: Stack(children: [
@@ -171,9 +173,10 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                               ])),
                           Positioned(left: -2, top: 34,
                             child: Container(width: 36, height: 36,
-                              color: const Color(0xFF008DD5),
+                              color: excelReference ? const Color(0xFF129A5B)
+                                  : const Color(0xFF008DD5),
                               alignment: Alignment.center,
-                              child: const Text('W', style: TextStyle(
+                              child: Text(excelReference ? 'X' : 'W', style: const TextStyle(
                                 color: Colors.white, fontSize: 22,
                                 fontWeight: FontWeight.bold)))),
                         ]),
@@ -196,7 +199,7 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
                 Text('Create or Import', style: TextStyle(color: muted,
                     fontWeight: FontWeight.w500)),
                 const SizedBox(height: 12),
-                if (wordReference) ...[
+                if (officeReference) ...[
                   Row(children: [
                     Expanded(child: _referenceSourceTile('Scan',
                       Icons.camera_alt, () {

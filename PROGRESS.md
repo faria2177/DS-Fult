@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-09
-**Current candidate release:** `0.5.27+41`
+**Current candidate release:** `0.5.28+42`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42567562071](https://github.com/faria2177/DS-Fult/actions/runs/42567562071)
 **Baseline commit:** [`4a237cf`](https://github.com/faria2177/DS-Fult/commit/4a237cfabebd363304b526ec77fd5a793cf1fa97)
 
@@ -46,6 +46,7 @@
 | `0.5.25` | Scan/Batch filled green four-corner border increased from 2.5 to 3.5 logical pixels, retaining the delicate mint interior, manual shutter and existing tracking. | Constructor regression test added; APK/real-camera visual verification pending |
 | `0.5.26` | CamScanner-style tool workflows: Edit PDF page chooser with working edit/sign/watermark/rotate/reorder/extract/compress/print/share actions; Sign UI adds ink palette and pen-size controls; To Word/To Excel use PDF/gallery/app source picker, page selection, offline OCR, editable review, real DOCX/XLSX export and Share. | New widget and table-parsing tests added; GitHub CI and physical Android device review pending |
 | `0.5.27` | `381709.mp4` DS visual identity: pastel DS AI Tools banner, dark four-column categories, two-column To Word Scan/Gallery/Device source picker, local `Converting with DS AI` indicator, white-page To Word review with tap-to-edit, undo/redo, page switching, DS Formatting persisted into DOCX, rule-based DS Writing, Word/PDF/original-image sharing, and CS PDF → DS PDF. | Widget regressions added; CI/device pixel comparison pending; Unicode text-PDF limited |
+| `0.5.28` | `381711.mp4` To Excel: DS-branded X badge and two-column picker, `Converting with DS AI` offline recognition, spreadsheet-style column letters/row numbers, pinch/pan, per-cell edits, sheet-text edits, undo/redo, multi-sheet navigation, Only tables/All content filtering, DS Formatting persisted to XLSX column width/row height/font/bold first row, genuine XLSX export sheet and editable share; PDF export of Latin-script table cells. | UI + XLSX structure regressions added; CI pending; real-device parity and table reconstruction accuracy need testing |
 
 ## Verified in the 0.5.10 CI run
 

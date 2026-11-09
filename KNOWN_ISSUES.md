@@ -1,7 +1,7 @@
 # DocScanner — Known Issues and Limitations
 
 **Last reviewed:** 2026-11-09
-**Baseline:** `0.5.27+41` candidate; hardware verification pending.
+**Baseline:** `0.5.28+42` candidate; hardware verification pending.
 This list separates **confirmed implementation limits** from **risks that need physical-device validation**. Do not interpret “not tested” as “broken.” For reproducible bugs see [BUGS.md](BUGS.md).
 
 ## Confirmed implementation limitations
@@ -12,7 +12,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 | K-002 | Saved card-side re-editing | New ID Card/License/Bank Card documents store a **composed A4 JPEG** as a page. Individual Front/Back images are editable during review, but separate side data is not persisted for later independent edits. | Persist source-side assets and migration metadata (T-101) |
 | K-003 | Smart Erase and image text replacement | Local pixel interpolation/brush algorithms are not generative semantic inpainting. Textured backgrounds can retain seams or artifacts. | Quality fixtures and explicitly labeled local tools |
 | K-004 | DOCX conversion | Word output is editable OCR text, not full original layout/font reconstruction. | Layout analysis and compare real-document exports |
-| K-005 | XLSX conversion | Spreadsheet columns are inferred from tabs/repeated spaces in OCR; original table geometry can be lost. | Table-cell detector and test fixtures (T-106) |
+| K-005 | XLSX conversion | The new grid/editor/export respects corrected cells and selected column/row styles, but spreadsheet columns are still inferred from tabs/repeated spaces in OCR; merged headings, borders and original table geometry can be lost. `Only tables` heuristically excludes single-cell rows. | Table-cell detector and real scans (T-106, T-106d) |
 | K-006 | PPTX conversion | PowerPoint files contain scanned page **images** on slides; their text/shapes are not independently editable. | Only promise editable objects after actual reconstruction support |
 | K-007 | Bengali OCR layout | Bundled Bengali Tesseract supports text recognition, but reliable Bengali word bounding boxes and arbitrary-layout editing are not provided. | Model/layout improvements and physical fixtures |
 | K-008 | Native imported PDFs | `0.5.19` adds offline raster import of external PDF files for PDF to Images, but the resulting DocScanner pages are bitmaps. Direct, lossless editing of imported vector text/layout is not available. | Separate PDF parser/content-edit architecture if required |
@@ -23,6 +23,7 @@ This list separates **confirmed implementation limits** from **risks that need p
 | K-013 | Passport photo acceptance | The presets set nominal pixel sizes at 300 DPI but cannot automatically verify face position, expression, lighting or country-specific biometric requirements. Users must manually frame and confirm photos before official use. | Add country-specific rule templates, face measurements and preview validation if requested |
 | K-014 | Word review vs original document | The video-inspired To Word editor displays OCR text on a styled page; original handwriting, fonts, signatures and exact layout are not reconstructed. DS Writing offers transparent rule-based cleanup, not generative AI. | Add offline structured layout/handwriting support after validated models |
 | K-015 | Edited-text PDF script support | To Word → Save as PDF currently supports Latin text through built-in PDF fonts. It rejects non-Latin/Bengali to avoid missing glyph boxes. DOCX preserves Bengali. Share as Images returns **original scan images**, not rasterized edited text. | Bundle/test licensed Unicode PDF font if needed |
+| K-016 | Excel review PDF script and grid limits | `381711.mp4` Excel review exports complete XLSX rows, but the interactive in-app grid previews at most 85 rows and 14 columns per sheet to keep phone interactions responsive; more data remains editable through sheet text. Save as PDF currently requires Latin script; XLSX preserves Unicode including বাংলা. | Profile long workbooks and bundle a tested Unicode PDF font |
 
 ## Device-dependent or unverified risks
 

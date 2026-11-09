@@ -42,6 +42,22 @@ void main() {
     expect(find.text('Select from This App'), findsOneWidget);
   });
 
+  testWidgets('To Excel video picker uses the Excel badge and reference sources',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: VideoToolSourcePicker(
+      store: _PickerStore(), title: 'To Excel',
+      description: 'Convert images and PDFs into editable spreadsheets.',
+      icon: Icons.table_chart, allowGallery: true, allowPdf: true,
+      onScan: () async {},
+    )));
+    await tester.pump();
+    expect(find.text('To Excel ✦'), findsOneWidget);
+    expect(find.text('X'), findsOneWidget);
+    expect(find.text('Gallery'), findsOneWidget);
+    expect(find.text('Device'), findsOneWidget);
+    expect(find.text('Select from This App'), findsOneWidget);
+  });
+
   testWidgets('video picker can select two source documents for merge',
       (tester) async {
     final store = _PickerStore();

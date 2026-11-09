@@ -186,6 +186,14 @@
 
 The `381709.mp4` CamScanner reference informs the DS AI banner, transition indicator, white-page editable Word preview, local formatting and sharing sheets. Original Flutter widgets, not proprietary assets/code, implement the appearance. On-device OCR and real DOCX generation preserve edited text. DS Writing is clearly rule-based cleanup, no cloud or generative AI. Unsupported non-Latin text-to-PDF is rejected rather than silently dropping glyphs. Original scanned images remain unchanged by Word edits.
 
+## ADR-024 — Excel reference uses an editable offline grid with explicit fidelity limits
+
+**Status:** Accepted for `0.5.28`; Android handset verification pending.
+**Decision:** `381711.mp4` informs a DS-branded To Excel source picker, offline OCR progress, interactive sheet grid and prepared XLSX export panel. Users can correct cells or the complete tab-separated sheet, undo edits, choose table-only rows and change cell dimensions/font weight. XLSX OpenXML stores those formatting choices and edited values.
+**Why:** The former Excel workflow exposed raw OCR text and a small table preview, lacking the video-style spreadsheet interaction.
+**Consequences:** OCR text splitting alone cannot reconstruct arbitrary merged cells, ruled table geometry, colours or complex formatting. The interactive grid renders at most 85 rows and 14 columns for mobile performance, while full-sheet text editing and XLSX export retain the complete content. Save as PDF currently rejects unsupported Unicode instead of outputting corrupt glyphs. No cloud or proprietary code/assets are introduced.
+**Related:** `excel_review_screen.dart`, `office_conversion_screen.dart`, `xlsx_export.dart`, `test/excel_review_screen_test.dart`.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
