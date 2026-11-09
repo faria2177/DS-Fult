@@ -117,6 +117,7 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
       ),
     );
     if (!mounted || updated == null) return;
+    FocusScope.of(context).unfocus();
     final next = List<String>.of(_texts)..[_page] = updated;
     _commit(next);
   }
@@ -253,7 +254,8 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
                   child: Text(choices[i], textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white))))),
             ]));
-      return SafeArea(top: false, child: Padding(
+      return SafeArea(top: false, child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 12, 22, 26),
         child: Column(mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -290,7 +292,7 @@ class _WordReviewScreenState extends State<WordReviewScreen> {
           segmented(['Compact', 'Medium', 'Wide'], _lineSpacing, (value) =>
             setState(() { _lineSpacing = value; _oneTapFormat = false; })),
         ]),
-      ));
+      )));
     }),
   );
 
