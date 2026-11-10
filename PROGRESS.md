@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-10
-**Current candidate release:** `0.5.32+46`
+**Current candidate release:** `0.5.33+47`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42683897645](https://github.com/faria2177/DS-Fult/actions/runs/42683897645)
 **Baseline commit:** [`385d537`](https://github.com/faria2177/DS-Fult/commit/385d5372e6139a3ac820e41dbf37ed5e8cec8f20)
 
@@ -51,6 +51,14 @@
 | `0.5.30` | Explicit opt-in text AI: use saved Gemini/Groq/OpenRouter keys for proofreading one Word or Extract Text page and cleaning one Excel sheet. Display provider/model/character count and text preview before external send; show AI suggestion for Apply/Discard. Preserve Word/Excel Undo and original scanned images. | HTTP adapters, consent UI and mocked-request regressions added. No automatic uploads or silent fallbacks. CI + live credential/device testing pending. |
 | `0.5.31` | Video `381739.mp4` vs `381742.mp4`: opt-in scanned-image AI vision conversion for Word/Excel with separate image-capable model IDs, original image consent, bounded compressed single-page requests to three HTTPS providers, plus English Tesseract fallback for ML Kit native failures. Word TSV becomes actual editable tables in DOCX and a grid in preview; Bengali/Unicode Save as PDF uses a shaped raster fallback. | Code and mocked tests; CI and real phone/vision-API validation pending. Models can misread text; layouts/merged cells are not guaranteed exact. |
 | `0.5.32` | Video `381772.mp4`: guard against CameraX JPEG pixels remaining landscape when the recent live stream was portrait, and reject unreliable still quads or smaller inner-table crops in favour of full-source corner review. Me → AI Mode now has an expandable API key hints panel and browser links for all 12 provider entries; link is repeated in key-entry sheet. | Kotlin geometry + Flutter link tests added. Actual HONOR camera behaviour and browser integration require device verification; no guaranteed CamScanner-equivalent detector accuracy. |
+| `0.5.33` | Video `381776.mp4`: the page outline is correct in live portrait preview, but the captured image enters Adjust corners sideways and can include the wooden desk. Match low-resolution still pixels to the recent camera-analysis frame across all four rotations before selecting corners or warping; do not transfer an unverified live quad to the JPEG. | New native pure-Kotlin registration tests; HONOR camera validation and release CI remain necessary. |
+
+### 0.5.33 — Verify orientation against actual shutter pixels
+
+- Video `381776.mp4` (00:06–00:12) exposes a limitation of `0.5.32`: even after reciprocal-aspect correction, the full portrait sheet may appear sideways in **Adjust corners**, while the white handles mark a rectangle that also captures the wooden background. The resulting page retains that wrong orientation/desk strip. This recording proves the visual mismatch; it does not expose the raw JPEG/EXIF metadata needed to attribute it to a specific CameraX vendor bug.
+- Cache one small luminance frame from live analysis. At shutter time, match the EXIF-adjusted JPEG's luminance against the displayed preview across 0°, 90°, 180° and 270°, allowing modest camera-field-of-view shifts. Apply an additional rotation only on a high-confidence, non-symmetric match; ambiguous pages retain EXIF handling rather than guessing.
+- A live-preview quad can seed manual corner adjustment only if pixel alignment is verified (or the analysis sample was unavailable). A failed match must not place yesterday's preview coordinates over a sideways or differently framed still. This is an accuracy safeguard; if registration cannot be established, the user may still need manual corner adjustment.
+- Added synthetic native regression cases for sensor rotations, already-upright JPEGs, sideways capture, upside-down capture, blank scenes and mismatched content. Verify on the same HONOR handset using a newly built APK.
 
 ### 0.5.32 — Capture/crop safety and AI key onboarding
 

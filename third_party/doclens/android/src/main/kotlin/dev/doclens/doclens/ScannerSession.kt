@@ -62,6 +62,7 @@ class ScannerSession(
     private data class FrameOrientation(
         val width: Int, val height: Int, val rotationDegrees: Int,
         val timestampMs: Long,
+        val luma: CaptureOrientationMatcher.Image,
     )
     @Volatile private var latestFrameOrientation: FrameOrientation? = null
 
@@ -230,6 +231,7 @@ class ScannerSession(
             val uprightFrameHeight = if (rotation % 180 == 0) height else width
             latestFrameOrientation = FrameOrientation(
                 uprightFrameWidth, uprightFrameHeight, rotation, now,
+                CaptureOrientationMatcher.Image(luma, width, height),
             )
             // Keep the chroma information: a similarly bright card and desk
             // can be separated by saturation edges that luma alone misses.
@@ -315,6 +317,7 @@ class ScannerSession(
     @MainThread
     fun switchCamera() {
         latestPagePreviewHint = null
+        latestFrameOrientation = null
         lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK)
             CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
         cameraProvider?.let { bindUseCases(it) }
@@ -323,11 +326,14 @@ class ScannerSession(
     @MainThread
     fun pause() {
         latestPagePreviewHint = null
+        latestFrameOrientation = null
         cameraProvider?.unbindAll()
     }
 
     @MainThread
     fun resume() {
+        latestPagePreviewHint = null
+        latestFrameOrientation = null
         cameraProvider?.let { bindUseCases(it) }
     }
 
@@ -394,16 +400,23 @@ class ScannerSession(
                     raw = decodeDownscaled(file.absolutePath, maxDimension = 4096)
                         ?: throw ScannerException.CaptureFailed("Decode failed")
                     val exifUpright = ExifRotator.rotated(raw, file.absolutePath)
-                    val turns = frameOrientationAtShutter?.let { frame ->
-                        StillCaptureCropSafety.missingExifQuarterTurns(
-                            frame.width, frame.height,
-                            exifUpright.width, exifUpright.height,
-                            frame.rotationDegrees,
+                    // The HONOR video 381776 shows a portrait preview followed
+                    // by a sideways *portrait-sized* JPEG. Aspect ratios are
+                    // not proof of orientation. Compare JPEG content directly
+                    // to the shutter frame instead of making a provisional
+                    // turn that might put a portrait page sideways.
+                    val orientationMatch = frameOrientationAtShutter?.let { frame ->
+                        CaptureOrientationMatcher.find(
+                            frame.luma, frame.rotationDegrees,
+                            downscaledBitmapLuma(exifUpright),
                         )
-                    } ?: 0
-                    rotated = if (turns == 0) exifUpright else
-                        ImageWarper.rotateBitmap(exifUpright, turns)
-                    if (rotated !== exifUpright && exifUpright !== raw) {
+                    }
+                    rotated = if (orientationMatch != null &&
+                        orientationMatch.clockwiseTurns != 0) {
+                        ImageWarper.rotateBitmap(exifUpright,
+                            orientationMatch.clockwiseTurns)
+                    } else exifUpright
+                    if (exifUpright !== raw && exifUpright !== rotated) {
                         exifUpright.recycle()
                     }
                     val rawSize = Size(rotated.width, rotated.height)
@@ -428,12 +441,22 @@ class ScannerSession(
                     // preview/still field-of-view ratios are compatible.
                     val reviewHint = previewHintAtShutter?.takeIf { hint ->
                         !config.preferIdCardBounds &&
+                        // Never map an unverified live quad onto a JPEG that
+                        // may be rotated or framed differently. A screenshot
+                        // with the wrong angle would select the desk instead.
+                        (frameOrientationAtShutter == null || orientationMatch != null) &&
                         StillCaptureCropSafety.compatibleView(hint.width, hint.height,
                             rawSize.width, rawSize.height)
-                    }?.quad
-                    val uncertainStill = !config.preferIdCardBounds &&
+                    }?.quad?.let { hint ->
+                        orientationMatch?.mapPreviewQuad(hint) ?:
+                            if (frameOrientationAtShutter == null) hint else null
+                    }
+                    val uncertainStill = !config.preferIdCardBounds && (
+                        // If a fresh live frame cannot be registered, do not
+                        // auto-warp its apparent page in an unknown direction.
+                        (frameOrientationAtShutter != null && orientationMatch == null) ||
                         StillCaptureCropSafety.requiresManualReview(
-                            stillQuad, rawSize.width, rawSize.height, reviewHint)
+                            stillQuad, rawSize.width, rawSize.height, reviewHint))
                     val q = if (uncertainStill && reviewHint != null) reviewHint
                         else if (uncertainStill) null else stillQuad
                     val pixelQuad = q?.let {
@@ -511,6 +534,29 @@ class ScannerSession(
         }
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
         return BitmapFactory.decodeFile(path, opts)
+    }
+
+    /** Tiny, memory-bounded JPEG sample for preview/still orientation matching. */
+    private fun downscaledBitmapLuma(bitmap: Bitmap): CaptureOrientationMatcher.Image {
+        val scale = minOf(1.0, 192.0 / maxOf(bitmap.width, bitmap.height))
+        val w = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val h = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        val small = Bitmap.createScaledBitmap(bitmap, w, h, true)
+        try {
+            val pixels = IntArray(w * h)
+            small.getPixels(pixels, 0, w, 0, 0, w, h)
+            val luma = ByteArray(pixels.size)
+            for (i in pixels.indices) {
+                val p = pixels[i]
+                val r = (p shr 16) and 0xff
+                val g = (p shr 8) and 0xff
+                val b = p and 0xff
+                luma[i] = ((77 * r + 150 * g + 29 * b) shr 8).toByte()
+            }
+            return CaptureOrientationMatcher.Image(luma, w, h)
+        } finally {
+            if (small !== bitmap) small.recycle()
+        }
     }
 
     @MainThread
