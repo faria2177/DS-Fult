@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:doclens/doclens.dart';
@@ -20,7 +19,7 @@ class OfflineDocumentContour {
       {bool preferIdCardBounds = false}) async {
     try {
       final bytes = await File(path).readAsBytes();
-      return compute(_detectContourWorker, <String, Object>{
+      return await compute(_detectContourWorker, <String, Object>{
         'bytes': bytes,
         'card': preferIdCardBounds,
       });
@@ -107,7 +106,9 @@ class OfflineDocumentContour {
         if (included) pixelsInMask++;
       }
       if (pixelsInMask < mask.length * .10 ||
-          pixelsInMask > mask.length * .88) continue;
+          pixelsInMask > mask.length * .88) {
+        continue;
+      }
       final candidate = _bestComponent(mask, width, height,
           preferIdCardBounds: preferIdCardBounds);
       if (candidate != null &&
@@ -200,9 +201,13 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
     if (aspect < 1.08 || aspect > 2.40) continue;
     final center = corners.reduce((a, b) => a + b) / 4;
     if ((center.dx - .5).abs() > .30 ||
-        (center.dy - .5).abs() > .30) continue;
+        (center.dy - .5).abs() > .30) {
+      continue;
+    }
     if (corners.any((p) => p.dx < .012 || p.dx > .988 ||
-        p.dy < .012 || p.dy > .988)) continue;
+        p.dy < .012 || p.dy > .988)) {
+      continue;
+    }
     final score = math.min(1.0, solidity) * .49 +
         (1 - (center.dx - .5).abs() - (center.dy - .5).abs()) * .27 +
         math.min(1.0, coverage / .50) * .24;

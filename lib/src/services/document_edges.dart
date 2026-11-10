@@ -242,10 +242,8 @@ class DocumentEdges {
     } catch (error) {
       debugPrint('Native page detector failed, trying offline fallback: $error');
     }
-    final normalIsSafe = normal != null &&
-        isReliableGalleryCrop(normal,
-            preferIdCardBounds: preferIdCardBounds) &&
-        (!preferIdCardBounds || isCredibleStandaloneCard(normal));
+    final normalIsSafe = normal != null && isReliableGalleryCrop(normal,
+        preferIdCardBounds: preferIdCardBounds);
     if (preferIdCardBounds && normalIsSafe) return normal;
 
     // Most well-framed A4 pages need just one pass. A compact/interior result
