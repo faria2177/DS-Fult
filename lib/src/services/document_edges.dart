@@ -149,7 +149,9 @@ class DocumentEdges {
     final quad = detection.quad;
     final size = detection.imageSize;
     if (quad == null || size.width <= 0 || size.height <= 0 ||
-        !CropQuad(quad.points).isValid) return false;
+        !CropQuad(quad.points).isValid) {
+      return false;
+    }
     final area = quad.area;
     if (area < .28 || area > .86) return false;
     if (quad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
@@ -179,7 +181,9 @@ class DocumentEdges {
     final normal = await detect(imagePath,
         preferIdCardBounds: preferIdCardBounds);
     if (normal != null && isReliableGalleryCrop(normal,
-        preferIdCardBounds: preferIdCardBounds)) return normal;
+        preferIdCardBounds: preferIdCardBounds)) {
+      return normal;
+    }
     if (preferIdCardBounds) return null;
 
     final card = await detect(imagePath, preferIdCardBounds: true);
