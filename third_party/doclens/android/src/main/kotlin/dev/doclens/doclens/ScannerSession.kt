@@ -8,7 +8,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.os.Build
+import android.util.Rational
 import android.util.Size
+import android.view.Surface
 import androidx.annotation.MainThread
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.AspectRatio
@@ -18,6 +20,8 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.ViewPort
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -109,6 +113,29 @@ class ScannerSession(
         provider.unbindAll()
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         val surfaceTexture = textureEntry.surfaceTexture()
+        // CameraX chooses the target orientation independently for each use
+        // case unless we give them one explicit screen rotation. On the HONOR
+        // capture in 381781.mp4 the portrait live page fits entirely, whereas
+        // the saved landscape JPEG loses its top border. A shared ViewPort
+        // forces Preview, ImageAnalysis and ImageCapture to use the *same*
+        // sensor region. Merely requesting 4:3 for each does not guarantee it.
+        val displayRotation = activity.window.decorView.display?.rotation
+            ?: Surface.ROTATION_0
+        val portraitDisplay = displayRotation == Surface.ROTATION_0 ||
+            displayRotation == Surface.ROTATION_180
+        val viewPort = ViewPort.Builder(
+            Rational(if (portraitDisplay) 3 else 4,
+                if (portraitDisplay) 4 else 3),
+            displayRotation,
+        ).setScaleType(ViewPort.FILL_CENTER).build()
+
+        fun coordinatedGroup(capture: ImageCapture): UseCaseGroup =
+            UseCaseGroup.Builder()
+                .setViewPort(viewPort)
+                .addUseCase(preview ?: error("Preview not initialized"))
+                .addUseCase(analysis ?: error("Analysis not initialized"))
+                .addUseCase(capture)
+                .build()
 
         // Without a shared aspect ratio CameraX may pick a 16:9 preview and
         // a 4:3 analysis buffer. Normalized analysis corners then stretch
@@ -117,6 +144,7 @@ class ScannerSession(
         // device. Flutter scales preview + overlay together using BoxFit.cover.
         preview = Preview.Builder()
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .setTargetRotation(displayRotation)
             .build().also { p ->
             p.setSurfaceProvider { request: SurfaceRequest ->
                 val res = request.resolution
@@ -164,6 +192,7 @@ class ScannerSession(
         analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .setTargetRotation(displayRotation)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
             .build()
             .also { a ->
@@ -172,6 +201,7 @@ class ScannerSession(
 
         val captureBuilder = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setTargetRotation(displayRotation)
             .setFlashMode(flashMode)
         val requestedSize = config.captureSize?.let { captureSize ->
             val parts = captureSize.split('x')
@@ -179,7 +209,13 @@ class ScannerSession(
             val h = parts.getOrNull(1)?.toIntOrNull()
             if (parts.size == 2 && w != null && h != null &&
                 w in 640..4300 && h in 480..4300 && w * h <= 13000000) {
-                Size(w, h)
+                // Camera2 advertises JPEG sizes in sensor-landscape order
+                // (e.g. 4000x3000). CameraX setTargetResolution interprets
+                // the Size in the *target-rotation* coordinate space, so a
+                // portrait screen must request 3000x4000. Without this the
+                // still can select a different aspect/crop than the preview.
+                Size(if (portraitDisplay) minOf(w, h) else maxOf(w, h),
+                    if (portraitDisplay) maxOf(w, h) else minOf(w, h))
             } else null
         }
         if (requestedSize != null) {
@@ -193,7 +229,8 @@ class ScannerSession(
         val owner = activity as? LifecycleOwner
             ?: throw ScannerException.InitFailed("Activity must be LifecycleOwner")
         camera = try {
-            provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+            provider.bindToLifecycle(owner, selector,
+                coordinatedGroup(imageCapture ?: error("Capture not initialized")))
         } catch (error: IllegalArgumentException) {
             if (requestedSize == null) throw error
             // A JPEG size can be listed by Camera2 yet be incompatible with
@@ -203,9 +240,11 @@ class ScannerSession(
             imageCapture = ImageCapture.Builder()
                 .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setTargetRotation(displayRotation)
                 .setFlashMode(flashMode)
                 .build()
-            provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+            provider.bindToLifecycle(owner, selector,
+                coordinatedGroup(imageCapture ?: error("Capture not initialized")))
         }
         if (torch) camera?.cameraControl?.enableTorch(true)
     }
@@ -451,12 +490,14 @@ class ScannerSession(
                         orientationMatch?.mapPreviewQuad(hint) ?:
                             if (frameOrientationAtShutter == null) hint else null
                     }
-                    val uncertainStill = !config.preferIdCardBounds && (
-                        // If a fresh live frame cannot be registered, do not
-                        // auto-warp its apparent page in an unknown direction.
-                        (frameOrientationAtShutter != null && orientationMatch == null) ||
+                    // Registration is needed before transferring LIVE
+                    // corners, but not before using corners independently
+                    // found in this very JPEG. The old unconditional
+                    // `orientationMatch == null` veto forced a full-image
+                    // rectangle even for an accurate still detector result.
+                    val uncertainStill = !config.preferIdCardBounds &&
                         StillCaptureCropSafety.requiresManualReview(
-                            stillQuad, rawSize.width, rawSize.height, reviewHint))
+                            stillQuad, rawSize.width, rawSize.height, reviewHint)
                     val q = if (uncertainStill && reviewHint != null) reviewHint
                         else if (uncertainStill) null else stillQuad
                     val pixelQuad = q?.let {

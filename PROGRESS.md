@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-10
-**Current candidate release:** `0.5.33+47`
+**Current candidate release:** `0.5.34+48`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42683897645](https://github.com/faria2177/DS-Fult/actions/runs/42683897645)
 **Baseline commit:** [`385d537`](https://github.com/faria2177/DS-Fult/commit/385d5372e6139a3ac820e41dbf37ed5e8cec8f20)
 
@@ -52,6 +52,14 @@
 | `0.5.31` | Video `381739.mp4` vs `381742.mp4`: opt-in scanned-image AI vision conversion for Word/Excel with separate image-capable model IDs, original image consent, bounded compressed single-page requests to three HTTPS providers, plus English Tesseract fallback for ML Kit native failures. Word TSV becomes actual editable tables in DOCX and a grid in preview; Bengali/Unicode Save as PDF uses a shaped raster fallback. | Code and mocked tests; CI and real phone/vision-API validation pending. Models can misread text; layouts/merged cells are not guaranteed exact. |
 | `0.5.32` | Video `381772.mp4`: guard against CameraX JPEG pixels remaining landscape when the recent live stream was portrait, and reject unreliable still quads or smaller inner-table crops in favour of full-source corner review. Me → AI Mode now has an expandable API key hints panel and browser links for all 12 provider entries; link is repeated in key-entry sheet. | Kotlin geometry + Flutter link tests added. Actual HONOR camera behaviour and browser integration require device verification; no guaranteed CamScanner-equivalent detector accuracy. |
 | `0.5.33` | Video `381776.mp4`: the page outline is correct in live portrait preview, but the captured image enters Adjust corners sideways and can include the wooden desk. Match low-resolution still pixels to the recent camera-analysis frame across all four rotations before selecting corners or warping; do not transfer an unverified live quad to the JPEG. | New native pure-Kotlin registration tests; HONOR camera validation and release CI remain necessary. |
+| `0.5.34` | Video `381781.mp4`: the live green frame covers the A4 sheet, but the captured landscape image loses part of the page and Adjust corners defaults to the whole JPEG. Set one CameraX screen rotation, bind Preview/Analysis/ImageCapture through a shared portrait ViewPort and rotate user-selected JPEG resolution into display coordinates. An independently credible still quad no longer requires a successful preview-frame match. | Native safety regression added; CI and HONOR real-device capture comparison pending. |
+
+### 0.5.34 — Align camera preview with the actual JPEG field of view
+
+- Video `381781.mp4` (~00:02–00:06) shows a correctly located green A4 outline in the camera. The resulting Adjust corners image is wide and contains desk on both sides; the top page border is not reliably preserved, and white handles span the full JPEG. The final preview retains this uncorrected background. This is direct evidence of a preview-to-still mismatch, **not** enough evidence to identify the exact device/EXIF root cause.
+- Coordinate all three CameraX use cases via one 3:4 portrait (or 4:3 landscape) `ViewPort` and a shared `targetRotation`. Honor selected HD capture size in output orientation: `4000x3000` advertised by Camera2 means `3000x4000` when portrait is requested. This avoids relying on matching aspect ratio independently for different capture pipelines.
+- Retain pixel-correlation matching as a gate for reusing preview corners, but accept a separately detected *credible full page* from the still itself even when cross-frame correlation is inconclusive. Missing, cropped-off or suspicious still corners continue into reversible manual review; no live quad is blindly applied to a different JPEG.
+- Validate with a freshly built APK on HONOR Android 16: top title, bottom signatures, all four paper corners, editor handles and final exported page. A clean CI run cannot establish actual Camera2 sensor behavior.
 
 ### 0.5.33 — Verify orientation against actual shutter pixels
 

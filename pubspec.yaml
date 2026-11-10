@@ -1,7 +1,7 @@
 name: docscanner
 description: Local-first document scanner with camera, ID copies, PDF and text tools.
 publish_to: none
-version: 0.5.33+47
+version: 0.5.34+48
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
