@@ -68,6 +68,30 @@ internal object StillCaptureCropSafety {
         return abs(cx - .5) <= .22 && abs(cy - .5) <= .22
     }
 
+    /**
+     * The chroma mask has independent evidence that a *coloured* card is
+     * surrounded by neutral paper, so it may accept a smaller complete card
+     * than the generic contour detector. This must never relax the normal
+     * A4-page or unverified text-box policy.
+     */
+    fun isCredibleColorCard(quad: Quad, width: Int, height: Int): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val points = listOf(quad.topLeft, quad.topRight,
+            quad.bottomRight, quad.bottomLeft)
+        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
+                it.x !in 0.025f..0.975f || it.y !in 0.025f..0.975f }) return false
+        if (area(quad) !in 0.16..0.76) return false
+        val (w, h) = sideLengths(quad, width, height)
+        val ratio = max(w, h) / min(w, h).coerceAtLeast(1.0)
+        if (ratio !in 1.44..2.12) return false
+        val spanX = points.maxOf { it.x } - points.minOf { it.x }
+        val spanY = points.maxOf { it.y } - points.minOf { it.y }
+        if (spanX < .32f || spanY < .28f) return false
+        val cx = points.sumOf { it.x.toDouble() } / 4
+        val cy = points.sumOf { it.y.toDouble() } / 4
+        return abs(cx - .5) <= .22 && abs(cy - .5) <= .22
+    }
+
     /** Recover an independently segmented outer card, never a loose panel.
      * If the card-mode contour is a smaller inner name box, the mask must
      * actually surround it and be at least 35% larger to replace it.
@@ -75,9 +99,13 @@ internal object StillCaptureCropSafety {
     fun chooseCardStillBoundary(
         contour: Quad?, contrast: Quad?, neutral: Quad?,
         width: Int, height: Int, saturated: Quad? = null,
+        colorCard: Quad? = null,
     ): Quad? {
-        val outer = listOfNotNull(contrast, neutral, saturated)
+        val normalCandidates = listOfNotNull(contrast, neutral, saturated)
             .filter { isCredibleCard(it, width, height) }
+        val colorCandidates = listOfNotNull(colorCard)
+            .filter { isCredibleColorCard(it, width, height) }
+        val outer = (normalCandidates + colorCandidates)
             .maxByOrNull { area(it) } ?: return contour
         if (contour == null) return outer
         if (encloses(outer, contour) && area(outer) >= area(contour) * 1.35) {

@@ -168,6 +168,44 @@ void main() {
     }
   });
 
+  test('Video 381877: a 20%-frame gold card replaces a near-frame notebook',
+      () async {
+    const size = Size(320, 420);
+    final notebook = _detection(_rect(.02, .02, .98, .98), size: size);
+    final card = _detection(_rect(.295, .26, .705, .75), size: size);
+    expect(card.quad!.area, lessThan(.21));
+    expect(DocumentEdges.isCredibleStandaloneCard(card), isTrue);
+    expect(DocumentEdges.isCredibleCardInsideBackground(notebook, card), isTrue);
+
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: notebook, card: card);
+    DoclensPlatform.instance = fake;
+    try {
+      final batch = await DocumentEdges.autoCropFiles(['notebook-id.jpg']);
+      expect(fake.preferCardCalls, [false, true]);
+      expect(fake.lastWarpedQuad!.points, card.quadIn.points);
+      expect(batch.croppedCount, 1);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  test('A good framed page skips a misleading inner coloured label', () async {
+    final page = _detection(_rect(.10, .10, .90, .90));
+    final label = _detection(_rect(.295, .26, .705, .75));
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: page, card: label);
+    DoclensPlatform.instance = fake;
+    try {
+      final batch = await DocumentEdges.autoCropFiles(['a4-report.jpg']);
+      expect(fake.preferCardCalls, [false]);
+      expect(fake.lastWarpedQuad!.points, page.quadIn.points);
+      expect(batch.croppedCount, 1);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
+  });
+
   test('Ordinary A4 page is not replaced by an inner card-looking label', () async {
     final regularA4 = _detection(_rect(.09, .09, .91, .91));
     final printedTitle = _detection(_rect(.18, .32, .82, .66));

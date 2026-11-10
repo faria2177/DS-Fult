@@ -182,6 +182,48 @@ class QuadDetectorTest {
     }
 
     @Test
+    fun smallerGoldIdOnRuledNotebookUsesIndependentChromaBoundary() {
+        // 381877.mp4: the notebook occupies most of the photo, whereas the
+        // portrait card covers ~20%. A full-page detector alone crops the
+        // notebook or leaves it uncropped. No real ID image is used here.
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFFE1DFD9.toInt() }
+        for (y in 30 until height step 39) {
+            fillRgb(pixels, width, 0, y, width, y + 2, 0xFF717E9D.toInt())
+        }
+        fillRgb(pixels, width, 95, 112, 225, 316, 0xFFC49E60.toInt())
+        fillRgb(pixels, width, 130, 158, 192, 233, 0xFF4D5B56.toInt())
+        for (y in 250 until 300 step 13) {
+            fillRgb(pixels, width, 119, y, 206, y + 2, 0xFF49413A.toInt())
+        }
+
+        val card = assertNotNull(
+            QuadDetector.detectColoredCardOnNeutralPage(pixels, width, height),
+        )
+        assertTrue(StillCaptureCropSafety.isCredibleColorCard(card, width, height))
+        assertTrue(!StillCaptureCropSafety.isCredibleCard(card, width, height))
+        assertTrue(abs(card.topLeft.x - 95f / width) < .05f)
+        assertTrue(abs(card.topLeft.y - 112f / height) < .05f)
+        assertTrue(abs(card.bottomRight.x - 224f / width) < .05f)
+        assertTrue(abs(card.bottomRight.y - 315f / height) < .05f)
+    }
+
+    @Test
+    fun chromaCardFallbackRejectsTinyTitleAndColouredBackground() {
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFFE1DFD9.toInt() }
+        fillRgb(pixels, width, 115, 190, 211, 231, 0xFFC49E60.toInt())
+        assertNull(QuadDetector.detectColoredCardOnNeutralPage(
+            pixels, width, height))
+
+        val goldBackdrop = IntArray(width * height) { 0xFFC49E60.toInt() }
+        assertNull(QuadDetector.detectColoredCardOnNeutralPage(
+            goldBackdrop, width, height))
+    }
+
+    @Test
     fun contrastMaskDoesNotInventPageOnUniformSurface() {
         val pixels = IntArray(320 * 400) { 0xFFD0CFCC.toInt() }
         assertNull(QuadDetector.detectBackgroundContrastPage(pixels, 320, 400))

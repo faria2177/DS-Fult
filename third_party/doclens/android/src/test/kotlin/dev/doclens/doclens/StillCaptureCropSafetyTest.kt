@@ -166,4 +166,19 @@ class StillCaptureCropSafetyTest {
             goldCard, null, null, 416, 741, saturated = rect(.30f, .40f, .75f, .63f))
             == goldCard)
     }
+
+    @Test
+    fun independentColorEvidenceRecoversSmallCardWithoutRelaxingPageRules() {
+        val notebook = rect(.02f, .02f, .98f, .98f)
+        val smallCard = rect(.295f, .26f, .705f, .75f)
+        assertFalse(StillCaptureCropSafety.isCredibleCard(smallCard, 320, 420))
+        assertTrue(StillCaptureCropSafety.isCredibleColorCard(smallCard, 320, 420))
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            notebook, null, null, 320, 420, colorCard = smallCard) == smallCard)
+
+        val innerLabel = rect(.39f, .44f, .62f, .57f)
+        assertFalse(StillCaptureCropSafety.isCredibleColorCard(innerLabel, 320, 420))
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            notebook, null, null, 320, 420, colorCard = innerLabel) == notebook)
+    }
 }

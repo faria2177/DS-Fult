@@ -301,6 +301,64 @@ object QuadDetector {
         return best
     }
 
+    /**
+     * A small gold/coloured ID card laid over an almost neutral notebook is
+     * neither an A4 page nor a large saturated poster. The normal still
+     * colour-panel cue deliberately rejects it (page area >= 30%). Use a
+     * separate, still-only foreground mask instead of relaxing the A4 rules.
+     *
+     * Thin blue notebook rules, monochrome printed text and pale shadows do
+     * not pass the chroma threshold. Three of the four *outer* corner patches
+     * must also be neutral, so a coloured tabletop/cloth is not silently
+     * mistaken for a smaller card. This is a proposal only: the independent
+     * four-corner and aspect-ratio checks still decide whether it is safe.
+     */
+    internal fun detectColoredCardOnNeutralPage(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+    ): Quad? {
+        if (width < 64 || height < 64 || pixels.size != width * height) return null
+        val patchW = (width * .085).toInt().coerceAtLeast(4)
+        val patchH = (height * .085).toInt().coerceAtLeast(4)
+        var neutralCorners = 0
+        for (corner in 0..3) {
+            val startX = if (corner % 2 == 0) 0 else width - patchW
+            val startY = if (corner < 2) 0 else height - patchH
+            var coloured = 0
+            for (y in startY until startY + patchH) {
+                for (x in startX until startX + patchW) {
+                    if (isStronglyColoured(pixels[y * width + x])) coloured++
+                }
+            }
+            if (coloured * 4 < patchW * patchH) neutralCorners++
+        }
+        if (neutralCorners < 3) return null
+
+        val colourMask = BooleanArray(pixels.size)
+        var colouredPixels = 0
+        for (i in pixels.indices) {
+            if (isStronglyColoured(pixels[i])) {
+                colourMask[i] = true
+                colouredPixels++
+            }
+        }
+        if (colouredPixels.toDouble() / pixels.size !in .105..0.78) return null
+        val card = analyzeMask(colourMask, width, height)?.quad ?: return null
+        return card.takeIf {
+            StillCaptureCropSafety.isCredibleColorCard(it, width, height)
+        }
+    }
+
+    private fun isStronglyColoured(pixel: Int): Boolean {
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        val high = max(r, max(g, b))
+        val low = min(r, min(g, b))
+        return high >= 95 && (high - low) * 100 >= high * 32
+    }
+
     /** RGB-backed live candidate at a bounded 256px edge, independent of OpenCV. */
     internal fun detectSaturatedPanelInRgba(
         rgba: ByteArray, width: Int, height: Int,
@@ -484,8 +542,10 @@ object QuadDetector {
             // long notebook lines with the card; a coherent colour-panel
             // proposal can recover its actual outside without tracing text.
             val colouredCard = detectSaturatedPanel(pixels, dw, dh)
+            val smallColouredCard = detectColoredCardOnNeutralPage(pixels, dw, dh)
             return StillCaptureCropSafety.chooseCardStillBoundary(
-                cvQuad, contrast, neutral, dw, dh, colouredCard)
+                cvQuad, contrast, neutral, dw, dh, colouredCard,
+                smallColouredCard)
         }
         // The independently segmented outside sheet must outweigh any inner
         // text rectangle, but cannot displace an equally sized strong CV page.

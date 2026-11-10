@@ -164,7 +164,11 @@ class DocumentEdges {
       return false;
     }
     final area = quad.area;
-    if (area < .28 || area > .86) return false;
+    // A complete coloured ID photographed on ruled notebook paper can cover
+    // only ~20% of the image. The dedicated native card pass independently
+    // checks chroma, outside corners and aspect ratio before returning it.
+    // Still reject tiny printed name blocks and near-full background pages.
+    if (area < .19 || area > .86) return false;
     if (quad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
         p.dx < .012 || p.dx > .988 || p.dy < .012 || p.dy > .988)) {
       return false;
@@ -198,13 +202,20 @@ class DocumentEdges {
         (background.imageSize.height - card.imageSize.height).abs() > 1) {
       return false;
     }
-    if (whole.area < .76 || inner.area < .34 ||
+    if (whole.area < .76 || inner.area < .19 ||
         inner.area > whole.area * .78 ||
         !inner.points.every(whole.contains)) {
       return false;
     }
-    final xs = whole.points.map((p) => p.dx).toList();
-    final ys = whole.points.map((p) => p.dy).toList();
+    return _nearFrameOnThreeSides(whole);
+  }
+
+  /// A ruled notebook/tabletop detected as the outer quadrilateral nearly
+  /// fills the photo. Its four-sided frame evidence is very different from a
+  /// properly framed paper page with a visible margin on every side.
+  static bool _nearFrameOnThreeSides(Quad quad) {
+    final xs = quad.points.map((p) => p.dx).toList();
+    final ys = quad.points.map((p) => p.dy).toList();
     final frameSides = [
       xs.reduce((a, b) => a < b ? a : b) < .065,
       xs.reduce((a, b) => a > b ? a : b) > .935,
@@ -229,7 +240,14 @@ class DocumentEdges {
     // Most well-framed A4 pages need just one pass. A compact/interior result
     // or a dominant camera-frame rectangle merits an independent card pass.
     final area = normal?.quad?.area ?? 0;
-    if (normalIsSafe && area > .62 && area < .78) return normal;
+    // Even a 70%-frame 'page' can be the surrounding notebook. Run the card
+    // pass when its outline crowds three frame sides; the native chroma mask
+    // can then recover the much smaller gold/coloured ID inside it.
+    final normalQuad = normal?.quad;
+    if (normalIsSafe && area > .62 && normalQuad != null &&
+        !_nearFrameOnThreeSides(normalQuad)) {
+      return normal;
+    }
 
     final card = await detect(imagePath, preferIdCardBounds: true);
     if (card != null) {
