@@ -83,6 +83,36 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun cameraXPortraitPreviewCorrectsLandscapeJpegOnlyWhenExifIsMissing() {
+        assertTrue(StillCaptureCropSafety.missingExifQuarterTurns(
+            300, 400, 1200, 900, 90) == 1)
+        assertTrue(StillCaptureCropSafety.missingExifQuarterTurns(
+            300, 400, 1200, 900, 270) == 3)
+        assertTrue(StillCaptureCropSafety.missingExifQuarterTurns(
+            300, 400, 900, 1200, 90) == 0)
+        assertTrue(StillCaptureCropSafety.missingExifQuarterTurns(
+            400, 300, 1200, 900, 90) == 0)
+        assertTrue(StillCaptureCropSafety.missingExifQuarterTurns(
+            300, 400, 1920, 1080, 90) == 0)
+        assertTrue(StillCaptureCropSafety.missingExifQuarterTurns(
+            300, 400, 1200, 900, 0) == 0)
+    }
+
+    @Test
+    fun video381772DenseInnerTableMustNotReplaceLiveA4Page() {
+        val fullA4 = rect(.08f, .07f, .92f, .93f)
+        val partialTable = rect(.12f, .28f, .88f, .73f)
+        assertTrue(StillCaptureCropSafety.isCrediblePage(fullA4, 900, 1200))
+        // A dense table can itself have four convex corners. Comparing the
+        // captured still against the live sheet is required to reject it.
+        assertTrue(StillCaptureCropSafety.isCrediblePage(partialTable, 900, 1200))
+        assertTrue(StillCaptureCropSafety.requiresManualReview(
+            partialTable, 900, 1200, fullA4))
+        assertFalse(StillCaptureCropSafety.requiresManualReview(
+            fullA4, 900, 1200, fullA4))
+    }
+
+    @Test
     fun outOfBoundsOrExtremelySmallQuadCannotSeedReview() {
         assertFalse(StillCaptureCropSafety.isCrediblePage(
             rect(-.05f, .01f, .90f, .95f), 900, 1200))

@@ -1,9 +1,9 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-10
-**Current candidate release:** `0.5.31+45`
-**Last fully successful CI baseline before this patch:** [GitHub Actions run #42668974043](https://github.com/faria2177/DS-Fult/actions/runs/42668974043)
-**Baseline commit:** [`bbde0a1`](https://github.com/faria2177/DS-Fult/commit/bbde0a15e39142503ffc9dd742a025cc797b47ec)
+**Current candidate release:** `0.5.32+46`
+**Last fully successful CI baseline before this patch:** [GitHub Actions run #42683897645](https://github.com/faria2177/DS-Fult/actions/runs/42683897645)
+**Baseline commit:** [`385d537`](https://github.com/faria2177/DS-Fult/commit/385d5372e6139a3ac820e41dbf37ed5e8cec8f20)
 
 > These are code/CI milestones, **not** proof that every reference video has been matched pixel-for-pixel or validated on a real Android handset. Always check the latest `main` commit before continuing.
 
@@ -50,6 +50,15 @@
 | `0.5.29` | Me → AI Mode: add Google AI Studio, Groq Cloud, OpenRouter and nine other optional provider credential slots; encrypt secrets with OS secure storage; choose active provider and opt in via Enable toggle; remove/replace keys. Android Back from the root shell now asks to Cancel/Exit. | Configuration and exit-dialog widget tests added; GitHub CI / Android 16 validation pending. **No AI inference calls or automatic scan uploads in this release.** |
 | `0.5.30` | Explicit opt-in text AI: use saved Gemini/Groq/OpenRouter keys for proofreading one Word or Extract Text page and cleaning one Excel sheet. Display provider/model/character count and text preview before external send; show AI suggestion for Apply/Discard. Preserve Word/Excel Undo and original scanned images. | HTTP adapters, consent UI and mocked-request regressions added. No automatic uploads or silent fallbacks. CI + live credential/device testing pending. |
 | `0.5.31` | Video `381739.mp4` vs `381742.mp4`: opt-in scanned-image AI vision conversion for Word/Excel with separate image-capable model IDs, original image consent, bounded compressed single-page requests to three HTTPS providers, plus English Tesseract fallback for ML Kit native failures. Word TSV becomes actual editable tables in DOCX and a grid in preview; Bengali/Unicode Save as PDF uses a shaped raster fallback. | Code and mocked tests; CI and real phone/vision-API validation pending. Models can misread text; layouts/merged cells are not guaranteed exact. |
+| `0.5.32` | Video `381772.mp4`: guard against CameraX JPEG pixels remaining landscape when the recent live stream was portrait, and reject unreliable still quads or smaller inner-table crops in favour of full-source corner review. Me → AI Mode now has an expandable API key hints panel and browser links for all 12 provider entries; link is repeated in key-entry sheet. | Kotlin geometry + Flutter link tests added. Actual HONOR camera behaviour and browser integration require device verification; no guaranteed CamScanner-equivalent detector accuracy. |
+
+### 0.5.32 — Capture/crop safety and AI key onboarding
+
+- At approximately 00:03–00:10 of `381772.mp4`, the green live contour frames the full portrait A4 timetable but shutter review and saved page contain only a horizontal table fragment. A later gallery import displays the selected image normally. Both JPEG orientation mismatch and an interior still-image quad are plausible contributors; video alone cannot distinguish their relative share.
+- Native CameraX now records the latest upright frame geometry at shutter time. If an EXIF-adjusted JPEG's aspect ratio is provably transposed relative to that frame, correct it using CameraX rotation before fresh still detection. Do not rotate already-upright stills or guess based on document content.
+- An uncertain still quad, a non-page-shaped candidate, or a significant shrink relative to a recent credible live full-page hint cannot be irreversibly auto-warped. Preserve the upright raw JPEG and offer four-corner manual review. This is a data-loss guard rather than a promise of automatic corner accuracy in every scene.
+- Me → AI Mode exposes an expandable three-provider official-key tutorial, explicit Get API key links for all provider cards, and an Open official API key website action beside the masked key editor. Browser failure falls back to copying the HTTPS link. No provider API key is hardcoded or uploaded by this UI.
+- Validation: native geometry regressions and widget link tests are added; GitHub CI and same-scene HONOR Android 16 retest remain pending.
 
 ### 0.5.31 — Reference conversion accuracy and crash handling
 

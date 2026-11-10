@@ -43,6 +43,34 @@ void main() {
     expect(AiProviderCatalog.byId('cloudflare')?.needsAccountId, isTrue);
     expect(AiProviderCatalog.byId('openai')?.freeTier, isFalse);
     expect(AiProviderCatalog.providers.length, greaterThanOrEqualTo(10));
+    expect(AiProviderCatalog.providers.every((p) =>
+      Uri.parse(p.keyPage).scheme == 'https'), isTrue);
+  });
+
+  testWidgets('API help opens the official Gemini and provider key links',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final opened = <Uri>[];
+    await tester.pumpWidget(MaterialApp(home: AiModeScreen(
+      credentialStore: _FakeAiVault(),
+      openExternalLink: (uri) async { opened.add(uri); return true; },
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-api-key-hints')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-help-gemini')));
+    await tester.pumpAndSettle();
+    expect(opened.single.toString(), 'https://aistudio.google.com/apikey');
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('ai-get-key-openrouter')), 220,
+    );
+    await tester.ensureVisible(find.byKey(const Key('ai-get-key-openrouter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-get-key-openrouter')));
+    await tester.pumpAndSettle();
+    expect(opened.last.toString(), 'https://openrouter.ai/settings/keys');
+    expect(opened.length, 2);
   });
 
   testWidgets('key entry is obscured, enables provider without leaking secret',
