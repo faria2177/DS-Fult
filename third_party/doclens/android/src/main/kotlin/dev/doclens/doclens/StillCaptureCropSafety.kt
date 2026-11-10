@@ -74,15 +74,23 @@ internal object StillCaptureCropSafety {
      */
     fun chooseCardStillBoundary(
         contour: Quad?, contrast: Quad?, neutral: Quad?,
-        width: Int, height: Int,
+        width: Int, height: Int, saturated: Quad? = null,
     ): Quad? {
-        val outer = listOfNotNull(contrast, neutral)
+        val outer = listOfNotNull(contrast, neutral, saturated)
             .filter { isCredibleCard(it, width, height) }
             .maxByOrNull { area(it) } ?: return contour
         if (contour == null) return outer
-        return if (encloses(outer, contour) && area(outer) >= area(contour) * 1.35) {
-            outer
-        } else contour
+        if (encloses(outer, contour) && area(outer) >= area(contour) * 1.35) {
+            return outer // Recover the outside from a printed name box.
+        }
+        // A white ruled notebook can have a near-frame OpenCV contour, while
+        // the smaller gold ID on it has a strong, coherent *colour* contour.
+        // Only discard the broad frame if it is NOT itself a plausible card.
+        if (!isCredibleCard(contour, width, height) &&
+            encloses(contour, outer) && area(contour) >= area(outer) * 1.35) {
+            return outer
+        }
+        return contour
     }
 
     /**

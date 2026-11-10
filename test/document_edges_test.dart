@@ -20,6 +20,7 @@ class _StillFakePlatform extends DoclensPlatform {
   final ImageDetection? card;
   final List<bool> preferCardCalls = [];
   int warpCalls = 0;
+  Quad? lastWarpedQuad;
 
   @override
   Future<ImageDetection?> detectInImage({
@@ -39,6 +40,7 @@ class _StillFakePlatform extends DoclensPlatform {
     AutoOrientation autoOrientation = AutoOrientation.none,
   }) async {
     warpCalls++;
+    lastWarpedQuad = quad;
     return '$rawImagePath.cropped';
   }
 
@@ -84,6 +86,31 @@ void main() {
       _detection(_rect(.07, .38, .93, .62))), isFalse);
   });
 
+  test('NID text band touching left/right edges cannot silently crop face', () {
+    // 381861.mp4: this appears sizeable enough to beat the old area guard,
+    // and near the horizontal image borders, but it is not the outer NID.
+    final label = _detection(_rect(.04, .25, .96, .75),
+      size: const Size(900, 1200));
+    expect(DocumentEdges.isReliableGalleryCrop(label), isFalse);
+  });
+
+  test('An edge-touching NID text fragment keeps the original if no card is found',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: _detection(
+      _rect(.04, .25, .96, .75), size: const Size(900, 1200)));
+    DoclensPlatform.instance = fake;
+    try {
+      final result = await DocumentEdges.autoCropFiles(['full-nid.jpg']);
+      expect(fake.preferCardCalls, [false, true]);
+      expect(fake.warpCalls, 0);
+      expect(result.paths, ['full-nid.jpg']);
+      expect(result.needsReview, 1);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
+  });
+
   test('Gallery import allows a well-framed landscape document', () {
     expect(DocumentEdges.isReliableGalleryCrop(
       _detection(_rect(.04, .09, .96, .91),
@@ -116,6 +143,47 @@ void main() {
     final outerCard = _detection(_rect(.12, .20, .88, .82),
       size: const Size(1200, 900));
     expect(DocumentEdges.isCredibleStandaloneCard(outerCard), isTrue);
+  });
+
+  test('Lined notebook background can yield to enclosed portrait ID card', () async {
+    // Video 381861.mp4: the gold ID occupies only part of the ruled sheet.
+    final background = _detection(_rect(.03, .03, .97, .97),
+      size: const Size(416, 741));
+    final goldCard = _detection(_rect(.18, .12, .94, .84),
+      size: const Size(416, 741));
+    expect(DocumentEdges.isReliableGalleryCrop(background), isTrue);
+    expect(DocumentEdges.isCredibleCardInsideBackground(background, goldCard),
+      isTrue);
+
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: background, card: goldCard);
+    DoclensPlatform.instance = fake;
+    try {
+      final result = await DocumentEdges.autoCropFiles(['gold-id.jpg']);
+      expect(fake.preferCardCalls, [false, true]);
+      expect(result.croppedCount, 1);
+      expect(fake.lastWarpedQuad?.points, goldCard.quadIn.points);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  test('Ordinary A4 page is not replaced by an inner card-looking label', () async {
+    final regularA4 = _detection(_rect(.09, .09, .91, .91));
+    final printedTitle = _detection(_rect(.18, .32, .82, .66));
+    expect(DocumentEdges.isCredibleCardInsideBackground(
+      regularA4, printedTitle), isFalse);
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: regularA4, card: printedTitle);
+    DoclensPlatform.instance = fake;
+    try {
+      final result = await DocumentEdges.autoCropFiles(['a4.jpg']);
+      expect(fake.preferCardCalls, [false]);
+      expect(result.croppedCount, 1);
+      expect(fake.lastWarpedQuad?.points, regularA4.quadIn.points);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
   });
 
   test('Independent recovery rejects inner labels and background rectangles', () {

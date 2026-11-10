@@ -107,6 +107,17 @@ class DocumentEdges {
     final right = points.map((p) => p.dx).reduce((a, b) => a > b ? a : b);
     final top = points.map((p) => p.dy).reduce((a, b) => a < b ? a : b);
     final bottom = points.map((p) => p.dy).reduce((a, b) => a > b ? a : b);
+    // A text strip can touch the *left and right* photo boundaries, bypassing
+    // the four-sided inset check below. That is what the 381861.mp4 NID crop
+    // looks like: width fills the frame but face/header above it disappear.
+    // A complete card or page must not turn into a horizontal/vertical band.
+    final spanX = right - left;
+    final spanY = bottom - top;
+    if (area < .64 &&
+        ((spanX > .79 && spanY < .62) ||
+         (spanY > .79 && spanX < .62))) {
+      return false;
+    }
     // A compact box surrounded by unselected image on *all four sides* is
     // likely the interior of a page/card, not its outside paper boundary.
     if (area < .56 && left > .045 && right < .955 &&
@@ -172,6 +183,37 @@ class DocumentEdges {
     return ratio >= 1.48 && ratio <= 2.10;
   }
 
+  /// A near-frame contour can be the notebook/tabletop surrounding a smaller
+  /// card (381861.mp4). Replace such a broad background *only* with a fully
+  /// enclosed and strongly card-shaped independent proposal. A normal A4
+  /// inset several percent from the camera border remains authoritative.
+  static bool isCredibleCardInsideBackground(
+      ImageDetection background, ImageDetection card) {
+    final whole = background.quad;
+    final inner = card.quad;
+    if (whole == null || inner == null || !isCredibleStandaloneCard(card)) {
+      return false;
+    }
+    if ((background.imageSize.width - card.imageSize.width).abs() > 1 ||
+        (background.imageSize.height - card.imageSize.height).abs() > 1) {
+      return false;
+    }
+    if (whole.area < .76 || inner.area < .34 ||
+        inner.area > whole.area * .78 ||
+        !inner.points.every(whole.contains)) {
+      return false;
+    }
+    final xs = whole.points.map((p) => p.dx).toList();
+    final ys = whole.points.map((p) => p.dy).toList();
+    final frameSides = [
+      xs.reduce((a, b) => a < b ? a : b) < .065,
+      xs.reduce((a, b) => a > b ? a : b) > .935,
+      ys.reduce((a, b) => a < b ? a : b) < .065,
+      ys.reduce((a, b) => a > b ? a : b) > .935,
+    ].where((touches) => touches).length;
+    return frameSides >= 3;
+  }
+
   /// Used by *both* automatic gallery import and Adjust corners → Auto
   /// Detect. Neither route may promote an interior table/name block to a
   /// complete document. Try the independent card outline even when the
@@ -180,18 +222,25 @@ class DocumentEdges {
       {bool preferIdCardBounds = false}) async {
     final normal = await detect(imagePath,
         preferIdCardBounds: preferIdCardBounds);
-    if (normal != null && isReliableGalleryCrop(normal,
-        preferIdCardBounds: preferIdCardBounds)) {
-      return normal;
-    }
-    if (preferIdCardBounds) return null;
+    final normalIsSafe = normal != null && isReliableGalleryCrop(normal,
+        preferIdCardBounds: preferIdCardBounds);
+    if (preferIdCardBounds) return normalIsSafe ? normal : null;
+
+    // Most well-framed A4 pages need just one pass. A compact/interior result
+    // or a dominant camera-frame rectangle merits an independent card pass.
+    final area = normal?.quad?.area ?? 0;
+    if (normalIsSafe && area > .62 && area < .78) return normal;
 
     final card = await detect(imagePath, preferIdCardBounds: true);
-    if (card == null) return null;
-    if (normal == null) {
-      return isCredibleStandaloneCard(card) ? card : null;
+    if (card != null) {
+      if (normal == null && isCredibleStandaloneCard(card)) return card;
+      if (normal != null &&
+          (isCredibleOuterCardAlternative(normal, card) ||
+           isCredibleCardInsideBackground(normal, card))) {
+        return card;
+      }
     }
-    return isCredibleOuterCardAlternative(normal, card) ? card : null;
+    return normalIsSafe ? normal : null;
   }
 
   /// Original photos remain unchanged, including when no document is found.

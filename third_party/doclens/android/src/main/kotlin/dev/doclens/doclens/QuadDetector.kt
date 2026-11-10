@@ -479,8 +479,13 @@ object QuadDetector {
         if (preferIdCardBounds) {
             val contrast = detectBackgroundContrastPage(pixels, dw, dh)
             val neutral = detectNeutralPaper(pixels, dw, dh)
+            // Gold/coloured cards over ruled white paper are often close in
+            // luma to the desk. Background-difference masks then merge the
+            // long notebook lines with the card; a coherent colour-panel
+            // proposal can recover its actual outside without tracing text.
+            val colouredCard = detectSaturatedPanel(pixels, dw, dh)
             return StillCaptureCropSafety.chooseCardStillBoundary(
-                cvQuad, contrast, neutral, dw, dh)
+                cvQuad, contrast, neutral, dw, dh, colouredCard)
         }
         // The independently segmented outside sheet must outweigh any inner
         // text rectangle, but cannot displace an equally sized strong CV page.

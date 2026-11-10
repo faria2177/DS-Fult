@@ -158,6 +158,30 @@ class QuadDetectorTest {
     }
 
     @Test
+    fun saturatedGoldCardIsolatedFromHorizontalNotebookLines() {
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFFD2D2D0.toInt() }
+        // Thin, high-contrast blue rules cover the entire paper background.
+        // Ordinary background-contrast components can connect these to the
+        // card and accidentally include the whole page.
+        for (y in 34 until height step 39) {
+            fillRgb(pixels, width, 0, y, width, y + 2, 0xFF707A98.toInt())
+        }
+        fillRgb(pixels, width, 68, 67, 251, 353, 0xFFC29F5F.toInt())
+        fillRgb(pixels, width, 122, 154, 204, 238, 0xFF294846.toInt())
+        for (y in 250 until 330 step 18) {
+            fillRgb(pixels, width, 104, y, 219, y + 3, 0xFF4D3C32.toInt())
+        }
+        val card = assertNotNull(QuadDetector.detectSaturatedPanel(pixels, width, height))
+        assertTrue(StillCaptureCropSafety.isCredibleCard(card, width, height))
+        assertTrue(abs(card.topLeft.x - 68f / width) < .055f)
+        assertTrue(abs(card.topLeft.y - 67f / height) < .055f)
+        assertTrue(abs(card.bottomRight.x - 250f / width) < .055f)
+        assertTrue(abs(card.bottomRight.y - 352f / height) < .055f)
+    }
+
+    @Test
     fun contrastMaskDoesNotInventPageOnUniformSurface() {
         val pixels = IntArray(320 * 400) { 0xFFD0CFCC.toInt() }
         assertNull(QuadDetector.detectBackgroundContrastPage(pixels, 320, 400))

@@ -152,4 +152,18 @@ class StillCaptureCropSafetyTest {
         assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
             name, unrelated, wholeFrame, 1200, 900) == name)
     }
+
+    @Test
+    fun ruledNotebookContourMustYieldToGoldCardPanel() {
+        val notebook = rect(.03f, .03f, .97f, .97f)
+        val goldCard = rect(.18f, .13f, .94f, .84f)
+        assertFalse(StillCaptureCropSafety.isCredibleCard(notebook, 416, 741))
+        assertTrue(StillCaptureCropSafety.isCredibleCard(goldCard, 416, 741))
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            notebook, null, null, 416, 741, saturated = goldCard) == goldCard)
+        // The opposite direction would erase an already correct outside card.
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            goldCard, null, null, 416, 741, saturated = rect(.30f, .40f, .75f, .63f))
+            == goldCard)
+    }
 }
