@@ -1,6 +1,5 @@
 import 'package:docscanner/src/screens/batch_crop_screen.dart';
 import 'package:docscanner/src/services/image_processor.dart';
-import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

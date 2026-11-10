@@ -270,6 +270,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
         return;
       }
       if (!fromCamera) {
+        if (!mounted) return;
         final review = await Navigator.of(context).push<GalleryImportResult>(
           MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
             imagePaths: paths,

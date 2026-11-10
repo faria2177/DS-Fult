@@ -48,7 +48,11 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
     super.initState();
     _selected.addAll(List<int>.generate(widget.imagePaths.length, (i) => i));
     _autoCrop = widget.initialAutoCrop;
-    _filter = widget.initialFilter;
+    // Camera presets include effects not shown in this compact import menu.
+    // Always choose a visible option rather than passing an unknown value to
+    // DropdownButton (which asserts when its value has no matching item).
+    _filter = _choices.contains(widget.initialFilter)
+        ? widget.initialFilter : ScanFilter.enhance;
   }
 
   List<int> get _orderedSelection => [

@@ -87,8 +87,10 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       setState(() { _bytes[index] = bytes; _ratios[index] = ratio; });
       await _detect(index);
     } catch (_) {
-      if (mounted) setState(() =>
-          _hint = 'Unable to load this page. The original is unchanged.');
+      if (mounted) {
+        setState(() => _hint =
+            'Unable to load this page. The original is unchanged.');
+      }
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -237,8 +239,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
                                 ))),
                             ),
                           ),
-                      ]))),
-                  );
+                      ])));
           },
         ))),
         Text(_hint, textAlign: TextAlign.center,
