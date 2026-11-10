@@ -139,6 +139,32 @@ void main() {
     expect(result.getPixel(8, 43).r, lessThan(result.getPixel(8, 75).r));
   });
 
+  test('Cropped-document Enhance lifts gold paper but protects skin and ink',
+      () async {
+    final input = img.Image(width: 160, height: 200);
+    img.fill(input, color: img.ColorRgb8(190, 170, 123));
+    for (var y = 64; y < 115; y++) {
+      for (var x = 50; x < 109; x++) {
+        input.setPixelRgb(x, y, 182, 116, 94); // portrait/skin patch
+      }
+    }
+    for (var x = 35; x < 128; x++) {
+      for (var y = 155; y < 162; y++) {
+        input.setPixelRgb(x, y, 28, 27, 26); // printed text
+      }
+    }
+    final source = Uint8List.fromList(img.encodePng(input));
+    final output = img.decodeImage(await ImageProcessor.process(
+      source, filter: ScanFilter.enhance, documentMode: true))!;
+    final paper = output.getPixel(25, 35);
+    final face = output.getPixel(80, 88);
+    final text = output.getPixel(80, 158);
+    expect(paper.r, greaterThan(200));
+    expect(paper.b, greaterThan(155));
+    expect(face.r, lessThan(235));
+    expect(text.r, lessThan(85));
+  });
+
   test('Invert effect reverses a mid-tone pixel', () async {
     final input = img.Image(width: 16, height: 16);
     img.fill(input, color: img.ColorRgb8(40, 90, 160));

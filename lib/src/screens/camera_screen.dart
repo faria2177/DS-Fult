@@ -230,7 +230,8 @@ class _CameraScreenState extends State<CameraScreen> {
       };
 
   Future<void> _finishProcessed(List<String> paths,
-      {bool applySelectedEffect = true}) async {
+      {bool applySelectedEffect = true,
+       Set<String> confirmedCrops = const <String>{}}) async {
     if (!mounted || _finished || paths.isEmpty) return;
     setState(() => _processingGallery = true);
     try {
@@ -245,6 +246,7 @@ class _CameraScreenState extends State<CameraScreen> {
           try {
             final filtered = await ImageProcessor.process(
               await File(original).readAsBytes(), filter: _selectedFilter,
+              documentMode: confirmedCrops.contains(original),
             );
             final file = File(p.join(folder.path,
                 'ds_effect_${DateTime.now().microsecondsSinceEpoch}_$i.jpg'));
@@ -266,6 +268,38 @@ class _CameraScreenState extends State<CameraScreen> {
       if (mounted && !_finished) {
         setState(() => _processingGallery = false);
       }
+    }
+  }
+
+  /// CameraX can return a full-resolution raw photo without a detected quad.
+  /// Recover those captures with the same safe still-image auto-crop pipeline
+  /// used by gallery import. Never re-crop a successful native perspective
+  /// result, and never force an uncertain crop of the original image.
+  Future<void> _finishCapturedResults(List<ScanResult> results) async {
+    if (!mounted || _finished || results.isEmpty) return;
+    final outputs = <String>[];
+    final confirmedCrops = <String>{};
+    for (final result in results) {
+      final nativeCrop = result.croppedImagePath;
+      if (nativeCrop != null && nativeCrop.isNotEmpty) {
+        outputs.add(nativeCrop);
+        confirmedCrops.add(nativeCrop);
+        continue;
+      }
+      final raw = result.rawImagePath;
+      if (raw.isEmpty) continue;
+      if (_settings.autoCrop || widget.cardMode) {
+        final recovered = await DocumentEdges.autoCropFiles([raw],
+            preferIdCardBounds: _detectCardBounds);
+        final path = recovered.paths.single;
+        outputs.add(path);
+        if (recovered.croppedCount > 0) confirmedCrops.add(path);
+      } else {
+        outputs.add(raw);
+      }
+    }
+    if (outputs.isNotEmpty) {
+      await _finishProcessed(outputs, confirmedCrops: confirmedCrops);
     }
   }
 
@@ -326,7 +360,8 @@ class _CameraScreenState extends State<CameraScreen> {
       final cropped = await DocumentEdges.autoCropFiles([image.path],
           preferIdCardBounds: _detectCardBounds);
       if (widget.cardMode) widget.onCardSourcePaths?.call([image.path]);
-      await _finishProcessed(cropped.paths);
+      await _finishProcessed(cropped.paths, confirmedCrops:
+          cropped.croppedCount == 0 ? const <String>{} : cropped.paths.toSet());
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -575,19 +610,14 @@ class _CameraScreenState extends State<CameraScreen> {
                       widget.onCardSourcePaths?.call(results
                           .map((result) => result.rawImagePath).toList());
                     }
-                    final paths = results
-                        .map((result) => result.croppedImagePath ?? result.rawImagePath)
-                        .where((path) => path.isNotEmpty)
-                        .toList();
-                    if (paths.isNotEmpty) unawaited(_finishProcessed(paths));
+                    unawaited(_finishCapturedResults(results));
                   },
                   onCapture: (result) {
                     if (_cameraSuspended) return;
                     if (widget.cardMode) {
                       widget.onCardSourcePaths?.call([result.rawImagePath]);
                     }
-                    final path = result.croppedImagePath ?? result.rawImagePath;
-                    if (path.isNotEmpty) unawaited(_finishProcessed([path]));
+                    unawaited(_finishCapturedResults([result]));
                   },
                 )),
           if (_processingGallery)

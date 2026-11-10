@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import 'image_processor.dart';
+import 'offline_document_contour.dart';
 
 /// The same on-device document contour detector is used by camera capture,
 /// gallery auto-crop and the manual corner editor.
@@ -231,11 +235,16 @@ class DocumentEdges {
   /// ordinary page detector returned null; otherwise leave the photo whole.
   static Future<ImageDetection?> detectSafeStillOutline(String imagePath,
       {bool preferIdCardBounds = false}) async {
-    final normal = await detect(imagePath,
-        preferIdCardBounds: preferIdCardBounds);
+    ImageDetection? normal;
+    try {
+      normal = await detect(imagePath,
+          preferIdCardBounds: preferIdCardBounds);
+    } catch (error) {
+      debugPrint('Native page detector failed, trying offline fallback: $error');
+    }
     final normalIsSafe = normal != null && isReliableGalleryCrop(normal,
         preferIdCardBounds: preferIdCardBounds);
-    if (preferIdCardBounds) return normalIsSafe ? normal : null;
+    if (preferIdCardBounds && normalIsSafe) return normal;
 
     // Most well-framed A4 pages need just one pass. A compact/interior result
     // or a dominant camera-frame rectangle merits an independent card pass.
@@ -244,18 +253,50 @@ class DocumentEdges {
     // pass when its outline crowds three frame sides; the native chroma mask
     // can then recover the much smaller gold/coloured ID inside it.
     final normalQuad = normal?.quad;
-    if (normalIsSafe && area > .62 && normalQuad != null &&
+    if (!preferIdCardBounds && normalIsSafe && area > .62 && normalQuad != null &&
         !_nearFrameOnThreeSides(normalQuad)) {
       return normal;
     }
 
-    final card = await detect(imagePath, preferIdCardBounds: true);
+    ImageDetection? card;
+    if (!preferIdCardBounds) {
+      try {
+        card = await detect(imagePath, preferIdCardBounds: true);
+      } catch (error) {
+        debugPrint('Native card detector failed: $error');
+      }
+    }
     if (card != null) {
       if (normal == null && isCredibleStandaloneCard(card)) return card;
       if (normal != null &&
           (isCredibleOuterCardAlternative(normal, card) ||
            isCredibleCardInsideBackground(normal, card))) {
         return card;
+      }
+    }
+
+    // Independent on-device pixel segmentation. This is deliberately not a
+    // neural image generator: it never invents a face, text or ID number.
+    // It also operates when native OpenCV is missing or returns no quad.
+    final offline = await OfflineDocumentContour.detectFile(imagePath,
+        preferIdCardBounds: preferIdCardBounds);
+    final outside = offline?.quad;
+    if (offline != null && outside != null) {
+      if (preferIdCardBounds && isCredibleStandaloneCard(offline)) {
+        return offline;
+      }
+      if (!preferIdCardBounds) {
+        final safePage = isReliableGalleryCrop(offline);
+        final safeCard = isCredibleStandaloneCard(offline);
+        if (normal == null && (safePage || safeCard)) return offline;
+        if (normal != null &&
+            (isCredibleOuterCardAlternative(normal, offline) ||
+             isCredibleCardInsideBackground(normal, offline) ||
+             (!normalIsSafe && safePage && normalQuad != null &&
+              outside.area >= normalQuad.area * 1.3 &&
+              normalQuad.points.every(outside.contains)))) {
+          return offline;
+        }
       }
     }
     return normalIsSafe ? normal : null;
@@ -275,15 +316,26 @@ class DocumentEdges {
           output.add(image);
           continue;
         }
-        final croppedPath = await DoclensPlatform.instance.warpImage(
-          rawImagePath: image,
-          quad: detection.quadIn,
-          jpegQuality: 95,
-          // Cropping is geometry only. Gallery Import applies the user's
-          // chosen Enhance/Original effect *afterwards*. Pre-enhancing here
-          // both double-processes text and changes faces on an Original ID.
-          enhancement: ImageEnhancement.none,
-        );
+        String croppedPath;
+        try {
+          croppedPath = await DoclensPlatform.instance.warpImage(
+            rawImagePath: image,
+            quad: detection.quadIn,
+            jpegQuality: 95,
+            // Keep colour effects separate from irreversible geometry.
+            enhancement: ImageEnhancement.none,
+          );
+        } catch (error) {
+          debugPrint('Native perspective warp failed, using Dart: $error');
+          final croppedBytes = await ImageProcessor.process(
+            await File(image).readAsBytes(),
+            crop: CropQuad(detection.quad!.points),
+          );
+          final file = File(p.join(Directory.systemTemp.path,
+              'ds_offline_crop_${DateTime.now().microsecondsSinceEpoch}.jpg'));
+          await file.writeAsBytes(croppedBytes, flush: true);
+          croppedPath = file.path;
+        }
         output.add(croppedPath);
         cropped++;
       } catch (error) {

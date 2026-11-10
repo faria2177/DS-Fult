@@ -117,7 +117,8 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
         if (folder != null) {
           try {
             final enhanced = await ImageProcessor.process(
-              await File(result).readAsBytes(), filter: _filter);
+              await File(result).readAsBytes(), filter: _filter,
+              documentMode: crop.paths[index] != sourcePaths[index]);
             final target = File(p.join(folder.path,
                 'ds_import_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
             await target.writeAsBytes(enhanced, flush: true);

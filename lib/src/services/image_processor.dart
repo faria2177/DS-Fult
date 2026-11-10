@@ -82,6 +82,7 @@ class ImageProcessor {
     ScanFilter filter = ScanFilter.original,
     int rotateDegrees = 0,
     bool outputPng = false,
+    bool documentMode = false,
   }) async {
     if (crop == null && filter == ScanFilter.original && rotateDegrees == 0) {
       return source;
@@ -92,6 +93,7 @@ class ImageProcessor {
       'filter': filter.name,
       'rotate': rotateDegrees,
       'outputPng': outputPng,
+      'documentMode': documentMode,
     });
   }
 }
@@ -113,13 +115,17 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
     image = img.copyRotate(image, angle: rotation.toDouble());
   }
   final filter = ScanFilter.values.byName(options['filter'] as String);
-  if (filter != ScanFilter.original) image = _filterImage(image, filter);
+  if (filter != ScanFilter.original) {
+    image = _filterImage(image, filter,
+        documentMode: options['documentMode'] == true);
+  }
   return Uint8List.fromList(options['outputPng'] == true
       ? img.encodePng(image)
       : img.encodeJpg(image, quality: 94));
 }
 
-img.Image _filterImage(img.Image input, ScanFilter filter) {
+img.Image _filterImage(img.Image input, ScanFilter filter,
+    {bool documentMode = false}) {
   final image = img.Image.from(input);
   final histogram = List<int>.filled(256, 0);
   for (var y = 0; y < image.height; y += 4) {
@@ -159,13 +165,29 @@ img.Image _filterImage(img.Image input, ScanFilter filter) {
           // explicit No Shadow preset.
           final safeFlatten = flattenGain.clamp(.90, 1.35);
           final scale = 1 + (safeFlatten - 1) * blend;
-          image.setPixelRgb(
-            x,
-            y,
-            _byte(r * scale + lift),
-            _byte(g * scale + lift),
-            _byte(b * scale + lift),
-          );
+          var rr = r * scale + lift;
+          var gg = g * scale + lift;
+          var bb = b * scale + lift;
+          if (documentMode && filter == ScanFilter.enhance) {
+            // A confirmed cropped document has a mostly flat surface.
+            // Lift light neutral/gold paper toward white without recolouring
+            // dark ink, the portrait's blue backdrop or warm skin tones.
+            // Apply this only after a credible four-corner crop; never
+            // whiten the surrounding desk of an unrecognised raw photo.
+            final tint = math.max(r, math.max(g, b)) -
+                math.min(r, math.min(g, b));
+            final likelySkin = r > g + 27 && g > b + 7 && g - b < 39;
+            final relative = lum / localPaper;
+            if (lum > 110 && tint < 80 && !likelySkin &&
+                relative >= .89) {
+              final strength = ((relative - .89) / .12)
+                  .clamp(0.0, 1.0) * .72;
+              rr += (252 - rr).clamp(0.0, 252.0) * strength;
+              gg += (252 - gg).clamp(0.0, 252.0) * strength;
+              bb += (252 - bb).clamp(0.0, 252.0) * strength;
+            }
+          }
+          image.setPixelRgb(x, y, _byte(rr), _byte(gg), _byte(bb));
         case ScanFilter.shadowFree:
           image.setPixelRgb(
             x, y,
