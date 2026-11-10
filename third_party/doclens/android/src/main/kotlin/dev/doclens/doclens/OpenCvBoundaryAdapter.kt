@@ -93,7 +93,10 @@ internal class OpenCvBoundaryAdapter {
         val boundaryDetector = try { engine() } catch (_: Throwable) { null } ?: return null
         val longest = max(bitmap.width, bitmap.height)
         if (longest < 32) return null
-        val scale = min(1.0, 900.0 / longest)
+        // Captured stills can be many megapixels; 1280px preserves more
+        // detail at faint paper corners than the old 900px working image.
+        // The live preview path stays unchanged for frame-rate stability.
+        val scale = min(1.0, 1280.0 / longest)
         val w = max(32, (bitmap.width * scale).toInt())
         val h = max(32, (bitmap.height * scale).toInt())
         val small = if (scale == 1.0) bitmap

@@ -140,19 +140,6 @@ class DocumentBoundaryDetector(
             }
         }
 
-        // Shutter stills can include a crisp inner table and a faint sheet
-        // border. Keep searching when we only have plausible *contents*;
-        // otherwise the first strong table prematurely skips the line and
-        // texture passes, which are often where the outer page appears.
-        fun hasSupportedPaperCandidate(): Boolean = candidates.any { candidate ->
-            val coverage = ContourDetector.calculatePolygonArea(candidate.corners) /
-                totalImageArea
-            coverage in .30..0.92 && candidate.edgeScore >= .22 &&
-                candidate.boundaryContrast >= 7.5 &&
-                ScannerTuning.paperRatioScore(
-                    ScannerTuning.normalizedLongRatio(candidate.corners)) >= .58
-        }
-
         collectFromCurrentEdges(DetectionStage.CONTOUR_QUAD, 8)
 
         // Preview keeps the fast path. For an actual shutter still, inspect
@@ -183,13 +170,15 @@ class DocumentBoundaryDetector(
             topScore = candidates.maxOfOrNull { it.totalConfidence } ?: 0.0
         }
 
-        // STAGE 2: If no strong candidate (> 0.70) found, attempt Line Intersections
-        // via HoughLinesP. Hough is run on a resolution-normalized copy of the edge
+        // STAGE 2: A dense inner table can be a strong, supported, page-shaped
+        // quadrilateral even though the real outer sheet has not been found.
+        // For a captured still, always give outer Hough lines a chance to
+        // challenge that contour; preserve the fast shortcut for live frames.
+        // Hough is run on a resolution-normalized copy of the edge
         // map: this keeps segment-length/gap thresholds meaningful (they'd otherwise
         // behave very differently on a 720p preview vs a 12MP still) and reduces
         // spurious short segments from high-res texture noise.
-        if (topScore < 0.56 || (preferOuterPageInStill &&
-                !hasSupportedPaperCandidate()) || (preferIdCardBounds &&
+        if (topScore < 0.56 || preferOuterPageInStill || (preferIdCardBounds &&
                 CardBoundaryPreference.select(candidates, width, height) == null)) {
             val maxDim = max(width, height)
             val houghScale = if (maxDim > 900) 900.0 / maxDim else 1.0
@@ -240,8 +229,7 @@ class DocumentBoundaryDetector(
 
         // STAGE 3: If still no good candidate, try Morphological Gradient fallback
         val topScoreAfterStage2 = candidates.maxByOrNull { it.totalConfidence }?.totalConfidence ?: 0.0
-        if (topScoreAfterStage2 < 0.46 || (preferOuterPageInStill &&
-                !hasSupportedPaperCandidate()) || (preferIdCardBounds &&
+        if (topScoreAfterStage2 < 0.46 || preferOuterPageInStill || (preferIdCardBounds &&
                 CardBoundaryPreference.select(candidates, width, height) == null)) {
             val gradMat = Mat()
             val largeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
@@ -316,7 +304,10 @@ class DocumentBoundaryDetector(
         )
         // Subpixel adjustment is only beneficial if it follows the SAME page boundary.
         // A strong intersection inside a form may otherwise drag a corner to table lines.
-        val maxAllowedDrift = hypot(width.toDouble(), height.toDouble()) * 0.025
+        // Still-image refinement must not jump from a faint paper corner to
+        // the nearby, much sharper intersection of printed table lines.
+        val maxAllowedDrift = hypot(width.toDouble(), height.toDouble()) *
+            (if (preferOuterPageInStill) 0.012 else 0.025)
         val stableRefinement = proposedCorners.size == 4 &&
             ContourDetector.isValidClockwiseConvex(proposedCorners) &&
             proposedCorners.indices.all { index ->
@@ -405,7 +396,13 @@ class DocumentBoundaryDetector(
         if (angleScore < 0.18) return null
 
         // Edge Strength Score: evaluates gradient presence along the 4 edges
-        val edgeScore = calculateEdgeSupport(corners, edgeMat)
+        val edgeEvidence = calculateEdgeSupport(corners, edgeMat)
+        val edgeScore = edgeEvidence.average
+        // Hough's four fitted lines can accidentally mix an outer border with
+        // internal table rows. Three independently supported sides are the
+        // minimum evidence needed to trust this fallback as a quadrilateral.
+        if (stage == DetectionStage.LINE_INTERSECTION &&
+            edgeEvidence.supportedSides < 3) return null
 
         // Corner Sharpness Score
         val cornerScore = evaluateCornerSharpness(corners, gray, imgWidth, imgHeight)
@@ -458,9 +455,12 @@ class DocumentBoundaryDetector(
     /**
      * Evaluates edge gradient support by sampling points along each of the 4 edges.
      */
-    private fun calculateEdgeSupport(quad: Array<Point>, edgeMat: Mat): Double {
+    private data class EdgeEvidence(val average: Double, val supportedSides: Int)
+
+    private fun calculateEdgeSupport(quad: Array<Point>, edgeMat: Mat): EdgeEvidence {
         var supportedSamples = 0
         var totalSamples = 0
+        var supportedSides = 0
         val samplesPerEdge = 24
 
         val w = edgeMat.width()
@@ -469,6 +469,7 @@ class DocumentBoundaryDetector(
         for (i in 0 until 4) {
             val p1 = quad[i]
             val p2 = quad[(i + 1) % 4]
+            var sideSamples = 0
 
             for (s in 1 until samplesPerEdge) {
                 val t = s.toDouble() / samplesPerEdge.toDouble()
@@ -490,12 +491,19 @@ class DocumentBoundaryDetector(
                     if (hasEdge) break
                 }
 
-                if (hasEdge) supportedSamples++
+                if (hasEdge) {
+                    supportedSamples++
+                    sideSamples++
+                }
                 totalSamples++
             }
+            if (sideSamples >= 5) supportedSides++
         }
 
-        return if (totalSamples > 0) (supportedSamples.toDouble() / totalSamples.toDouble()).coerceIn(0.0, 1.0) else 0.0
+        val average = if (totalSamples > 0)
+            (supportedSamples.toDouble() / totalSamples.toDouble()).coerceIn(0.0, 1.0)
+        else 0.0
+        return EdgeEvidence(average, supportedSides)
     }
 
     /**

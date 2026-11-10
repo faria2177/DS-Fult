@@ -56,4 +56,24 @@ void main() {
       _detection(_rect(.04, .09, .96, .91),
         size: const Size(1200, 900))), isTrue);
   });
+
+  test('Card-aware recovery accepts the complete card around an inner name', () {
+    final inner = _detection(_rect(.28, .42, .76, .65),
+      size: const Size(1200, 900));
+    final card = _detection(_rect(.09, .16, .91, .85),
+      size: const Size(1200, 900));
+    expect(DocumentEdges.isReliableGalleryCrop(inner), isFalse);
+    expect(DocumentEdges.isCredibleOuterCardAlternative(inner, card), isTrue);
+  });
+
+  test('Card recovery rejects unrelated and merely larger text blocks', () {
+    final inner = _detection(_rect(.20, .45, .70, .64),
+      size: const Size(1200, 900));
+    expect(DocumentEdges.isCredibleOuterCardAlternative(inner,
+      _detection(_rect(.47, .12, .95, .52),
+        size: const Size(1200, 900))), isFalse);
+    expect(DocumentEdges.isCredibleOuterCardAlternative(inner,
+      _detection(_rect(.18, .40, .75, .68),
+        size: const Size(1200, 900))), isFalse);
+  });
 }

@@ -116,6 +116,41 @@ class DocumentEdges {
     return true;
   }
 
+  /// The regular Scan detector can lock onto the printed name box of an ID
+  /// photo. When this happens, an independent card-mode pass may recover the
+  /// *outer* card. Accept that alternative only if it actually surrounds the
+  /// original candidate, is substantially larger and has card-like geometry.
+  /// Otherwise keep the uncropped gallery photo for manual review.
+  static bool isCredibleOuterCardAlternative(
+      ImageDetection inner, ImageDetection outer) {
+    final innerQuad = inner.quad;
+    final outerQuad = outer.quad;
+    if (innerQuad == null || outerQuad == null) return false;
+    if ((inner.imageSize.width - outer.imageSize.width).abs() > 1 ||
+        (inner.imageSize.height - outer.imageSize.height).abs() > 1) {
+      return false;
+    }
+    final outerArea = outerQuad.area;
+    if (outerArea < .30 || outerArea > .94 ||
+        outerArea < innerQuad.area * 1.45) {
+      return false;
+    }
+    if (outerQuad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
+        p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1)) {
+      return false;
+    }
+    if (!innerQuad.points.every(outerQuad.contains)) return false;
+
+    final points = outerQuad.scaleToSize(outer.imageSize).points;
+    final width = ((points[1] - points[0]).distance +
+        (points[2] - points[3]).distance) / 2;
+    final height = ((points[3] - points[0]).distance +
+        (points[2] - points[1]).distance) / 2;
+    if (width <= 0 || height <= 0) return false;
+    final ratio = width > height ? width / height : height / width;
+    return ratio >= 1.30 && ratio <= 2.10;
+  }
+
   /// Original photos remain unchanged, including when no document is found.
   /// Per-file failure falls back to the original so imports never disappear.
   static Future<AutoCropBatch> autoCropFiles(List<String> images,
@@ -124,10 +159,20 @@ class DocumentEdges {
     var cropped = 0;
     for (final image in images) {
       try {
-        final detection = await detect(image,
+        var detection = await detect(image,
             preferIdCardBounds: preferIdCardBounds);
-        if (detection == null || !isReliableGalleryCrop(detection,
-            preferIdCardBounds: preferIdCardBounds)) {
+        var safeToWarp = detection != null && isReliableGalleryCrop(detection,
+            preferIdCardBounds: preferIdCardBounds);
+        if (!safeToWarp && !preferIdCardBounds && detection != null) {
+          // Only an uncertain normal-Scan result pays for a second detector
+          // pass. Do not silently accept an unrelated background rectangle.
+          final card = await detect(image, preferIdCardBounds: true);
+          if (card != null && isCredibleOuterCardAlternative(detection, card)) {
+            detection = card;
+            safeToWarp = true;
+          }
+        }
+        if (detection == null || !safeToWarp) {
           output.add(image);
           continue;
         }

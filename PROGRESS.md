@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-10
-**Current candidate release:** `0.5.32+46`
+**Current candidate release:** `0.5.33+47`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42683897645](https://github.com/faria2177/DS-Fult/actions/runs/42683897645)
 **Baseline commit:** [`385d537`](https://github.com/faria2177/DS-Fult/commit/385d5372e6139a3ac820e41dbf37ed5e8cec8f20)
 
@@ -52,6 +52,7 @@
 | `0.5.31` | Video `381739.mp4` vs `381742.mp4`: opt-in scanned-image AI vision conversion for Word/Excel with separate image-capable model IDs, original image consent, bounded compressed single-page requests to three HTTPS providers, plus English Tesseract fallback for ML Kit native failures. Word TSV becomes actual editable tables in DOCX and a grid in preview; Bengali/Unicode Save as PDF uses a shaped raster fallback. | Code and mocked tests; CI and real phone/vision-API validation pending. Models can misread text; layouts/merged cells are not guaranteed exact. |
 | `0.5.32` | Video `381772.mp4`: guard against CameraX JPEG pixels remaining landscape when the recent live stream was portrait, and reject unreliable still quads or smaller inner-table crops in favour of full-source corner review. Me → AI Mode now has an expandable API key hints panel and browser links for all 12 provider entries; link is repeated in key-entry sheet. | Kotlin geometry + Flutter link tests added. Actual HONOR camera behaviour and browser integration require device verification; no guaranteed CamScanner-equivalent detector accuracy. |
 | Post-`0.5.32` | Video `381847(1).mp4`: gallery import of an ID photo in the normal Scan tab silently cropped to the central text block. Added conservative full-page geometry checks before gallery auto-warp, preserving the unmodified source when the detected rectangle looks like an interior panel. Dedicated ID-card scanning retains its separate detector policy. | Dart geometry regressions added; CI and exact-image HONOR Android 16 retest pending. Some uncertain photos deliberately retain background until manually cropped. |
+| `0.5.33` | CamScanner APK structural comparison motivates independent refinement: always search Hough/morphological candidates on full-resolution stills even when an internal table has strong edges, use a 1280px rather than 900px still working image, limit still corner drift, require support on at least three sides for Hough quadrilaterals, and retry an ambiguous gallery name-box crop with the strict card detector if the returned outer card encloses it. No CamScanner binary/source copied. | Native and Dart source changes plus outer-card geometry tests; CI, latency measurement and exact-reference HONOR camera/gallery tests pending. |
 
 ### 0.5.32 — Capture/crop safety and AI key onboarding
 
