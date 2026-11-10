@@ -12,6 +12,7 @@ import '../services/document_edges.dart';
 import '../services/image_processor.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
+import 'gallery_import_review_screen.dart';
 import 'manual_camera_screen.dart';
 import 'id_card_templates.dart';
 import 'id_card_template_screen.dart';
@@ -278,17 +279,25 @@ class _CameraScreenState extends State<CameraScreen> {
         requestFullMetadata: false,
       );
       if (files.isEmpty || !mounted) return;
-      setState(() => _processingGallery = true);
-      final cropped = await DocumentEdges.autoCropFiles(
-        files.map((file) => file.path).toList(),
-        preferIdCardBounds: _detectCardBounds,
+      final reviewed = await Navigator.of(context).push<GalleryImportResult>(
+        MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
+          imagePaths: files.map((file) => file.path).toList(),
+          initialAutoCrop: _settings.autoCrop,
+          initialFilter: widget.cardMode ? ScanFilter.original :
+              (_selectedFilter == ScanFilter.original
+                  ? ScanFilter.enhance : _selectedFilter),
+          preferIdCardBounds: _detectCardBounds,
+        )),
       );
-      if (!mounted) return;
+      if (reviewed == null || !mounted) return;
       if (widget.cardMode) {
-        widget.onCardSourcePaths?.call(files.map((e) => e.path).toList());
+        widget.onCardSourcePaths?.call(reviewed.sourcePaths);
       }
-      await _finishProcessed(cropped.paths,
-        applySelectedEffect: _settings.importFromGallery && !_batchMode);
+      if (reviewed.needsReview > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          '${reviewed.needsReview} photo(s) need manual corner review.')));
+      }
+      await _finishProcessed(reviewed.paths, applySelectedEffect: false);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

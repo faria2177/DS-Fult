@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
-import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/id_card_page_composer.dart';
 import '../services/docx_export.dart';
@@ -15,8 +14,10 @@ import '../services/image_tool_operations.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
+import 'batch_crop_screen.dart';
 import 'crop_screen.dart';
 import 'edit_text_screen.dart';
+import 'gallery_import_review_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'mosaic_screen.dart';
 import 'pdf_tools_screen.dart';
@@ -83,6 +84,29 @@ class _DocumentScreenState extends State<DocumentScreen> {
   Future<void> _crop() async {
     final doc = _document;
     if (doc == null || _busy) return;
+    if (doc.pages.length > 1) {
+      final edits = await Navigator.push<Map<int, Uint8List>>(context,
+        MaterialPageRoute(builder: (_) => BatchCropScreen(
+          imagePaths: doc.pages.map((page) => page.path).toList(),
+          initialIndex: _index,
+        )),
+      );
+      if (edits == null || edits.isEmpty || !mounted) return;
+      setState(() => _busy = true);
+      try {
+        for (final entry in edits.entries) {
+          if (entry.key < 0 || entry.key >= doc.pages.length) continue;
+          final page = doc.pages[entry.key];
+          await widget.store.replacePageBytes(doc.id, page.id, entry.value,
+              filter: page.filter);
+        }
+      } catch (error) {
+        _message('Batch crop failed: $error');
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
     final page = doc.pages[_index];
     final result = await Navigator.push<Uint8List>(context,
       MaterialPageRoute(builder: (_) => CropScreen(imagePath: page.path)));
@@ -246,11 +270,16 @@ class _DocumentScreenState extends State<DocumentScreen> {
         return;
       }
       if (!fromCamera) {
-        if (mounted) setState(() => _busy = true);
-        final cropped = await DocumentEdges.autoCropFiles(paths);
-        paths = cropped.paths;
-        if (cropped.needsReview > 0) {
-          _message('${cropped.needsReview} image(s) need manual corner review.');
+        final review = await Navigator.of(context).push<GalleryImportResult>(
+          MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
+            imagePaths: paths,
+            preferIdCardBounds: doc.kind.twoSided,
+          )),
+        );
+        if (review == null || !mounted) return;
+        paths = review.paths;
+        if (review.needsReview > 0) {
+          _message('${review.needsReview} image(s) need manual corner review.');
         }
       }
       if (doc.compositeCardPages) {

@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
-import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/id_card_page_composer.dart';
 import '../services/docx_export.dart';
@@ -21,6 +20,7 @@ import 'compress_screen.dart';
 import 'document_screen.dart';
 import 'document_text_tools_screen.dart';
 import 'edit_text_screen.dart';
+import 'gallery_import_review_screen.dart';
 import 'lock_document_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'signature_screen.dart';
@@ -239,10 +239,14 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         }
         final images = await _picker.pickMultiImage(limit: remaining,
             requestFullMetadata: false);
-        paths = images.map((image) => image.path).toList();
-        if (paths.isNotEmpty) {
-          paths = (await DocumentEdges.autoCropFiles(paths)).paths;
-        }
+        if (images.isEmpty || !mounted) return;
+        final review = await Navigator.of(context).push<GalleryImportResult>(
+          MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
+            imagePaths: images.map((image) => image.path).toList(),
+            preferIdCardBounds: doc.kind.twoSided,
+          )),
+        );
+        paths = review?.paths ?? [];
       }
       if (doc.compositeCardPages && paths.isNotEmpty) {
         if (paths.length != 2) {

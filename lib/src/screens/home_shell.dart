@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
 import '../services/ai_credential_store.dart';
-import '../services/document_edges.dart';
 import '../services/document_export.dart';
 import '../services/scan_settings_store.dart';
 import '../storage/document_store.dart';
@@ -20,6 +19,7 @@ import 'extract_text_screen.dart';
 import 'extract_pdf_pages_screen.dart';
 import 'files_workspace.dart';
 import 'files_merge_screen.dart';
+import 'gallery_import_review_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'image_to_pdf_screen.dart';
@@ -127,15 +127,17 @@ class _HomeShellState extends State<HomeShell> {
     try {
       final files = await _picker.pickMultiImage(requestFullMetadata: false);
       if (files.isEmpty || !mounted) return;
-      final autoCrop = await DocumentEdges.autoCropFiles(
-        files.map((file) => file.path).toList(),
+      final reviewed = await Navigator.of(context).push<GalleryImportResult>(
+        MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
+          imagePaths: files.map((file) => file.path).toList(),
+        )),
       );
-      if (!mounted) return;
-      if (autoCrop.needsReview > 0) {
-        _message('${autoCrop.needsReview} photo(s) had no reliable edges. '
+      if (reviewed == null || !mounted) return;
+      if (reviewed.needsReview > 0) {
+        _message('${reviewed.needsReview} photo(s) had no reliable edges. '
             'Use Crop to adjust them manually.');
       }
-      await _create(autoCrop.paths);
+      await _create(reviewed.paths);
     } catch (error) {
       _message('Could not import photos: $error');
     }
@@ -164,7 +166,9 @@ class _HomeShellState extends State<HomeShell> {
     try {
       final doc = await widget.store.createFromPaths(paths);
       if (!mounted) return;
-      await _open(doc.id, openEditorFirst: true);
+      // The supplied CamScanner sequence shows a 01/02 document grid after
+      // multi-import. Retain direct edit preview for a single captured page.
+      await _open(doc.id, openEditorFirst: paths.length == 1);
     } catch (error) {
       _message('Could not save document: $error');
     }
