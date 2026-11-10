@@ -34,7 +34,10 @@ internal object LiveOuterPageSearchPolicy {
         }
 
         val ratio = ScannerTuning.normalizedLongRatio(quad)
-        return ratio in 1.08..2.40 &&
+        // Internal forms may be almost square even on portrait A4 paper.
+        // Their containing *outer* candidate still has to pass the stricter
+        // paper-ratio checks in StillCapturePagePreference.
+        return ratio in 1.0..2.40 &&
             candidate.geometryScore >= .44 && candidate.edgeScore >= .18
     }
 }
