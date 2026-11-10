@@ -69,6 +69,21 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun video381781FullPageDetectedInJpegDoesNotNeedPreviewRegistration() {
+        // The capture may be independently registered poorly because CameraX
+        // uses different JPEG/analysis resolutions. Never discard a credible
+        // complete sheet found from the actual still pixels merely because
+        // the image-to-image matcher returned null.
+        val fullPageInStill = rect(.10f, .08f, .90f, .92f)
+        assertFalse(StillCaptureCropSafety.requiresManualReview(
+            fullPageInStill, 900, 1200, null))
+
+        // An invalid full-frame quad is still not an automatic page crop.
+        assertTrue(StillCaptureCropSafety.requiresManualReview(
+            rect(0f, 0f, 1f, 1f), 900, 1200, null))
+    }
+
+    @Test
     fun suddenlySmallerStillQuadRequiresReview() {
         val livePage = rect(.09f, .06f, .91f, .94f)
         val innerBand = rect(.12f, .43f, .88f, .62f)
