@@ -44,6 +44,47 @@ internal object StillCaptureCropSafety {
         return coverage in .30..0.94 && aspect in 1.12..1.89
     }
 
+    /** Strong *outer* ID-card proposal in a fully visible still photograph.
+     *
+     * Unlike the full-page policy, a card is landscape in physical pixels
+     * regardless of photo rotation. Require enough foreground for a complete
+     * card, an ID-like ratio and a reasonably centred contour. This is only
+     * used to promote an independent colour-mask candidate, not to invalidate
+     * the existing dedicated ID-card OpenCV selector.
+     */
+    fun isCredibleCard(quad: Quad, width: Int, height: Int): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val points = listOf(quad.topLeft, quad.topRight,
+            quad.bottomRight, quad.bottomLeft)
+        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
+                it.x !in 0.012f..0.988f || it.y !in 0.012f..0.988f }) return false
+        val coverage = area(quad)
+        if (coverage !in 0.25..0.86) return false
+        val (w, h) = sideLengths(quad, width, height)
+        val aspect = max(w, h) / min(w, h).coerceAtLeast(1.0)
+        if (aspect !in 1.48..2.1) return false
+        val cx = points.sumOf { it.x.toDouble() } / 4
+        val cy = points.sumOf { it.y.toDouble() } / 4
+        return abs(cx - .5) <= .22 && abs(cy - .5) <= .22
+    }
+
+    /** Recover an independently segmented outer card, never a loose panel.
+     * If the card-mode contour is a smaller inner name box, the mask must
+     * actually surround it and be at least 35% larger to replace it.
+     */
+    fun chooseCardStillBoundary(
+        contour: Quad?, contrast: Quad?, neutral: Quad?,
+        width: Int, height: Int,
+    ): Quad? {
+        val outer = listOfNotNull(contrast, neutral)
+            .filter { isCredibleCard(it, width, height) }
+            .maxByOrNull { area(it) } ?: return contour
+        if (contour == null) return outer
+        return if (encloses(outer, contour) && area(outer) >= area(contour) * 1.35) {
+            outer
+        } else contour
+    }
+
     /**
      * A high-contrast inner title, label or table can win still detection even
      * though the live preview framed the entire document. The still JPEG's

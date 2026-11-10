@@ -13,6 +13,39 @@ Quad _rect(double left, double top, double right, double bottom) => Quad(
   bottomLeft: Offset(left, bottom),
 );
 
+class _StillFakePlatform extends DoclensPlatform {
+  _StillFakePlatform({this.page, this.card});
+
+  final ImageDetection? page;
+  final ImageDetection? card;
+  final List<bool> preferCardCalls = [];
+  int warpCalls = 0;
+
+  @override
+  Future<ImageDetection?> detectInImage({
+    required String imagePath,
+    ScannerConfig config = const ScannerConfig(),
+  }) async {
+    preferCardCalls.add(config.preferIdCardBounds);
+    return config.preferIdCardBounds ? card : page;
+  }
+
+  @override
+  Future<String> warpImage({
+    required String rawImagePath,
+    required Quad quad,
+    int jpegQuality = 100,
+    ImageEnhancement enhancement = ImageEnhancement.none,
+    AutoOrientation autoOrientation = AutoOrientation.none,
+  }) async {
+    warpCalls++;
+    return '$rawImagePath.cropped';
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   test('Scanner tracks a stable four-corner outline with manual capture', () {
     final config = DocumentEdges.scannerConfig;
@@ -75,5 +108,65 @@ void main() {
     expect(DocumentEdges.isCredibleOuterCardAlternative(inner,
       _detection(_rect(.18, .40, .75, .68),
         size: const Size(1200, 900))), isFalse);
+  });
+
+  test('Gallery can recover a complete card when normal detection is null', () {
+    // 381853.mp4: the original is still available after import, but a second
+    // card-aware pass must not depend on the first detector finding a quad.
+    final outerCard = _detection(_rect(.12, .20, .88, .82),
+      size: const Size(1200, 900));
+    expect(DocumentEdges.isCredibleStandaloneCard(outerCard), isTrue);
+  });
+
+  test('Independent recovery rejects inner labels and background rectangles', () {
+    final innerName = _detection(_rect(.23, .43, .77, .59),
+      size: const Size(1200, 900));
+    final narrowSide = _detection(_rect(.18, .30, .82, .70),
+      size: const Size(1200, 900));
+    final nearlyFullFrame = _detection(_rect(.01, .02, .99, .98),
+      size: const Size(1200, 900));
+    final offCenter = _detection(_rect(.02, .02, .70, .48),
+      size: const Size(1200, 900));
+    expect(DocumentEdges.isCredibleStandaloneCard(innerName), isFalse);
+    expect(DocumentEdges.isCredibleStandaloneCard(narrowSide), isFalse);
+    expect(DocumentEdges.isCredibleStandaloneCard(nearlyFullFrame), isFalse);
+    expect(DocumentEdges.isCredibleStandaloneCard(offCenter), isFalse);
+  });
+
+  test('Null page detector still tries card fallback before gallery warp', () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(card: _detection(
+      _rect(.12, .20, .88, .82), size: const Size(1200, 900)));
+    DoclensPlatform.instance = fake;
+    try {
+      final result = await DocumentEdges.autoCropFiles(['id-front.jpg']);
+      expect(fake.preferCardCalls, [false, true]);
+      expect(result.paths, ['id-front.jpg.cropped']);
+      expect(result.croppedCount, 1);
+      expect(fake.warpCalls, 1);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  test('Manual and gallery lookup both reject inner box without outer card', () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(
+      page: _detection(_rect(.28, .43, .75, .61),
+        size: const Size(1200, 900)),
+      card: _detection(_rect(.22, .38, .78, .68),
+        size: const Size(1200, 900)),
+    );
+    DoclensPlatform.instance = fake;
+    try {
+      expect(await DocumentEdges.detectSafeStillOutline('card.jpg'), isNull);
+      final result = await DocumentEdges.autoCropFiles(['card.jpg']);
+      expect(result.paths, ['card.jpg']);
+      expect(result.croppedCount, 0);
+      expect(fake.warpCalls, 0);
+      expect(fake.preferCardCalls, [false, true, false, true]);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
   });
 }

@@ -130,4 +130,26 @@ class StillCaptureCropSafetyTest {
         assertFalse(StillCaptureCropSafety.shouldPreferPaperMask(
             alreadyAccuratePage, wholePaper, 900, 1200))
     }
+
+    @Test
+    fun fullIdCardCanRecoverWhenOpenCvOnlyFindsAnInnerNameBlock() {
+        val card = rect(.12f, .23f, .88f, .79f)
+        val name = rect(.29f, .43f, .69f, .56f)
+        assertTrue(StillCaptureCropSafety.isCredibleCard(card, 1200, 900))
+        assertFalse(StillCaptureCropSafety.isCredibleCard(name, 1200, 900))
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            name, card, null, 1200, 900) == card)
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            null, card, null, 1200, 900) == card)
+    }
+
+    @Test
+    fun cardFallbackCannotPreferUnrelatedOrDocumentSizedBackground() {
+        val name = rect(.29f, .43f, .69f, .56f)
+        val unrelated = rect(.02f, .20f, .65f, .70f)
+        val wholeFrame = rect(.02f, .02f, .98f, .98f)
+        assertFalse(StillCaptureCropSafety.isCredibleCard(wholeFrame, 1200, 900))
+        assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
+            name, unrelated, wholeFrame, 1200, 900) == name)
+    }
 }

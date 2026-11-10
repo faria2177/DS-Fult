@@ -139,6 +139,25 @@ class QuadDetectorTest {
     }
 
     @Test
+    fun darkDeskColourSegmentationFindsOuterIdCardAndIgnoresInnerNameBox() {
+        // The 381853.mp4 front/back imports leave a tabletop background.
+        // Exercise the independent card candidate with synthetic pixels only,
+        // without storing any personally identifiable identity-card photo.
+        val width = 320
+        val height = 240
+        val pixels = IntArray(width * height) { 0xFF343536.toInt() }
+        fillRgb(pixels, width, 43, 55, 278, 184, 0xFF9AA8B1.toInt())
+        fillRgb(pixels, width, 106, 85, 219, 146, 0xFF434545.toInt())
+        val outer = assertNotNull(
+            QuadDetector.detectBackgroundContrastPage(pixels, width, height))
+        assertTrue(StillCaptureCropSafety.isCredibleCard(outer, width, height))
+        assertTrue(abs(outer.topLeft.x - 43f / width) < .05f)
+        assertTrue(abs(outer.topLeft.y - 55f / height) < .05f)
+        assertTrue(abs(outer.bottomRight.x - 277f / width) < .05f)
+        assertTrue(abs(outer.bottomRight.y - 183f / height) < .05f)
+    }
+
+    @Test
     fun contrastMaskDoesNotInventPageOnUniformSurface() {
         val pixels = IntArray(320 * 400) { 0xFFD0CFCC.toInt() }
         assertNull(QuadDetector.detectBackgroundContrastPage(pixels, 320, 400))

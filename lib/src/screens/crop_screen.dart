@@ -25,6 +25,9 @@ class _CropScreenState extends State<CropScreen> {
   double _ratio = .7;
   bool _busy = false;
   bool _detecting = false;
+  // Inset handles are only a draggable starting point. They must never cut
+  // 5% off every edge when automatic detection failed and Done is tapped.
+  bool _cropSelectionConfirmed = false;
   String _hint = 'Drag the four handles to adjust the document.';
 
   @override
@@ -57,17 +60,18 @@ class _CropScreenState extends State<CropScreen> {
     if (_detecting || _busy || _imageBytes == null) return;
     setState(() => _detecting = true);
     try {
-      final detected = await DocumentEdges.detect(widget.imagePath,
+      final detected = await DocumentEdges.detectSafeStillOutline(widget.imagePath,
           preferIdCardBounds: widget.preferIdCardBounds);
       if (!mounted) return;
       final points = detected?.quad?.points;
       setState(() {
         if (points == null) {
-          _hint = 'No reliable outline found. Adjust all four corners manually.';
+          _hint = 'No reliable outer border. Drag the corners to crop; Done keeps the original unless you adjust them.';
         } else {
           _corners
             ..clear()
             ..addAll(points);
+          _cropSelectionConfirmed = true;
           _hint = 'Four corners detected. Review edges before saving.';
         }
       });
@@ -85,7 +89,8 @@ class _CropScreenState extends State<CropScreen> {
       _corners
         ..clear()
         ..addAll(CropQuad.inset().corners);
-      _hint = 'Full-page rectangle selected. Drag to refine.';
+      _cropSelectionConfirmed = false;
+      _hint = 'Full photo restored. Drag corners to crop; Done keeps it unchanged if you do not adjust.';
     });
   }
 
@@ -99,7 +104,9 @@ class _CropScreenState extends State<CropScreen> {
     }
     setState(() => _busy = true);
     try {
-      final image = await ImageProcessor.process(_imageBytes!, crop: CropQuad(_corners));
+      final image = _cropSelectionConfirmed
+          ? await ImageProcessor.process(_imageBytes!, crop: CropQuad(_corners))
+          : _imageBytes!;
       if (mounted) Navigator.pop(context, image);
     } catch (error) {
       if (mounted) {
@@ -150,7 +157,10 @@ class _CropScreenState extends State<CropScreen> {
                                 (_corners[i].dy + details.delta.dy / height).clamp(.0, 1.0),
                               );
                               if (CropQuad(candidate).isValid) {
-                                setState(() => _corners[i] = candidate[i]);
+                                setState(() {
+                                  _corners[i] = candidate[i];
+                                  _cropSelectionConfirmed = true;
+                                });
                               }
                             },
                             child: Container(

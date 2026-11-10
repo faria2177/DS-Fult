@@ -459,10 +459,10 @@ object QuadDetector {
         // without it a missed still quad silently saves the entire camera
         // frame (the incorrect third page in the supplied video).
         val cvQuad = OpenCvBoundaryAdapter.detectStill(bitmap, preferIdCardBounds)
-        // ID mode has its own strict card selector. If that selector cannot
-        // find the card, ask for corner review rather than segmenting the
-        // large pale form underneath it as the document.
-        if (preferIdCardBounds) return cvQuad
+        // ID mode keeps its strict OpenCV card selector. On imported photos
+        // with a dark table background, independently segment the *outer*
+        // card before giving up. This fallback is card-shaped/centred and
+        // cannot promote a large A4 form behind a small card.
         val w = bitmap.width
         val h = bitmap.height
         val scale = min(1.0, 512.0 / max(w, h))
@@ -475,6 +475,12 @@ object QuadDetector {
             small.getPixels(pixels, 0, dw, 0, 0, dw, dh)
         } finally {
             if (small !== bitmap) small.recycle()
+        }
+        if (preferIdCardBounds) {
+            val contrast = detectBackgroundContrastPage(pixels, dw, dh)
+            val neutral = detectNeutralPaper(pixels, dw, dh)
+            return StillCaptureCropSafety.chooseCardStillBoundary(
+                cvQuad, contrast, neutral, dw, dh)
         }
         // The independently segmented outside sheet must outweigh any inner
         // text rectangle, but cannot displace an equally sized strong CV page.

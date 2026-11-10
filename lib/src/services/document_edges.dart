@@ -131,24 +131,63 @@ class DocumentEdges {
       return false;
     }
     final outerArea = outerQuad.area;
-    if (outerArea < .30 || outerArea > .94 ||
+    if (!isCredibleStandaloneCard(outer) ||
         outerArea < innerQuad.area * 1.45) {
-      return false;
-    }
-    if (outerQuad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
-        p.dx < 0 || p.dx > 1 || p.dy < 0 || p.dy > 1)) {
       return false;
     }
     if (!innerQuad.points.every(outerQuad.contains)) return false;
 
-    final points = outerQuad.scaleToSize(outer.imageSize).points;
+    return true;
+  }
+
+  /// Independent card-mode results must pass stricter geometry before they
+  /// can crop a normal Scan import whose page detector returned *nothing*.
+  /// A compact central text box is easy to mistake for a card, so require
+  /// substantial coverage, an actual landscape-card ratio and a near-centred
+  /// fully visible outline. A weak result keeps the unmodified original.
+  static bool isCredibleStandaloneCard(ImageDetection detection) {
+    final quad = detection.quad;
+    final size = detection.imageSize;
+    if (quad == null || size.width <= 0 || size.height <= 0 ||
+        !CropQuad(quad.points).isValid) return false;
+    final area = quad.area;
+    if (area < .28 || area > .86) return false;
+    if (quad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
+        p.dx < .012 || p.dx > .988 || p.dy < .012 || p.dy > .988)) {
+      return false;
+    }
+    final cx = quad.points.map((p) => p.dx).reduce((a, b) => a + b) / 4;
+    final cy = quad.points.map((p) => p.dy).reduce((a, b) => a + b) / 4;
+    if ((cx - .5).abs() > .22 || (cy - .5).abs() > .22) return false;
+
+    final points = quad.scaleToSize(size).points;
     final width = ((points[1] - points[0]).distance +
         (points[2] - points[3]).distance) / 2;
     final height = ((points[3] - points[0]).distance +
         (points[2] - points[1]).distance) / 2;
     if (width <= 0 || height <= 0) return false;
     final ratio = width > height ? width / height : height / width;
-    return ratio >= 1.30 && ratio <= 2.10;
+    return ratio >= 1.48 && ratio <= 2.10;
+  }
+
+  /// Used by *both* automatic gallery import and Adjust corners → Auto
+  /// Detect. Neither route may promote an interior table/name block to a
+  /// complete document. Try the independent card outline even when the
+  /// ordinary page detector returned null; otherwise leave the photo whole.
+  static Future<ImageDetection?> detectSafeStillOutline(String imagePath,
+      {bool preferIdCardBounds = false}) async {
+    final normal = await detect(imagePath,
+        preferIdCardBounds: preferIdCardBounds);
+    if (normal != null && isReliableGalleryCrop(normal,
+        preferIdCardBounds: preferIdCardBounds)) return normal;
+    if (preferIdCardBounds) return null;
+
+    final card = await detect(imagePath, preferIdCardBounds: true);
+    if (card == null) return null;
+    if (normal == null) {
+      return isCredibleStandaloneCard(card) ? card : null;
+    }
+    return isCredibleOuterCardAlternative(normal, card) ? card : null;
   }
 
   /// Original photos remain unchanged, including when no document is found.
@@ -159,20 +198,9 @@ class DocumentEdges {
     var cropped = 0;
     for (final image in images) {
       try {
-        var detection = await detect(image,
+        final detection = await detectSafeStillOutline(image,
             preferIdCardBounds: preferIdCardBounds);
-        var safeToWarp = detection != null && isReliableGalleryCrop(detection,
-            preferIdCardBounds: preferIdCardBounds);
-        if (!safeToWarp && !preferIdCardBounds && detection != null) {
-          // Only an uncertain normal-Scan result pays for a second detector
-          // pass. Do not silently accept an unrelated background rectangle.
-          final card = await detect(image, preferIdCardBounds: true);
-          if (card != null && isCredibleOuterCardAlternative(detection, card)) {
-            detection = card;
-            safeToWarp = true;
-          }
-        }
-        if (detection == null || !safeToWarp) {
+        if (detection == null) {
           output.add(image);
           continue;
         }
