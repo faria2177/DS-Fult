@@ -92,8 +92,26 @@ internal object StillCaptureCropSafety {
         return abs(previewAspect - stillAspect) / previewAspect <= .085
     }
 
+    /**
+     * A few Android CameraX devices write landscape JPEG pixels without the
+     * 90/270-degree EXIF flag while the live analysis surface is portrait.
+     * Only correct a proven transposed aspect ratio, using CameraX's recent
+     * frame rotation; never guess from the content of a landscape document.
+     */
+    fun missingExifQuarterTurns(previewWidth: Int, previewHeight: Int,
+                                stillWidth: Int, stillHeight: Int,
+                                frameRotationDegrees: Int): Int {
+        if (compatibleView(previewWidth, previewHeight, stillWidth, stillHeight)) return 0
+        if (!compatibleView(previewWidth, previewHeight, stillHeight, stillWidth)) return 0
+        return when (((frameRotationDegrees % 360) + 360) % 360) {
+            90 -> 1
+            270 -> 3
+            else -> 0
+        }
+    }
+
     fun significantlySmallerThan(still: Quad, preview: Quad): Boolean =
-        area(still) < area(preview) * .64
+        area(still) < area(preview) * .78
 
     /** A proposed coloured outer panel must actually contain the inner crop. */
     fun encloses(outer: Quad, inner: Quad): Boolean {
@@ -115,6 +133,7 @@ internal object StillCaptureCropSafety {
     fun requiresManualReview(
         still: Quad?, width: Int, height: Int, credibleLiveHint: Quad?,
     ): Boolean = still == null ||
+        !isCrediblePage(still, width, height) ||
         isSuspiciousInteriorStrip(still, width, height) ||
         (credibleLiveHint != null && significantlySmallerThan(still, credibleLiveHint))
 

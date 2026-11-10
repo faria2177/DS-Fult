@@ -218,6 +218,14 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 **Consequences:** ADR-026's **text-only** Send consent remains unchanged for standalone proofreading; the new photo-consent flow is a separate narrowly scoped exception to the historical offline-only default. Providers process submitted photos under their own policies and may incur costs; the feature cannot guarantee correct columns, merged cells or factual content. A device and non-sensitive API-fixture test is required before release parity claims.
 **Related:** `ai_document_vision_gateway.dart`, `ai_mode_screen.dart`, `office_conversion_screen.dart`, `docx_export.dart`, `word_review_screen.dart`, `unicode_text_pdf_export.dart`, model downloader and regression tests.
 
+## ADR-028 — Never auto-warp a suspicious shutter crop; make API setup discoverable
+
+**Status:** Accepted for `0.5.32`; real HONOR Android 16 retest pending.
+**Decision:** The recent CameraX live-frame orientation is evidence for correcting a JPEG whose EXIF-upright pixel aspect remains precisely transposed; do not rotate already matching pixels or infer orientation from document text. After independent still detection, reject a non-credible full-page quad or one significantly smaller than the recent reliable live page and return the complete upright source for manual corner adjustment. Preserve all original content until an explicit user decision. Separately, expose provider-owned HTTPS API-key dashboards as external browser links via an expandable AI Mode hint and each provider's setup controls, with copy-link fallback.
+**Why:** In `381772.mp4` the green live quad frames a portrait A4 timetable, but shutter preview and final document show only a cropped horizontal fragment. The screenshot requests discoverable API-key instructions for every provider.
+**Consequences:** More borderline scenes may require manual corner confirmation; the correction cannot compensate for every sensor-space orientation inconsistency or prove exact Auto Crop fidelity without device captures. Opening an official dashboard neither obtains nor uses an API key automatically. Users remain responsible for provider sign-in, quota and billing; API keys stay protected in local secure storage.
+**Related:** `ScannerSession.kt`, `StillCaptureCropSafety.kt`, native safety tests, `ai_mode_screen.dart`, `ai_provider_catalog.dart`, `test/ai_mode_screen_test.dart`, and `BUGS.md` B-001.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.

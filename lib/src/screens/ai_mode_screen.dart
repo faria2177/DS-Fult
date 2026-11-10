@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/ai_credential_store.dart';
 import '../services/ai_provider_catalog.dart';
@@ -8,10 +9,14 @@ import '../theme.dart';
 
 /// Provider credentials are configured here, but no inference request is sent
 /// until an individual document feature explicitly implements and requests it.
+typedef AiLinkOpener = Future<bool> Function(Uri uri);
+
 class AiModeScreen extends StatefulWidget {
-  const AiModeScreen({super.key, this.credentialStore});
+  const AiModeScreen({super.key, this.credentialStore, this.openExternalLink});
 
   final AiCredentialStore? credentialStore;
+  /// Test seam; production always uses the system browser for official sites.
+  final AiLinkOpener? openExternalLink;
 
   @override
   State<AiModeScreen> createState() => _AiModeScreenState();
@@ -73,6 +78,36 @@ class _AiModeScreenState extends State<AiModeScreen> {
         SnackBar(content: Text(message)),
       );
     }
+  }
+
+  Future<void> _openKeyPage(AiProvider provider) async {
+    final uri = Uri.tryParse(provider.keyPage);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      _notice('This provider does not have a valid official key link.');
+      return;
+    }
+    try {
+      final opened = await (widget.openExternalLink?.call(uri) ??
+          launchUrl(uri, mode: LaunchMode.externalApplication));
+      if (opened) return;
+    } catch (_) {
+      // A browser may not be installed; make the link copyable instead.
+    }
+    await Clipboard.setData(ClipboardData(text: uri.toString()));
+    _notice('Could not open the browser. API key link copied instead.');
+  }
+
+  Widget _keyHelpRow(String providerId, String instruction) {
+    final provider = AiProviderCatalog.byId(providerId)!;
+    return ListTile(
+      dense: true,
+      title: Text(provider.name, style: const TextStyle(
+        fontWeight: FontWeight.w600)),
+      subtitle: Text(instruction),
+      trailing: const Icon(Icons.open_in_new, size: 19, color: dsTeal),
+      onTap: () => _openKeyPage(provider),
+      key: Key('ai-help-$providerId'),
+    );
   }
 
   Future<void> _changeEnabled(bool value) async {
@@ -160,6 +195,7 @@ class _AiModeScreenState extends State<AiModeScreen> {
         provider: provider,
         vault: _vault,
         hasSavedKey: _hasKeys[provider.id] ?? false,
+        onOpenKeyPage: () => _openKeyPage(provider),
       ),
     );
     if (saved == null || !mounted) return;
@@ -257,6 +293,28 @@ class _AiModeScreenState extends State<AiModeScreen> {
                   style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
                 ),
               ),
+              Card(child: ExpansionTile(
+                key: const Key('ai-api-key-hints'),
+                leading: const Icon(Icons.help_outline, color: dsTeal),
+                title: const Text('Where to get an API key'),
+                subtitle: const Text('Official links and quick instructions'),
+                childrenPadding: const EdgeInsets.only(bottom: 10),
+                children: [
+                  _keyHelpRow('gemini',
+                    'Sign in with Google → Create API key → Copy the key.'),
+                  _keyHelpRow('groq',
+                    'Sign in to GroqCloud → API Keys → Create API key.'),
+                  _keyHelpRow('openrouter',
+                    'Sign in → Keys → Create key. Check free model limits.'),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                    child: Text('For the other providers, use the official '
+                      'Get API key link shown in each provider card. API '
+                      'availability and charges depend on the provider.',
+                      style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              )),
               _heading('Providers with free-tier options'),
               for (final provider in AiProviderCatalog.providers.where((p) => p.freeTier))
                 _providerTile(provider),
@@ -322,6 +380,18 @@ class _AiModeScreenState extends State<AiModeScreen> {
                     ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(left: 64, right: 10),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: Key('ai-get-key-${provider.id}'),
+                onPressed: () => _openKeyPage(provider),
+                icon: const Icon(Icons.open_in_new, size: 17),
+                label: const Text('Get API key'),
+              ),
+            ),
+          ),
         ]),
       ),
     );
@@ -333,11 +403,13 @@ class _ProviderKeySheet extends StatefulWidget {
     required this.provider,
     required this.vault,
     required this.hasSavedKey,
+    required this.onOpenKeyPage,
   });
 
   final AiProvider provider;
   final AiCredentialStore vault;
   final bool hasSavedKey;
+  final Future<void> Function() onOpenKeyPage;
 
   @override
   State<_ProviderKeySheet> createState() => _ProviderKeySheetState();
@@ -465,6 +537,12 @@ class _ProviderKeySheetState extends State<_ProviderKeySheet> {
             )),
           ),
           const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            key: const Key('ai-open-key-website'),
+            onPressed: widget.onOpenKeyPage,
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Open official API key website'),
+          ),
           TextButton.icon(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: widget.provider.keyPage));

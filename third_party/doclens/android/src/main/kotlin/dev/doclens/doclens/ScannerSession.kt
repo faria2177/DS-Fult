@@ -59,6 +59,11 @@ class ScannerSession(
         val quad: Quad, val timestampMs: Long, val width: Int, val height: Int,
     )
     @Volatile private var latestPagePreviewHint: PagePreviewHint? = null
+    private data class FrameOrientation(
+        val width: Int, val height: Int, val rotationDegrees: Int,
+        val timestampMs: Long,
+    )
+    @Volatile private var latestFrameOrientation: FrameOrientation? = null
 
     init {
         lensFacing = if (config.initialLens == "front") CameraSelector.LENS_FACING_FRONT
@@ -221,6 +226,11 @@ class ScannerSession(
             val (luma, width, height) = YuvUtils.extractLuma(image, downscaleTo)
             lastFrameWidth = width
             lastFrameHeight = height
+            val uprightFrameWidth = if (rotation % 180 == 0) width else height
+            val uprightFrameHeight = if (rotation % 180 == 0) height else width
+            latestFrameOrientation = FrameOrientation(
+                uprightFrameWidth, uprightFrameHeight, rotation, now,
+            )
             // Keep the chroma information: a similarly bright card and desk
             // can be separated by saturation edges that luma alone misses.
             // If a device supplies an invalid chroma plane, preserve the
@@ -365,6 +375,9 @@ class ScannerSession(
         val previewHintAtShutter = latestPagePreviewHint?.takeIf {
             System.currentTimeMillis() - it.timestampMs in 0L..900L
         }
+        val frameOrientationAtShutter = latestFrameOrientation?.takeIf {
+            System.currentTimeMillis() - it.timestampMs in 0L..1200L
+        }
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, captureExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onError(exception: ImageCaptureException) {
@@ -380,7 +393,19 @@ class ScannerSession(
                     // subsampling it to 3MP before applying the perspective warp.
                     raw = decodeDownscaled(file.absolutePath, maxDimension = 4096)
                         ?: throw ScannerException.CaptureFailed("Decode failed")
-                    rotated = ExifRotator.rotated(raw, file.absolutePath)
+                    val exifUpright = ExifRotator.rotated(raw, file.absolutePath)
+                    val turns = frameOrientationAtShutter?.let { frame ->
+                        StillCaptureCropSafety.missingExifQuarterTurns(
+                            frame.width, frame.height,
+                            exifUpright.width, exifUpright.height,
+                            frame.rotationDegrees,
+                        )
+                    } ?: 0
+                    rotated = if (turns == 0) exifUpright else
+                        ImageWarper.rotateBitmap(exifUpright, turns)
+                    if (rotated !== exifUpright && exifUpright !== raw) {
+                        exifUpright.recycle()
+                    }
                     val rawSize = Size(rotated.width, rotated.height)
                     // The preview quad is measured on a low-resolution YUV
                     // stream and can drift if a phone uses a different sensor
