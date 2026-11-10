@@ -181,4 +181,21 @@ class StillCaptureCropSafetyTest {
         assertTrue(StillCaptureCropSafety.chooseCardStillBoundary(
             notebook, null, null, 320, 420, colorCard = innerLabel) == notebook)
     }
+
+    @Test
+    fun cameraShutterMayTrustVerifiedCardButNotPrintedA4Label() {
+        val notebook = rect(.02f, .02f, .98f, .98f)
+        val wholeA4 = rect(.10f, .10f, .90f, .90f)
+        val card = rect(.295f, .26f, .705f, .75f)
+        assertTrue(StillCaptureCropSafety.verifiedColorCardOverBackground(
+            notebook, card, 320, 420))
+        assertTrue(StillCaptureCropSafety.verifiedColorCardOverBackground(
+            null, card, 320, 420))
+        assertTrue(StillCaptureCropSafety.verifiedColorCardOverBackground(
+            card, card, 320, 420))
+        assertFalse(StillCaptureCropSafety.verifiedColorCardOverBackground(
+            wholeA4, card, 320, 420))
+        assertFalse(StillCaptureCropSafety.verifiedColorCardOverBackground(
+            notebook, rect(.40f, .45f, .60f, .58f), 320, 420))
+    }
 }

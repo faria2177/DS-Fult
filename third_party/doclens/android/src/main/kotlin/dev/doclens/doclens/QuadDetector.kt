@@ -328,7 +328,7 @@ object QuadDetector {
             var coloured = 0
             for (y in startY until startY + patchH) {
                 for (x in startX until startX + patchW) {
-                    if (isStronglyColoured(pixels[y * width + x])) coloured++
+                    if (isCardForegroundColor(pixels[y * width + x])) coloured++
                 }
             }
             if (coloured * 4 < patchW * patchH) neutralCorners++
@@ -338,7 +338,7 @@ object QuadDetector {
         val colourMask = BooleanArray(pixels.size)
         var colouredPixels = 0
         for (i in pixels.indices) {
-            if (isStronglyColoured(pixels[i])) {
+            if (isCardForegroundColor(pixels[i])) {
                 colourMask[i] = true
                 colouredPixels++
             }
@@ -357,6 +357,43 @@ object QuadDetector {
         val high = max(r, max(g, b))
         val low = min(r, min(g, b))
         return high >= 95 && (high - low) * 100 >= high * 32
+    }
+
+    /**
+     * Light gold cards can be almost as bright as the paper underneath them.
+     * They have a consistent warm red/green excess over blue even when their
+     * HSV saturation falls below the generic coloured-panel threshold.
+     * White notebook pages and thin blue ruling fail this additional cue.
+     */
+    private fun isCardForegroundColor(pixel: Int): Boolean {
+        if (isStronglyColoured(pixel)) return true
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        return r >= 130 && g >= 105 && r - b >= 34 && g - b >= 14
+    }
+
+    /**
+     * An independent, colour-backed still-capture hint. Used only after the
+     * user presses the shutter, never in the live-frame hot path. This can
+     * verify a card when the normal camera detector has chosen the entire
+     * ruled notebook behind it. The original high-resolution photo stays
+     * intact, and the normalized corners warp the full-resolution bitmap.
+     */
+    internal fun detectColoredCardInBitmap(bitmap: Bitmap): Quad? {
+        if (bitmap.width < 64 || bitmap.height < 64) return null
+        val scale = min(1.0, 512.0 / max(bitmap.width, bitmap.height))
+        val width = max(64, (bitmap.width * scale).toInt())
+        val height = max(64, (bitmap.height * scale).toInt())
+        val small = if (width == bitmap.width && height == bitmap.height) bitmap
+            else Bitmap.createScaledBitmap(bitmap, width, height, true)
+        val pixels = IntArray(width * height)
+        try {
+            small.getPixels(pixels, 0, width, 0, 0, width, height)
+        } finally {
+            if (small !== bitmap) small.recycle()
+        }
+        return detectColoredCardOnNeutralPage(pixels, width, height)
     }
 
     /** RGB-backed live candidate at a bounded 256px edge, independent of OpenCV. */

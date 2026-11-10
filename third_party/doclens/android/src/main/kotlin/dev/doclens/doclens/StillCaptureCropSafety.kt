@@ -92,6 +92,39 @@ internal object StillCaptureCropSafety {
         return abs(cx - .5) <= .22 && abs(cy - .5) <= .22
     }
 
+    /**
+     * Only an independently segmented *whole card* may challenge camera
+     * preview geometry. A broad border from the notebook can be replaced;
+     * a normal A4 page cannot be replaced by a coloured heading inside it.
+     * A close match means the normal detector already found this same card.
+     */
+    fun verifiedColorCardOverBackground(
+        detected: Quad?, colorCard: Quad?, width: Int, height: Int,
+    ): Boolean {
+        if (colorCard == null || !isCredibleColorCard(colorCard, width, height)) {
+            return false
+        }
+        if (detected == null) return true
+        val normalPoints = listOf(detected.topLeft, detected.topRight,
+            detected.bottomRight, detected.bottomLeft)
+        val cardPoints = listOf(colorCard.topLeft, colorCard.topRight,
+            colorCard.bottomRight, colorCard.bottomLeft)
+        val alreadySame = normalPoints.indices.all { i ->
+            hypot((normalPoints[i].x - cardPoints[i].x).toDouble(),
+                (normalPoints[i].y - cardPoints[i].y).toDouble()) <= .055
+        }
+        if (alreadySame) return true
+        val left = normalPoints.minOf { it.x }
+        val right = normalPoints.maxOf { it.x }
+        val top = normalPoints.minOf { it.y }
+        val bottom = normalPoints.maxOf { it.y }
+        val nearFrameSides = listOf(left < .065f, right > .935f,
+            top < .065f, bottom > .935f).count { it }
+        return nearFrameSides >= 3 && area(detected) >= .70 &&
+            area(detected) >= area(colorCard) * 1.40 &&
+            encloses(detected, colorCard)
+    }
+
     /** Recover an independently segmented outer card, never a loose panel.
      * If the card-mode contour is a smaller inner name box, the mask must
      * actually surround it and be at least 35% larger to replace it.

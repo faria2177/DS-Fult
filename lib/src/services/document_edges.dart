@@ -279,7 +279,10 @@ class DocumentEdges {
           rawImagePath: image,
           quad: detection.quadIn,
           jpegQuality: 95,
-          enhancement: ImageEnhancement.enhanced,
+          // Cropping is geometry only. Gallery Import applies the user's
+          // chosen Enhance/Original effect *afterwards*. Pre-enhancing here
+          // both double-processes text and changes faces on an Original ID.
+          enhancement: ImageEnhancement.none,
         );
         output.add(croppedPath);
         cropped++;

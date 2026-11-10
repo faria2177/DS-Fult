@@ -21,6 +21,7 @@ class _StillFakePlatform extends DoclensPlatform {
   final List<bool> preferCardCalls = [];
   int warpCalls = 0;
   Quad? lastWarpedQuad;
+  ImageEnhancement? lastWarpEnhancement;
 
   @override
   Future<ImageDetection?> detectInImage({
@@ -41,6 +42,7 @@ class _StillFakePlatform extends DoclensPlatform {
   }) async {
     warpCalls++;
     lastWarpedQuad = quad;
+    lastWarpEnhancement = enhancement;
     return '$rawImagePath.cropped';
   }
 
@@ -66,6 +68,21 @@ void main() {
   test('Gallery import accepts a credible outer A4 page', () {
     expect(DocumentEdges.isReliableGalleryCrop(
       _detection(_rect(.08, .08, .92, .92))), isTrue);
+  });
+
+  test('Auto Crop only warps pixels and never pre-enhances ID text or faces',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: _detection(
+      _rect(.08, .08, .92, .92)));
+    DoclensPlatform.instance = fake;
+    try {
+      final result = await DocumentEdges.autoCropFiles(['original.jpg']);
+      expect(result.croppedCount, 1);
+      expect(fake.lastWarpEnhancement, ImageEnhancement.none);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
   });
 
   test('Gallery import keeps full ID image when text block is selected', () {

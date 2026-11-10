@@ -210,6 +210,28 @@ class QuadDetectorTest {
     }
 
     @Test
+    fun paleGoldCardRetainsOuterCornersWhenSaturationAloneWouldMissIt() {
+        // Sampled from the *colour characteristics* of the user's test
+        // scene, not from their private portrait, name or ID information.
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFFBBBBC0.toInt() }
+        for (y in 27 until height step 38) {
+            fillRgb(pixels, width, 0, y, width, y + 2, 0xFF596077.toInt())
+        }
+        // This light gold has saturation ~24%, below the original 32% mask.
+        fillRgb(pixels, width, 91, 97, 231, 327, 0xFFDAC5A6.toInt())
+        fillRgb(pixels, width, 135, 165, 192, 245, 0xFF494E4D.toInt())
+        val detected = assertNotNull(
+            QuadDetector.detectColoredCardOnNeutralPage(pixels, width, height),
+        )
+        assertTrue(abs(detected.topLeft.x - 91f / width) < .05f)
+        assertTrue(abs(detected.topLeft.y - 97f / height) < .05f)
+        assertTrue(abs(detected.bottomRight.x - 230f / width) < .05f)
+        assertTrue(abs(detected.bottomRight.y - 326f / height) < .05f)
+    }
+
+    @Test
     fun chromaCardFallbackRejectsTinyTitleAndColouredBackground() {
         val width = 320
         val height = 420

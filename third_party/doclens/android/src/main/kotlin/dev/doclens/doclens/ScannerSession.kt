@@ -415,12 +415,26 @@ class ScannerSession(
                     // fails. CameraX stills can have a different crop/zoom;
                     // preserving the whole original lets the user adjust
                     // all four corners without irreversible mis-cropping.
-                    val stillQuad = QuadDetector.detectInBitmap(
+                    val ordinaryStillQuad = QuadDetector.detectInBitmap(
                         rotated,
                         config.detectionPolarity,
                         config.detectionThresholdOffset,
                         config.preferIdCardBounds,
                     )
+                    // A coloured card on ruled paper can appear as a small
+                    // object *inside* the large notebook quad detected by
+                    // ordinary page edges. Verify its physical outer border
+                    // independently before warping any captured pixels.
+                    // This stays entirely offline and never synthesizes or
+                    // rewrites the person's portrait or card text.
+                    val colourCard = if (config.preferIdCardBounds) null else
+                        QuadDetector.detectColoredCardInBitmap(rotated)
+                    val verifiedColourCard = !config.preferIdCardBounds &&
+                        StillCaptureCropSafety.verifiedColorCardOverBackground(
+                            ordinaryStillQuad, colourCard,
+                            rawSize.width, rawSize.height)
+                    val stillQuad = if (verifiedColourCard) colourCard
+                        else ordinaryStillQuad
                     // CameraX still capture is re-detected on upright pixels,
                     // but a dense letter may yield only the inner text band.
                     // In that case NEVER warp away the header and signature.
@@ -432,6 +446,7 @@ class ScannerSession(
                             rawSize.width, rawSize.height)
                     }?.quad
                     val uncertainStill = !config.preferIdCardBounds &&
+                        !verifiedColourCard &&
                         StillCaptureCropSafety.requiresManualReview(
                             stillQuad, rawSize.width, rawSize.height, reviewHint)
                     val q = if (uncertainStill && reviewHint != null) reviewHint

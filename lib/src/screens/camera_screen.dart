@@ -283,9 +283,10 @@ class _CameraScreenState extends State<CameraScreen> {
         MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
           imagePaths: files.map((file) => file.path).toList(),
           initialAutoCrop: _settings.autoCrop,
+          // Honour an explicit Original preset: auto-crop must not imply
+          // colour/face/text enhancement of the user's source image.
           initialFilter: widget.cardMode ? ScanFilter.original :
-              (_selectedFilter == ScanFilter.original
-                  ? ScanFilter.enhance : _selectedFilter),
+              _selectedFilter,
           preferIdCardBounds: _detectCardBounds,
         )),
       );
