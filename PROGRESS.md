@@ -1,7 +1,7 @@
 # DocScanner — Progress Snapshot
 
 **Last documented:** 2026-11-10
-**Current candidate release:** `0.5.34+48`
+**Current candidate release:** `0.5.35+49`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42683897645](https://github.com/faria2177/DS-Fult/actions/runs/42683897645)
 **Baseline commit:** [`385d537`](https://github.com/faria2177/DS-Fult/commit/385d5372e6139a3ac820e41dbf37ed5e8cec8f20)
 
@@ -53,6 +53,14 @@
 | `0.5.32` | Video `381772.mp4`: guard against CameraX JPEG pixels remaining landscape when the recent live stream was portrait, and reject unreliable still quads or smaller inner-table crops in favour of full-source corner review. Me → AI Mode now has an expandable API key hints panel and browser links for all 12 provider entries; link is repeated in key-entry sheet. | Kotlin geometry + Flutter link tests added. Actual HONOR camera behaviour and browser integration require device verification; no guaranteed CamScanner-equivalent detector accuracy. |
 | `0.5.33` | Video `381776.mp4`: the page outline is correct in live portrait preview, but the captured image enters Adjust corners sideways and can include the wooden desk. Match low-resolution still pixels to the recent camera-analysis frame across all four rotations before selecting corners or warping; do not transfer an unverified live quad to the JPEG. | New native pure-Kotlin registration tests; HONOR camera validation and release CI remain necessary. |
 | `0.5.34` | Video `381781.mp4`: the live green frame covers the A4 sheet, but the captured landscape image loses part of the page and Adjust corners defaults to the whole JPEG. Set one CameraX screen rotation, bind Preview/Analysis/ImageCapture through a shared portrait ViewPort and rotate user-selected JPEG resolution into display coordinates. An independently credible still quad no longer requires a successful preview-frame match. | Native safety regression added; CI and HONOR real-device capture comparison pending. |
+| `0.5.35` | Video `381803.mp4`: CamScanner frames the outside of a complete bank form; DocScanner frames only the printed table and saves part of the desk. Live detection now invokes its deeper colour/line searches for suspicious inset, page-like rectangles, considers larger real enclosing paper borders, and keeps the short path for already-large pages. ID-card detection remains independent. | Four new native regression cases added; GitHub CI and HONOR camera validation pending. Do not upload the recorded bank form or its personal details. |
+
+### 0.5.35 — Prefer real outer paper in the live camera
+
+- In `381803.mp4` (~00:14–00:19), the green DocScanner quadrilateral follows the internal printed form grid, not the white sheet's outside perimeter. At ~00:20–00:24, the corner editor and saved preview still show surrounding desk and a neighbouring sheet. CamScanner's scan (~00:00–00:07) includes the full title, margins and bottom of the page.
+- Previously, a strong first-stage inner-table contour caused the live detector to skip adaptive/saturation and line searches. Add a geometrically bounded second search when the initial live contour is inset, incomplete as a page and relatively small. The existing independently observed outer-border selector must still validate containment, confidence, edge support, contrast, size and page aspect; no corners are guessed.
+- Preserve low-cost detection when the first candidate already covers most of the page, and keep ID card mode out of the outer-sheet expansion policy. If the physical sheet is clipped out of frame or all four outside corners cannot be observed, use manual corner review rather than silently warping to a guessed boundary.
+- Test `0.5.35+49` on the original HONOR phone and compare the live outline, after-shutter Adjust corners, final filtered image and exported file. CI alone cannot prove physical camera detection accuracy or stable FPS.
 
 ### 0.5.34 — Align camera preview with the actual JPEG field of view
 

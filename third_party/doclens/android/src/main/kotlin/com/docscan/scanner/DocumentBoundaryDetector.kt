@@ -99,6 +99,7 @@ class DocumentBoundaryDetector(
         stabilityScoreBonus: Double = 0.0,
         preferOuterPageInStill: Boolean = false,
         preferIdCardBounds: Boolean = false,
+        preferOuterPageInLive: Boolean = false,
     ): DocumentDetectionResult {
         val width = rgbaMat.width()
         val height = rgbaMat.height()
@@ -119,16 +120,19 @@ class DocumentBoundaryDetector(
         Imgproc.morphologyEx(cannyMat, morphMat, Imgproc.MORPH_CLOSE, morphKernel)
 
         val candidates = mutableListOf<CandidateScore>()
+        var inspectInnerLive = false
+        val seekOuterPage = preferOuterPageInStill ||
+            (preferOuterPageInLive && !preferIdCardBounds)
         fun collectFromCurrentEdges(stage: DetectionStage, maxCandidates: Int = 8) {
             val quads = ContourDetector.findQuadrilaterals(morphMat,
                 maxCandidates = when {
                     preferIdCardBounds -> 24
-                    preferOuterPageInStill -> 16
+                    preferOuterPageInStill || inspectInnerLive -> 16
                     else -> maxCandidates
                 },
                 contourLimit = when {
                     preferIdCardBounds -> 32
-                    preferOuterPageInStill -> 24
+                    preferOuterPageInStill || inspectInnerLive -> 24
                     else -> 10
                 })
             for (cand in quads) {
@@ -155,11 +159,23 @@ class DocumentBoundaryDetector(
 
         collectFromCurrentEdges(DetectionStage.CONTOUR_QUAD, 8)
 
-        // Preview keeps the fast path. For an actual shutter still, inspect
-        // colour/adaptive edges even if a high-confidence INNER table already
-        // won the fast pass: otherwise the faint outer A4 edge is never seen.
+        // A dense bank form presents strong inner grid lines. In a live
+        // preview those can score >.60, bypassing the passes that would find
+        // the low-contrast *outer* paper. Search further only when the first
+        // winning quad is inset and page-sized but not already the full sheet.
+        // Unlike still capture, a good large live page keeps the fast path.
+        val fastBest = candidates.maxByOrNull { it.totalConfidence }
+        inspectInnerLive = preferOuterPageInLive && !preferIdCardBounds &&
+            LiveOuterPageSearchPolicy.shouldInspect(fastBest, width, height)
+        fun hasContainingOuterProposal(): Boolean {
+            val inner = fastBest ?: return false
+            return StillCapturePagePreference.select(candidates, inner, totalImageArea) !== inner
+        }
+
+        // A full-page preview keeps the fast path. A suspicious inner form
+        // rectangle gets the same extra colour/adaptive edge search as a still.
         var topScore = candidates.maxOfOrNull { it.totalConfidence } ?: 0.0
-        if (topScore < 0.60 || preferOuterPageInStill || preferIdCardBounds) {
+        if (topScore < 0.60 || preferOuterPageInStill || inspectInnerLive || preferIdCardBounds) {
             Imgproc.adaptiveThreshold(
                 bilateralMat, adaptMat, 255.0,
                 Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY_INV,
@@ -189,7 +205,8 @@ class DocumentBoundaryDetector(
         // behave very differently on a 720p preview vs a 12MP still) and reduces
         // spurious short segments from high-res texture noise.
         if (topScore < 0.56 || (preferOuterPageInStill &&
-                !hasSupportedPaperCandidate()) || (preferIdCardBounds &&
+                !hasSupportedPaperCandidate()) || (inspectInnerLive &&
+                !hasContainingOuterProposal()) || (preferIdCardBounds &&
                 CardBoundaryPreference.select(candidates, width, height) == null)) {
             val maxDim = max(width, height)
             val houghScale = if (maxDim > 900) 900.0 / maxDim else 1.0
@@ -241,7 +258,8 @@ class DocumentBoundaryDetector(
         // STAGE 3: If still no good candidate, try Morphological Gradient fallback
         val topScoreAfterStage2 = candidates.maxByOrNull { it.totalConfidence }?.totalConfidence ?: 0.0
         if (topScoreAfterStage2 < 0.46 || (preferOuterPageInStill &&
-                !hasSupportedPaperCandidate()) || (preferIdCardBounds &&
+                !hasSupportedPaperCandidate()) || (inspectInnerLive &&
+                !hasContainingOuterProposal()) || (preferIdCardBounds &&
                 CardBoundaryPreference.select(candidates, width, height) == null)) {
             val gradMat = Mat()
             val largeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
@@ -251,8 +269,8 @@ class DocumentBoundaryDetector(
 
             val gradCandidates = ContourDetector.findQuadrilaterals(otsuMat,
                 minAreaRatio = if (preferIdCardBounds) 0.025 else 0.12,
-                maxCandidates = if (preferIdCardBounds) 24 else 10,
-                contourLimit = if (preferIdCardBounds) 32 else 10)
+                maxCandidates = if (preferIdCardBounds) 24 else if (seekOuterPage) 16 else 10,
+                contourLimit = if (preferIdCardBounds) 32 else if (seekOuterPage) 24 else 10)
             gradMat.release()
             largeKernel.release()
             otsuMat.release()
@@ -304,7 +322,8 @@ class DocumentBoundaryDetector(
             // the user can adjust the original four corners in that case.
             CardBoundaryPreference.select(candidates, width, height)
                 ?: return DocumentDetectionResult.EMPTY
-        } else if (preferOuterPageInStill) {
+        } else if (preferOuterPageInStill || (preferOuterPageInLive &&
+                LiveOuterPageSearchPolicy.shouldInspect(scoredBest, width, height))) {
             StillCapturePagePreference.select(candidates, scoredBest, totalImageArea)
         } else scoredBest
 
