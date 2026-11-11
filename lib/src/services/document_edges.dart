@@ -429,6 +429,7 @@ class DocumentEdges {
     final output = <String>[];
     final failed = <int>[];
     var cropped = 0;
+    var thrownFailures = 0;
     for (var index = 0; index < images.length; index++) {
       final image = images[index];
       try {
@@ -465,20 +466,28 @@ class DocumentEdges {
         _log(image, 'auto-crop skipped: $error');
         output.add(image);
         failed.add(index);
+        thrownFailures++;
       }
     }
-    return AutoCropBatch(output, cropped, failedIndexes: failed);
+    return AutoCropBatch(output, cropped,
+        failedIndexes: failed, failedCount: thrownFailures);
   }
 }
 
 class AutoCropBatch {
   const AutoCropBatch(this.paths, this.croppedCount,
-      {this.failedIndexes = const <int>[]});
+      {this.failedIndexes = const <int>[], this.failedCount = 0});
 
   final List<String> paths;
   final int croppedCount;
   /// Indexes into [paths] that retained their uncropped source image.
   final List<int> failedIndexes;
+  /// Actual processing exceptions, separately from uncertain/no-edge photos.
+  /// Retained from the supplied DocumentEdges implementation for callers that
+  /// need to distinguish a decode failure from an ambiguous document.
+  final int failedCount;
 
   int get needsReview => paths.length - croppedCount;
+  int get failed => failedCount;
+  int get ambiguous => needsReview - failedCount;
 }

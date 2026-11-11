@@ -1,8 +1,8 @@
 package dev.doclens.doclens
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
@@ -19,6 +19,14 @@ import kotlin.math.roundToInt
  * lengths to preserve resolution without excessive memory use.
  */
 object ImageWarper {
+    /**
+     * Longest output edge. A gallery export can present a 4000x6000 page, and
+     * an ARGB_8888 destination of that size plus the decoded source is the
+     * second out-of-memory site on low-RAM devices (the first is the decode).
+     * The cap keeps the aspect ratio and still exceeds A4 at 300 dpi.
+     */
+    private const val MAX_OUTPUT_SIDE = 3200
+
     fun warp(
         bitmap: Bitmap,
         quad: Quad,
@@ -34,8 +42,14 @@ object ImageWarper {
                                (quad.bottomLeft.y - quad.topLeft.y).toDouble())
         val heightRight = hypot((quad.bottomRight.x - quad.topRight.x).toDouble(),
                                 (quad.bottomRight.y - quad.topRight.y).toDouble())
-        val outW = max(widthTop, widthBottom).roundToInt().coerceAtLeast(8)
-        val outH = max(heightLeft, heightRight).roundToInt().coerceAtLeast(8)
+        var outW = max(widthTop, widthBottom).roundToInt().coerceAtLeast(8)
+        var outH = max(heightLeft, heightRight).roundToInt().coerceAtLeast(8)
+        val longest = max(outW, outH)
+        if (longest > MAX_OUTPUT_SIDE) {
+            val scale = MAX_OUTPUT_SIDE.toDouble() / longest
+            outW = (outW * scale).roundToInt().coerceAtLeast(8)
+            outH = (outH * scale).roundToInt().coerceAtLeast(8)
+        }
 
         val src = floatArrayOf(
             quad.topLeft.x, quad.topLeft.y,
@@ -55,6 +69,11 @@ object ImageWarper {
             throw ScannerException.CaptureFailed("setPolyToPoly failed")
         }
         val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        // An untouched ARGB bitmap is fully transparent, and JPEG has no alpha
+        // channel, so any sub-pixel gap the sampled quad leaves along the
+        // output border was encoded as a black strip. Erasing to white first
+        // keeps every edge of an auto-cropped page clean.
+        out.eraseColor(Color.WHITE)
         val canvas = Canvas(out)
         val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         canvas.drawBitmap(bitmap, matrix, paint)
@@ -86,6 +105,16 @@ object ImageWarper {
         return tmp.absolutePath
     }
 
+    /**
+     * Warp the file at [rawPath] using [quad] in that file's EXIF-upright
+     * pixel space.
+     *
+     * The decode goes through [ExifRotator.decodeUpright], the exact same
+     * bounded, orientation-baked decoder the still detector uses. Previously
+     * this path decoded at full resolution while detection applied a different
+     * orientation transform, so an exported 6000px photo either failed to
+     * decode here (leaving the page uncropped) or was warped mirrored.
+     */
     fun warpFile(
         rawPath: String,
         quad: Quad,
@@ -93,14 +122,12 @@ object ImageWarper {
         enhancement: String = "none",
         autoOrientation: String = "none",
     ): String {
-        val raw = BitmapFactory.decodeFile(rawPath)
+        val upright = ExifRotator.decodeUpright(rawPath)
             ?: throw ScannerException.CaptureFailed("Decode failed: $rawPath")
-        val rotated = ExifRotator.rotated(raw, rawPath)
         try {
-            return warp(rotated, quad, jpegQuality, enhancement, autoOrientation)
+            return warp(upright, quad, jpegQuality, enhancement, autoOrientation)
         } finally {
-            if (rotated !== raw) rotated.recycle()
-            raw.recycle()
+            upright.recycle()
         }
     }
 
@@ -111,17 +138,16 @@ object ImageWarper {
      * [quarterTurns] is normalized modulo 4.
      */
     fun rotateFile(rawPath: String, quarterTurns: Int, jpegQuality: Int): String {
-        val raw = BitmapFactory.decodeFile(rawPath)
+        val upright = ExifRotator.decodeUpright(rawPath)
             ?: throw ScannerException.CaptureFailed("Decode failed: $rawPath")
-        val rotated = ExifRotator.rotated(raw, rawPath)
-        val out = rotateBitmap(rotated, quarterTurns)
+        val out = rotateBitmap(upright, quarterTurns)
         val tmp = File.createTempFile("fnds_rotated_", ".jpg")
         FileOutputStream(tmp).use { stream ->
             out.compress(Bitmap.CompressFormat.JPEG, jpegQuality.coerceIn(1, 100), stream)
         }
-        // `out`, `rotated` and `raw` may alias each other (no rotation / no
-        // EXIF). Recycle each distinct bitmap exactly once.
-        listOf(out, rotated, raw).distinct().forEach { it.recycle() }
+        // `out` and `upright` alias each other when the turn count is zero.
+        // Recycle each distinct bitmap exactly once.
+        listOf(out, upright).distinct().forEach { it.recycle() }
         return tmp.absolutePath
     }
 
