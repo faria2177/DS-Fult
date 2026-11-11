@@ -651,10 +651,10 @@ class _CameraScreenState extends State<CameraScreen> {
                   accentColor: _outlineColor,
                   warningColor: _outlineColor,
                   overlayStyle: QuadOverlayStyle.filled,
-                  // Live four-corner tracking stays enabled, but taking a
-                  // photo always requires the user's shutter tap. This is
-                  // the Single/Batch capture flow shown in video 382016.
-                  enableAutoCapture: false,
+                  // Manual shutter remains the default, as in video 382016.
+                  // Respect an explicit Auto Capture opt-in from Settings.
+                  enableAutoCapture: !widget.cardMode && _settings.autoCapture &&
+                      !_settings.useSystemCamera,
                   enablePerspectiveWarp: widget.cardMode ||
                       (_settings.autoCrop &&
                           (!_batchMode || _settings.autoAdjustBorders)),
