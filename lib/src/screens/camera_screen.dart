@@ -370,7 +370,11 @@ class _CameraScreenState extends State<CameraScreen> {
       final reviewed = await Navigator.of(context).push<GalleryImportResult>(
         MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
           imagePaths: files.map((file) => file.path).toList(),
-          initialAutoCrop: _settings.autoCrop,
+          // Import Images is a separate CamScanner-style entry point: always
+          // offer four-corner detection on the imported still, even if the
+          // user previously disabled automatic cropping for live captures.
+          // They can explicitly uncheck Auto Crop in the review screen.
+          initialAutoCrop: true,
           // Honour an explicit Original preset: auto-crop must not imply
           // colour/face/text enhancement of the user's source image.
           initialFilter: widget.cardMode ? ScanFilter.original :
@@ -647,8 +651,10 @@ class _CameraScreenState extends State<CameraScreen> {
                   accentColor: _outlineColor,
                   warningColor: _outlineColor,
                   overlayStyle: QuadOverlayStyle.filled,
-                  enableAutoCapture: !widget.cardMode && _settings.autoCapture &&
-                      !_settings.useSystemCamera,
+                  // Live four-corner tracking stays enabled, but taking a
+                  // photo always requires the user's shutter tap. This is
+                  // the Single/Batch capture flow shown in video 382016.
+                  enableAutoCapture: false,
                   enablePerspectiveWarp: widget.cardMode ||
                       (_settings.autoCrop &&
                           (!_batchMode || _settings.autoAdjustBorders)),
