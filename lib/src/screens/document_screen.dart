@@ -279,9 +279,8 @@ class _DocumentScreenState extends State<DocumentScreen> {
         );
         if (review == null || !mounted) return;
         paths = review.paths;
-        if (review.needsReview > 0) {
-          _message('${review.needsReview} image(s) need manual corner review.');
-        }
+        // GalleryImportReviewScreen already offers a four-handle correction
+        // route before these pages are appended to the document.
       }
       if (doc.compositeCardPages) {
         final combined = await _composeExtraCard(paths);

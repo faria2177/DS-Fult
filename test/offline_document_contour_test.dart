@@ -71,6 +71,18 @@ void main() {
     expect(result.quad!.bottomRight.dx, closeTo(359 / 420, .05));
   });
 
+  test('Nearly frame-touching rectangular card retains its actual border', () {
+    final photo = img.Image(width: 420, height: 320);
+    img.fill(photo, color: img.ColorRgb8(35, 36, 39));
+    // The left outer edge is 0.5% of the image width from the frame, so a
+    // blanket 1.2% margin gate would incorrectly reject this complete card.
+    _rect(photo, 2, 65, 308, 259, img.ColorRgb8(232, 232, 229));
+    final result = OfflineDocumentContour.detectDetailedBytes(_png(photo));
+    expect(result?.detection.quad, isNotNull);
+    expect(result!.detection.quad!.topLeft.dx, closeTo(2 / 420, .03));
+    expect(result.borderEvidence, greaterThan(.55));
+  });
+
   test('Offline detector does not mistake a small printed label for a card', () {
     final photo = img.Image(width: 320, height: 420);
     img.fill(photo, color: img.ColorRgb8(235, 235, 233));

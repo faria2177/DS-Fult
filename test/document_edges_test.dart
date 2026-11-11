@@ -123,6 +123,7 @@ void main() {
       expect(fake.warpCalls, 0);
       expect(result.paths, ['full-nid.jpg']);
       expect(result.needsReview, 1);
+      expect(result.failedIndexes, [0]);
     } finally {
       DoclensPlatform.instance = previous;
     }
@@ -160,6 +161,14 @@ void main() {
     final outerCard = _detection(_rect(.12, .20, .88, .82),
       size: const Size(1200, 900));
     expect(DocumentEdges.isCredibleStandaloneCard(outerCard), isTrue);
+  });
+
+  test('Almost edge-to-edge cards are not rejected by the old 1.2% margin', () {
+    // Normalized card corners can be close to the camera frame without
+    // touching or leaving it. The strict 1.2% margin discarded those scans.
+    final edgeCard = _detection(_rect(.007, .12, .94, .90),
+      size: const Size(1200, 900));
+    expect(DocumentEdges.isCredibleStandaloneCard(edgeCard), isTrue);
   });
 
   test('Lined notebook background can yield to enclosed portrait ID card', () async {
@@ -297,6 +306,7 @@ void main() {
       final result = await DocumentEdges.autoCropFiles(['card.jpg']);
       expect(result.paths, ['card.jpg']);
       expect(result.croppedCount, 0);
+      expect(result.failedIndexes, [0]);
       expect(fake.warpCalls, 0);
       expect(fake.preferCardCalls, [false, true, false, true]);
     } finally {

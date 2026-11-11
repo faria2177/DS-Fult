@@ -65,8 +65,22 @@ class DocumentEdges {
       config: preferIdCardBounds ? idCardScannerConfig : scannerConfig,
     );
     final quad = detection?.quad;
-    if (quad == null || !CropQuad(quad.points).isValid) return null;
+    if (quad == null || !CropQuad(quad.points).isValid) {
+      _log(imagePath, 'native ${preferIdCardBounds ? 'card' : 'page'} pass: no valid quadrilateral');
+      return null;
+    }
     return detection;
+  }
+
+  static void _log(String imagePath, String reason) {
+    if (kDebugMode) {
+      debugPrint('[AutoCrop] ${p.basename(imagePath)}: $reason');
+    }
+  }
+
+  static bool _reject(String gate, String reason) {
+    if (kDebugMode) debugPrint('[AutoCrop] $gate rejected: $reason');
+    return false;
   }
 
   /// A gallery photo has no live-camera page outline to cross-check against.
@@ -83,19 +97,19 @@ class DocumentEdges {
     final quad = detection.quad;
     final imageSize = detection.imageSize;
     if (quad == null || imageSize.width <= 0 || imageSize.height <= 0) {
-      return false;
+      return _reject('gallery', 'missing quad or image dimensions');
     }
     final points = quad.points;
     if (points.any((point) => !point.dx.isFinite || !point.dy.isFinite ||
         point.dx < 0 || point.dx > 1 || point.dy < 0 || point.dy > 1)) {
-      return false;
+      return _reject('gallery', 'out-of-bounds or non-finite corners');
     }
     if (preferIdCardBounds) return true;
 
     final area = quad.area;
     // Below this, a strong-looking rectangle is often a printed *part* of a
     // document. A conservative original beats an unrecoverable partial scan.
-    if (area < .30) return false;
+    if (area < .30) return _reject('gallery', 'coverage ${area.toStringAsFixed(3)} < .30');
 
     final pixelPoints = quad.scaleToSize(imageSize).points;
     final horizontal = ((pixelPoints[1] - pixelPoints[0]).distance +
@@ -106,7 +120,9 @@ class DocumentEdges {
         2;
     final shortSide = horizontal < vertical ? horizontal : vertical;
     final longSide = horizontal > vertical ? horizontal : vertical;
-    if (shortSide <= 0 || longSide / shortSide > 1.95) return false;
+    if (shortSide <= 0 || longSide / shortSide > 1.95) {
+      return _reject('gallery', 'aspect ${shortSide <= 0 ? 'invalid' : (longSide / shortSide).toStringAsFixed(2)} > 1.95');
+    }
 
     final left = points.map((p) => p.dx).reduce((a, b) => a < b ? a : b);
     final right = points.map((p) => p.dx).reduce((a, b) => a > b ? a : b);
@@ -121,13 +137,13 @@ class DocumentEdges {
     if (area < .64 &&
         ((spanX > .79 && spanY < .62) ||
          (spanY > .79 && spanX < .62))) {
-      return false;
+      return _reject('gallery', 'incomplete page strip: spanX=${spanX.toStringAsFixed(2)}, spanY=${spanY.toStringAsFixed(2)}');
     }
     // A compact box surrounded by unselected image on *all four sides* is
     // likely the interior of a page/card, not its outside paper boundary.
     if (area < .56 && left > .045 && right < .955 &&
         top > .065 && bottom < .935) {
-      return false;
+      return _reject('gallery', 'inner printed box, coverage=${area.toStringAsFixed(3)}');
     }
     return true;
   }
@@ -166,30 +182,37 @@ class DocumentEdges {
     final size = detection.imageSize;
     if (quad == null || size.width <= 0 || size.height <= 0 ||
         !CropQuad(quad.points).isValid) {
-      return false;
+      return _reject('card', 'invalid quad or image dimensions');
     }
     final area = quad.area;
     // A complete coloured ID photographed on ruled notebook paper can cover
     // only ~20% of the image. The dedicated native card pass independently
     // checks chroma, outside corners and aspect ratio before returning it.
     // Still reject tiny printed name blocks and near-full background pages.
-    if (area < .19 || area > .86) return false;
+    if (area < .19 || area > .86) {
+      return _reject('card', 'coverage ${area.toStringAsFixed(3)} outside .19–.86');
+    }
     if (quad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
-        p.dx < .012 || p.dx > .988 || p.dy < .012 || p.dy > .988)) {
-      return false;
+        p.dx < .004 || p.dx > .996 || p.dy < .004 || p.dy > .996)) {
+      return _reject('card', 'corner too close to image frame');
     }
     final cx = quad.points.map((p) => p.dx).reduce((a, b) => a + b) / 4;
     final cy = quad.points.map((p) => p.dy).reduce((a, b) => a + b) / 4;
-    if ((cx - .5).abs() > .22 || (cy - .5).abs() > .22) return false;
+    if ((cx - .5).abs() > .22 || (cy - .5).abs() > .22) {
+      return _reject('card', 'off-centre candidate ($cx, $cy)');
+    }
 
     final points = quad.scaleToSize(size).points;
     final width = ((points[1] - points[0]).distance +
         (points[2] - points[3]).distance) / 2;
     final height = ((points[3] - points[0]).distance +
         (points[2] - points[1]).distance) / 2;
-    if (width <= 0 || height <= 0) return false;
+    if (width <= 0 || height <= 0) return _reject('card', 'invalid side length');
     final ratio = width > height ? width / height : height / width;
-    return ratio >= 1.48 && ratio <= 2.10;
+    if (ratio < 1.48 || ratio > 2.10) {
+      return _reject('card', 'aspect ${ratio.toStringAsFixed(2)} outside 1.48–2.10');
+    }
+    return true;
   }
 
   /// A near-frame contour can be the notebook/tabletop surrounding a smaller
@@ -280,7 +303,7 @@ class DocumentEdges {
       normal = await detect(imagePath,
           preferIdCardBounds: preferIdCardBounds);
     } catch (error) {
-      debugPrint('Native page detector failed, trying offline fallback: $error');
+      _log(imagePath, 'native page detector failed: $error');
     }
     final normalIsSafe = normal != null &&
         isReliableGalleryCrop(normal,
@@ -303,14 +326,18 @@ class DocumentEdges {
       try {
         card = await detect(imagePath, preferIdCardBounds: true);
       } catch (error) {
-        debugPrint('Native card detector failed: $error');
+        _log(imagePath, 'native card detector failed: $error');
       }
     }
     if (card != null) {
-      if (normal == null && isCredibleStandaloneCard(card)) return card;
+      if (normal == null && isCredibleStandaloneCard(card)) {
+        _log(imagePath, 'accepted native card with no page quad');
+        return card;
+      }
       if (normal != null &&
           (isCredibleOuterCardAlternative(normal, card) ||
            isCredibleCardInsideBackground(normal, card))) {
+        _log(imagePath, 'accepted native outer card alternative');
         return card;
       }
     }
@@ -329,13 +356,17 @@ class DocumentEdges {
             isCredibleOuterCardAlternative(normal, offline) ||
             isCredibleCardInsideHolder(normal, offline,
                 borderEvidence: independent!.borderEvidence))) {
+          _log(imagePath, 'accepted independent card outline');
           return offline;
         }
       }
       if (!preferIdCardBounds) {
         final safePage = isReliableGalleryCrop(offline);
         final safeCard = isCredibleStandaloneCard(offline);
-        if (normal == null && (safePage || safeCard)) return offline;
+        if (normal == null && (safePage || safeCard)) {
+          _log(imagePath, 'accepted independent ${safeCard ? 'card' : 'page'} outline');
+          return offline;
+        }
         if (normal != null &&
             (isCredibleOuterCardAlternative(normal, offline) ||
              isCredibleCardInsideBackground(normal, offline) ||
@@ -344,9 +375,19 @@ class DocumentEdges {
              (!normalIsSafe && safePage && normalQuad != null &&
               outside.area >= normalQuad.area * 1.3 &&
               normalQuad.points.every(outside.contains)))) {
+          _log(imagePath, 'accepted independent outer boundary');
           return offline;
         }
       }
+    }
+    if (!normalIsSafe) {
+      final pageArea = normal?.quad?.area;
+      final cardArea = card?.quad?.area;
+      final offlineArea = offline?.quad?.area;
+      _log(imagePath, 'no reliable outside boundary '
+          '(page=${pageArea?.toStringAsFixed(3) ?? 'none'}, '
+          'card=${cardArea?.toStringAsFixed(3) ?? 'none'}, '
+          'offline=${offlineArea?.toStringAsFixed(3) ?? 'none'})');
     }
     return normalIsSafe ? normal : null;
   }
@@ -356,13 +397,16 @@ class DocumentEdges {
   static Future<AutoCropBatch> autoCropFiles(List<String> images,
       {bool preferIdCardBounds = false}) async {
     final output = <String>[];
+    final failed = <int>[];
     var cropped = 0;
-    for (final image in images) {
+    for (var index = 0; index < images.length; index++) {
+      final image = images[index];
       try {
         final detection = await detectSafeStillOutline(image,
             preferIdCardBounds: preferIdCardBounds);
         if (detection == null) {
           output.add(image);
+          failed.add(index);
           continue;
         }
         String croppedPath;
@@ -375,7 +419,7 @@ class DocumentEdges {
             enhancement: ImageEnhancement.none,
           );
         } catch (error) {
-          debugPrint('Native perspective warp failed, using Dart: $error');
+          _log(image, 'native warp failed, trying Dart: $error');
           final croppedBytes = await ImageProcessor.process(
             await File(image).readAsBytes(),
             crop: CropQuad(detection.quad!.points),
@@ -388,19 +432,23 @@ class DocumentEdges {
         output.add(croppedPath);
         cropped++;
       } catch (error) {
-        debugPrint('Auto-crop skipped for $image: $error');
+        _log(image, 'auto-crop skipped: $error');
         output.add(image);
+        failed.add(index);
       }
     }
-    return AutoCropBatch(output, cropped);
+    return AutoCropBatch(output, cropped, failedIndexes: failed);
   }
 }
 
 class AutoCropBatch {
-  const AutoCropBatch(this.paths, this.croppedCount);
+  const AutoCropBatch(this.paths, this.croppedCount,
+      {this.failedIndexes = const <int>[]});
 
   final List<String> paths;
   final int croppedCount;
+  /// Indexes into [paths] that retained their uncropped source image.
+  final List<int> failedIndexes;
 
   int get needsReview => paths.length - croppedCount;
 }

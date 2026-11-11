@@ -57,5 +57,6 @@ void main() {
     expect(returned?.sourcePaths, ['/nonexistent/a.jpg', '/nonexistent/b.jpg']);
     expect(returned?.paths, ['/nonexistent/a.jpg', '/nonexistent/b.jpg']);
     expect(returned?.needsReview, 0);
+    expect(returned?.failedIndexes, isEmpty);
   });
 }

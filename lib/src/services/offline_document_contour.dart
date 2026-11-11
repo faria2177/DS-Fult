@@ -143,6 +143,10 @@ class OfflineDocumentContour {
       if (consistentBackground) 3, // colour difference from surrounding desk
       if (backgroundChroma > 40) 4, // neutral paper on colourful background
     ];
+    if (kDebugMode) {
+      debugPrint('[AutoCrop] offline: ${width}x$height, modes=$modes, '
+          'backgroundLight=${backgroundLight.toStringAsFixed(1)}');
+    }
     for (final mode in modes) {
       var pixelsInMask = 0;
       final brightCutoff = math.max(117, backgroundLight + 34);
@@ -163,6 +167,10 @@ class OfflineDocumentContour {
       }
       if (pixelsInMask < mask.length * .10 ||
           pixelsInMask > mask.length * .88) {
+        if (kDebugMode) {
+          debugPrint('[AutoCrop] offline mode=$mode rejected: mask='
+              '${(pixelsInMask / mask.length).toStringAsFixed(3)}');
+        }
         continue;
       }
       final candidate = _bestComponent(mask, width, height,
@@ -178,7 +186,10 @@ class OfflineDocumentContour {
       }
     }
     final quad = best?.quad;
-    if (quad == null) return null;
+    if (quad == null) {
+      if (kDebugMode) debugPrint('[AutoCrop] offline: no credible contour');
+      return null;
+    }
     return OfflineContourResult(ImageDetection(quad: quad,
         imageSize: Size(source.width.toDouble(), source.height.toDouble())),
         best!.borderEvidence);
@@ -239,7 +250,7 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
       if (y > 0) add(index - width);
       if (y + 1 < height) add(index + width);
     }
-    if (count < minPixels || borderCount > count * .04) continue;
+    if (count < minPixels) continue;
     final corners = [tl, tr, br, bl].map((p) => Offset(
         p.dx / width, p.dy / height)).toList();
     final safe = CropQuad(corners);
@@ -252,27 +263,72 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
       twiceArea += a.dx * b.dy - b.dx * a.dy;
     }
     final coverage = twiceArea.abs() / 2;
-    if (coverage < (preferIdCardBounds ? .13 : .17) || coverage > .90) continue;
+    if (coverage < (preferIdCardBounds ? .13 : .17) || coverage > .90) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: coverage '
+            '${coverage.toStringAsFixed(3)}');
+      }
+      continue;
+    }
     final pixelArea = coverage * width * height;
     final solidity = count / math.max(1.0, pixelArea);
-    if (solidity < .47) continue;
+    if (solidity < .47) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: solidity '
+            '${solidity.toStringAsFixed(3)} < .47');
+      }
+      continue;
+    }
     final pixelWidth = ((tr - tl).distance + (br - bl).distance) / 2;
     final pixelHeight = ((bl - tl).distance + (br - tr).distance) / 2;
     if (pixelWidth < 10 || pixelHeight < 10) continue;
     final aspect = math.max(pixelWidth, pixelHeight) /
         math.min(pixelWidth, pixelHeight);
-    if (aspect < 1.08 || aspect > 2.40) continue;
+    if (aspect < 1.08 || aspect > 2.40) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: aspect '
+            '${aspect.toStringAsFixed(3)}');
+      }
+      continue;
+    }
+    // A card can nearly touch the source image frame. Permit that only when
+    // its complete rectangular geometry and four-edge contrast support it;
+    // the original .04 border and .012 margin remain for non-card surfaces.
+    final cardLike = aspect >= 1.48 && aspect <= 1.75;
+    final borderLimit = cardLike ? .12 : .04;
+    final margin = cardLike ? .003 : .012;
+    if (borderCount > count * borderLimit) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: border fraction '
+            '${(borderCount / count).toStringAsFixed(3)} > $borderLimit');
+      }
+      continue;
+    }
     final center = corners.reduce((a, b) => a + b) / 4;
     if ((center.dx - .5).abs() > .30 ||
         (center.dy - .5).abs() > .30) {
+      if (kDebugMode) debugPrint('[AutoCrop] offline component rejected: centre=$center');
       continue;
     }
-    if (corners.any((p) => p.dx < .012 || p.dx > .988 ||
-        p.dy < .012 || p.dy > .988)) {
+    final nearFrame = corners.any((p) => p.dx < margin || p.dx > 1 - margin ||
+        p.dy < margin || p.dy > 1 - margin);
+    if (nearFrame) {
+      if (kDebugMode) debugPrint('[AutoCrop] offline component rejected: frame margin $margin');
       continue;
     }
     final edgeEvidence = _boundaryContrast(pixels, width, height,
         <Offset>[tl, tr, br, bl]);
+    // The relaxed margins must never admit a notebook edge or an inner text
+    // strip just because it has the outline of a standard-sized ID card.
+    if (cardLike && (borderCount > count * .04 ||
+        corners.any((p) => p.dx < .012 || p.dx > .988 ||
+            p.dy < .012 || p.dy > .988)) && edgeEvidence < .55) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline card rejected: weak four-edge '
+            'evidence ${edgeEvidence.toStringAsFixed(3)} < .55');
+      }
+      continue;
+    }
     final score = math.min(1.0, solidity) * .35 +
         (1 - (center.dx - .5).abs() - (center.dy - .5).abs()) * .20 +
         math.min(1.0, coverage / .50) * .19 + edgeEvidence * .26 +
