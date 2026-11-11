@@ -277,6 +277,34 @@ class DocumentEdges {
         low(iy) - low(oy) >= .022 && high(oy) - high(iy) >= .022;
   }
 
+  /// A camera may report the surrounding notebook as a valid, fairly inset
+  /// page. It is *not* necessarily near three image sides, so that old guard
+  /// misses a large gold/coloured ID on ruled paper. An independently
+  /// segmented, sizeable coloured card with evidence from its real outside
+  /// border can replace that proposal without admitting tiny inner labels.
+  /// This does not affect the usual A4 scan or a plain white paper page.
+  static bool isCredibleColoredCardOverPage(
+      ImageDetection page, OfflineContourResult proposed) {
+    final outer = page.quad;
+    final card = proposed.detection;
+    final inner = card.quad;
+    if (outer == null || inner == null ||
+        !proposed.colorOnNeutralBackground ||
+        proposed.borderEvidence < .56 ||
+        !isCredibleStandaloneCard(card)) {
+      return false;
+    }
+    if ((page.imageSize.width - card.imageSize.width).abs() > 1 ||
+        (page.imageSize.height - card.imageSize.height).abs() > 1 ||
+        outer.area < .62 || inner.area < .28 ||
+        inner.area < outer.area * .51 ||
+        inner.area > outer.area * .84 ||
+        !inner.points.every(outer.contains)) {
+      return false;
+    }
+    return true;
+  }
+
   /// A ruled notebook/tabletop detected as the outer quadrilateral nearly
   /// fills the photo. Its four-sided frame evidence is very different from a
   /// properly framed paper page with a visible margin on every side.
@@ -370,6 +398,8 @@ class DocumentEdges {
         if (normal != null &&
             (isCredibleOuterCardAlternative(normal, offline) ||
              isCredibleCardInsideBackground(normal, offline) ||
+             (safeCard && isCredibleColoredCardOverPage(
+                 normal, independent!)) ||
              (safeCard && isCredibleCardInsideHolder(normal, offline,
                  borderEvidence: independent!.borderEvidence)) ||
              (!normalIsSafe && safePage && normalQuad != null &&

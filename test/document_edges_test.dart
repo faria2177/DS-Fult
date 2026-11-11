@@ -1,5 +1,6 @@
 import 'package:doclens/doclens.dart';
 import 'package:docscanner/src/services/document_edges.dart';
+import 'package:docscanner/src/services/offline_document_contour.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -230,6 +231,34 @@ void main() {
     } finally {
       DoclensPlatform.instance = previous;
     }
+  });
+
+  test('Coloured airport-pass card replaces a fairly inset notebook outline', () {
+    // The ruled background is not touching three frame edges, so the earlier
+    // near-frame guard alone could never choose the real outer ID corners.
+    const size = Size(864, 1536);
+    final notebook = _detection(_rect(.07, .07, .96, .93), size: size);
+    final card = _detection(_rect(.185, .125, .945, .825), size: size);
+    final segmented = OfflineContourResult(card, .61,
+        colorOnNeutralBackground: true);
+    expect(DocumentEdges.isCredibleCardInsideBackground(notebook, card),
+        isFalse);
+    expect(DocumentEdges.isCredibleColoredCardOverPage(notebook, segmented),
+        isTrue);
+    expect(DocumentEdges.isCredibleColoredCardOverPage(notebook,
+        OfflineContourResult(card, .61)), isFalse);
+    expect(DocumentEdges.isCredibleColoredCardOverPage(notebook,
+        OfflineContourResult(card, .32,
+            colorOnNeutralBackground: true)), isFalse);
+  });
+
+  test('Normal A4 printed boxes cannot replace the outer page', () {
+    const size = Size(864, 1536);
+    final page = _detection(_rect(.07, .07, .96, .93), size: size);
+    final label = _detection(_rect(.24, .30, .77, .66), size: size);
+    expect(DocumentEdges.isCredibleColoredCardOverPage(page,
+        OfflineContourResult(label, .95,
+            colorOnNeutralBackground: true)), isFalse);
   });
 
   test('Ordinary A4 page is not replaced by an inner card-looking label', () async {

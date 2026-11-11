@@ -79,6 +79,50 @@ void main() {
     }
   });
 
+  test('Gold card beats native notebook bounds even without near-frame sides',
+      () async {
+    final folder = await Directory.systemTemp.createTemp('docscanner_ruled_');
+    final originalNative = DoclensPlatform.instance;
+    try {
+      final raw = img.Image(width: 320, height: 420);
+      img.fill(raw, color: img.ColorRgb8(224, 225, 225));
+      for (var y = 22; y < 420; y += 30) {
+        img.fillRect(raw, x1: 0, y1: y, x2: 319, y2: y + 1,
+            color: img.ColorRgb8(91, 110, 156));
+      }
+      img.fillRect(raw, x1: 57, y1: 55, x2: 264, y2: 374,
+          color: img.ColorRgb8(192, 172, 120));
+      img.fillRect(raw, x1: 111, y1: 125, x2: 208, y2: 218,
+          color: img.ColorRgb8(28, 104, 114));
+      img.fillRect(raw, x1: 137, y1: 148, x2: 184, y2: 203,
+          color: img.ColorRgb8(178, 119, 90));
+      img.fillRect(raw, x1: 88, y1: 245, x2: 234, y2: 251,
+          color: img.ColorRgb8(24, 24, 24));
+      final source = File('${folder.path}/card_on_notebook.png');
+      await source.writeAsBytes(Uint8List.fromList(img.encodePng(raw)));
+      final notebook = ImageDetection(imageSize: const Size(320, 420),
+        quad: const Quad(
+          topLeft: Offset(.075, .075),
+          topRight: Offset(.95, .075),
+          bottomRight: Offset(.95, .93),
+          bottomLeft: Offset(.075, .93),
+        ));
+      DoclensPlatform.instance = _HolderNativeDetector(notebook);
+
+      final found = await DocumentEdges.detectSafeStillOutline(source.path);
+      expect(found?.quad, isNotNull);
+      // Notebook still passes the ordinary page policy, but the complete
+      // four-corner gold card should win instead.
+      expect(found!.quad!.topLeft.dx, closeTo(57 / 320, .05));
+      expect(found.quad!.topLeft.dy, closeTo(55 / 420, .05));
+      expect(found.quad!.bottomRight.dx, closeTo(264 / 320, .05));
+      expect(found.quad!.bottomRight.dy, closeTo(374 / 420, .05));
+    } finally {
+      DoclensPlatform.instance = originalNative;
+      await folder.delete(recursive: true);
+    }
+  });
+
   test('Gallery crop and perspective warp work when native pipeline fails',
       () async {
     final folder = await Directory.systemTemp.createTemp('docscanner_test_');

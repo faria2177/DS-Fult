@@ -11,11 +11,16 @@ import 'image_processor.dart';
 /// A proposed outside boundary together with evidence from all four edges.
 /// Geometry alone cannot distinguish a real ID from an inner printed box.
 class OfflineContourResult {
-  const OfflineContourResult(this.detection, this.borderEvidence);
+  const OfflineContourResult(this.detection, this.borderEvidence,
+      {this.colorOnNeutralBackground = false});
 
   final ImageDetection detection;
   /// 0..1: how consistently the inside differs from the surrounding surface.
   final double borderEvidence;
+  /// True only when a substantial connected coloured surface was segmented
+  /// against neutral exterior corners. Useful to distinguish a real card
+  /// from a native page detector's broader notebook/tabletop contour.
+  final bool colorOnNeutralBackground;
 }
 
 /// Native-independent, fully offline still-image detector. Gallery images
@@ -181,7 +186,8 @@ class OfflineDocumentContour {
         // brightness/chroma surface when both provide complete boundaries.
         final priorityPenalty = mode == 3 ? .14 : (mode == 4 ? .035 : 0.0);
         final ranked = _ContourProposal(candidate.quad,
-            candidate.score - priorityPenalty, candidate.borderEvidence);
+            candidate.score - priorityPenalty, candidate.borderEvidence,
+            mode: mode);
         if (best == null || ranked.score > best.score) best = ranked;
       }
     }
@@ -192,15 +198,18 @@ class OfflineDocumentContour {
     }
     return OfflineContourResult(ImageDetection(quad: quad,
         imageSize: Size(source.width.toDouble(), source.height.toDouble())),
-        best!.borderEvidence);
+        best!.borderEvidence,
+        colorOnNeutralBackground: best.mode == 0 && neutralCorners >= 3);
   }
 }
 
 class _ContourProposal {
-  const _ContourProposal(this.quad, this.score, this.borderEvidence);
+  const _ContourProposal(this.quad, this.score, this.borderEvidence,
+      {this.mode = -1});
   final Quad quad;
   final double score;
   final double borderEvidence;
+  final int mode;
 }
 
 _ContourProposal? _bestComponent(Uint8List mask, int width, int height,

@@ -127,6 +127,13 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
 img.Image _filterImage(img.Image input, ScanFilter filter,
     {bool documentMode = false}) {
   final image = img.Image.from(input);
+  // A gold/cream plastic card is not neutral white paper. Once its *outer*
+  // corners are confirmed and perspective-warped, identify the continuous
+  // warm background surface and lift that surface to white while protecting
+  // text, logos, the blue portrait backing and skin tones. On an uncropped
+  // gallery photo this must stay disabled, or the desk could be bleached.
+  final warmPaper = documentMode && filter == ScanFilter.enhance
+      ? _WarmPaperMask.detect(image) : null;
   final histogram = List<int>.filled(256, 0);
   for (var y = 0; y < image.height; y += 4) {
     for (var x = 0; x < image.width; x += 4) {
@@ -195,6 +202,13 @@ img.Image _filterImage(img.Image input, ScanFilter filter,
               gg *= inkContrast;
               bb *= inkContrast;
             }
+            if (warmPaper?.contains(x, y, r, g, b) ?? false) {
+              // Preserve the printed coloured elements via the colour mask;
+              // flatten only the connected card substrate to scanner white.
+              rr += (251 - rr).clamp(0.0, 251.0) * .90;
+              gg += (251 - gg).clamp(0.0, 251.0) * .90;
+              bb += (251 - bb).clamp(0.0, 251.0) * .90;
+            }
           }
           image.setPixelRgb(x, y, _byte(rr), _byte(gg), _byte(bb));
         case ScanFilter.shadowFree:
@@ -255,6 +269,139 @@ img.Image _filterImage(img.Image input, ScanFilter filter,
     }
   }
   return image;
+}
+
+/// Small working-frame flood fill from the four inset corners of an already
+/// cropped page. Only a continuous warm paper/card region is whitened; an
+/// isolated similarly coloured face within a cyan portrait cannot join it.
+class _WarmPaperMask {
+  const _WarmPaperMask(this.width, this.height,
+      this.sourceWidth, this.sourceHeight, this.mask,
+      this.redGreen, this.greenBlue, this.minimumLight);
+
+  final int width;
+  final int height;
+  final int sourceWidth;
+  final int sourceHeight;
+  final Uint8List mask;
+  final double redGreen;
+  final double greenBlue;
+  final double minimumLight;
+
+  static _WarmPaperMask? detect(img.Image image) {
+    if (image.width < 80 || image.height < 80) return null;
+    final scale = math.min(1.0,
+        512.0 / math.max(image.width, image.height));
+    final width = (image.width * scale).round();
+    final height = (image.height * scale).round();
+    final working = scale < 1
+        ? img.copyResize(image, width: width, height: height,
+            interpolation: img.Interpolation.linear)
+        : image;
+    final rgb = working.getBytes(order: img.ChannelOrder.rgb);
+
+    final samples = <List<double>>[];
+    final centers = <(double, double)>[
+      (.09, .09), (.91, .09), (.09, .91), (.91, .91),
+    ];
+    final patchRadius = math.max(2, (math.min(width, height) * .018).round());
+    for (final (fx, fy) in centers) {
+      final cx = (width * fx).round();
+      final cy = (height * fy).round();
+      var red = 0.0;
+      var green = 0.0;
+      var blue = 0.0;
+      var count = 0;
+      for (var y = math.max(0, cy - patchRadius);
+          y <= math.min(height - 1, cy + patchRadius); y += 2) {
+        for (var x = math.max(0, cx - patchRadius);
+            x <= math.min(width - 1, cx + patchRadius); x += 2) {
+          final i = (y * width + x) * 3;
+          red += rgb[i];
+          green += rgb[i + 1];
+          blue += rgb[i + 2];
+          count++;
+        }
+      }
+      samples.add([red / count, green / count, blue / count]);
+    }
+    double medianChannel(int channel) {
+      final values = samples.map((s) => s[channel]).toList()..sort();
+      return (values[1] + values[2]) / 2;
+    }
+    final refR = medianChannel(0);
+    final refG = medianChannel(1);
+    final refB = medianChannel(2);
+    final rg = refR - refG;
+    final gb = refG - refB;
+    // Exclude photos, desktops and highly saturated orange/red scenes.
+    if (refR < 112 || refG < 95 || refB < 54 ||
+        rg < 6 || rg > 65 || gb < 20 || gb > 90) {
+      return null;
+    }
+    final similarCorners = samples.where((s) =>
+        (s[0] - refR).abs() < 38 && (s[1] - refG).abs() < 38 &&
+        (s[2] - refB).abs() < 38).length;
+    if (similarCorners < 3) return null;
+
+    final minimumLight = (refR * 77 + refG * 150 + refB * 29) / 256 * .60;
+    final mask = Uint8List(width * height);
+    final queue = Int32List(width * height);
+    var head = 0;
+    var tail = 0;
+
+    bool candidate(int red, int green, int blue) {
+      final light = (red * 77 + green * 150 + blue * 29) / 256;
+      return light >= minimumLight &&
+          red >= green - 4 && green >= blue + 10 &&
+          ((red - green) - rg).abs() <= 24 &&
+          ((green - blue) - gb).abs() <= 28;
+    }
+
+    void add(int x, int y) {
+      if (x < 0 || y < 0 || x >= width || y >= height) return;
+      final pos = y * width + x;
+      if (mask[pos] != 0) return;
+      final i = pos * 3;
+      if (!candidate(rgb[i], rgb[i + 1], rgb[i + 2])) return;
+      mask[pos] = 1;
+      queue[tail++] = pos;
+    }
+
+    for (final (fx, fy) in centers) {
+      final cx = (width * fx).round();
+      final cy = (height * fy).round();
+      for (var y = cy - patchRadius; y <= cy + patchRadius; y++) {
+        for (var x = cx - patchRadius; x <= cx + patchRadius; x++) {
+          add(x, y);
+        }
+      }
+    }
+    while (head < tail) {
+      final pos = queue[head++];
+      final x = pos % width;
+      final y = pos ~/ width;
+      add(x - 1, y);
+      add(x + 1, y);
+      add(x, y - 1);
+      add(x, y + 1);
+    }
+    // A coloured logo or small printed box must never trigger page whitening.
+    if (tail < width * height * .22) return null;
+    return _WarmPaperMask(width, height, image.width, image.height,
+        mask, rg, gb, minimumLight);
+  }
+
+  bool contains(int x, int y, double red, double green, double blue) {
+    final xx = (x * width ~/ sourceWidth).clamp(0, width - 1);
+    final yy = (y * height ~/ sourceHeight).clamp(0, height - 1);
+    if (mask[yy * width + xx] == 0) return false;
+    final light = (red * 77 + green * 150 + blue * 29) / 256;
+    return light >= minimumLight &&
+        ((red - green) - redGreen).abs() <= 24 &&
+        ((green - blue) - greenBlue).abs() <= 28;
+  }
+
 }
 
 class _IlluminationGrid {
