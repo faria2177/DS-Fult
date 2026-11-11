@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
@@ -214,6 +215,45 @@ class DocumentEdges {
     return _nearFrameOnThreeSides(whole);
   }
 
+  /// A dark plastic sleeve or clipboard can be a closed, inset quadrilateral
+  /// itself, so the near-frame test alone is insufficient. Only a second,
+  /// smaller complete ID with strong *four-side colour evidence* can replace
+  /// that broad native result. This deliberately does not apply to an
+  /// arbitrary inner printed rectangle.
+  static bool isCredibleCardInsideHolder(ImageDetection holder,
+      ImageDetection card, {required double borderEvidence}) {
+    final outer = holder.quad;
+    final inner = card.quad;
+    if (outer == null || inner == null || borderEvidence < .67 ||
+        !isCredibleStandaloneCard(card)) {
+      return false;
+    }
+    if ((holder.imageSize.width - card.imageSize.width).abs() > 1 ||
+        (holder.imageSize.height - card.imageSize.height).abs() > 1 ||
+        outer.area < .49 || inner.area > outer.area * .72 ||
+        !inner.points.every(outer.contains)) {
+      return false;
+    }
+    // An ordinary portrait A4 sheet may contain a large inset chart. A
+    // landscape holder surrounding a landscape ID is a different scene.
+    final outerPoints = outer.scaleToSize(holder.imageSize).points;
+    final outerWidth = ((outerPoints[1] - outerPoints[0]).distance +
+        (outerPoints[2] - outerPoints[3]).distance) / 2;
+    final outerHeight = ((outerPoints[3] - outerPoints[0]).distance +
+        (outerPoints[2] - outerPoints[1]).distance) / 2;
+    if (outerWidth < outerHeight * 1.08) return false;
+    // The candidate must have visible exterior clearance on all sides;
+    // matching the holder itself is not a reason to warp the same image twice.
+    final ox = outer.points.map((p) => p.dx).toList();
+    final oy = outer.points.map((p) => p.dy).toList();
+    final ix = inner.points.map((p) => p.dx).toList();
+    final iy = inner.points.map((p) => p.dy).toList();
+    double low(List<double> values) => values.reduce(math.min);
+    double high(List<double> values) => values.reduce(math.max);
+    return low(ix) - low(ox) >= .022 && high(ox) - high(ix) >= .022 &&
+        low(iy) - low(oy) >= .022 && high(oy) - high(iy) >= .022;
+  }
+
   /// A ruled notebook/tabletop detected as the outer quadrilateral nearly
   /// fills the photo. Its four-sided frame evidence is very different from a
   /// properly framed paper page with a visible margin on every side.
@@ -246,7 +286,6 @@ class DocumentEdges {
         isReliableGalleryCrop(normal,
             preferIdCardBounds: preferIdCardBounds) &&
         (!preferIdCardBounds || isCredibleStandaloneCard(normal));
-    if (preferIdCardBounds && normalIsSafe) return normal;
 
     // Most well-framed A4 pages need just one pass. A compact/interior result
     // or a dominant camera-frame rectangle merits an independent card pass.
@@ -255,13 +294,12 @@ class DocumentEdges {
     // pass when its outline crowds three frame sides; the native chroma mask
     // can then recover the much smaller gold/coloured ID inside it.
     final normalQuad = normal?.quad;
-    if (!preferIdCardBounds && normalIsSafe && area > .62 && normalQuad != null &&
-        !_nearFrameOnThreeSides(normalQuad)) {
-      return normal;
-    }
+    final nativeLooksLikeWholePage = !preferIdCardBounds && normalIsSafe &&
+        area > .62 && normalQuad != null &&
+        !_nearFrameOnThreeSides(normalQuad);
 
     ImageDetection? card;
-    if (!preferIdCardBounds) {
+    if (!preferIdCardBounds && !nativeLooksLikeWholePage) {
       try {
         card = await detect(imagePath, preferIdCardBounds: true);
       } catch (error) {
@@ -280,12 +318,19 @@ class DocumentEdges {
     // Independent on-device pixel segmentation. This is deliberately not a
     // neural image generator: it never invents a face, text or ID number.
     // It also operates when native OpenCV is missing or returns no quad.
-    final offline = await OfflineDocumentContour.detectFile(imagePath,
+    final independent = await OfflineDocumentContour.detectDetailedFile(imagePath,
         preferIdCardBounds: preferIdCardBounds);
+    final offline = independent?.detection;
     final outside = offline?.quad;
     if (offline != null && outside != null) {
-      if (preferIdCardBounds && isCredibleStandaloneCard(offline)) {
-        return offline;
+      if (preferIdCardBounds) {
+        final credible = isCredibleStandaloneCard(offline);
+        if (credible && (!normalIsSafe || (normal != null &&
+            (isCredibleOuterCardAlternative(normal, offline) ||
+             isCredibleCardInsideHolder(normal, offline,
+                 borderEvidence: independent!.borderEvidence))))) {
+          return offline;
+        }
       }
       if (!preferIdCardBounds) {
         final safePage = isReliableGalleryCrop(offline);
@@ -294,6 +339,8 @@ class DocumentEdges {
         if (normal != null &&
             (isCredibleOuterCardAlternative(normal, offline) ||
              isCredibleCardInsideBackground(normal, offline) ||
+             (safeCard && isCredibleCardInsideHolder(normal, offline,
+                 borderEvidence: independent!.borderEvidence)) ||
              (!normalIsSafe && safePage && normalQuad != null &&
               outside.area >= normalQuad.area * 1.3 &&
               normalQuad.points.every(outside.contains)))) {

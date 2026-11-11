@@ -42,6 +42,33 @@ void main() {
     final q = result!.quad!;
     expect(q.topLeft.dx, closeTo(64 / 420, .04));
     expect(q.bottomRight.dy, closeTo(243 / 320, .04));
+    final detail = OfflineDocumentContour.detectDetailedBytes(_png(photo));
+    expect(detail!.borderEvidence, greaterThan(.67));
+  });
+
+  test('Same-brightness coloured card is distinguished from the desk', () {
+    final photo = img.Image(width: 420, height: 320);
+    img.fill(photo, color: img.ColorRgb8(110, 130, 140));
+    // The card and desk have similar luminance. Neither the bright/dark
+    // thresholds nor the gold-card saturation rule can reliably separate it.
+    _rect(photo, 70, 76, 360, 250, img.ColorRgb8(155, 115, 112));
+    final result = OfflineDocumentContour.detectDetailedBytes(_png(photo));
+    expect(result?.detection.quad, isNotNull);
+    final q = result!.detection.quad!;
+    expect(q.topLeft.dx, closeTo(70 / 420, .05));
+    expect(q.bottomRight.dx, closeTo(359 / 420, .05));
+    expect(result.borderEvidence, greaterThan(.6));
+  });
+
+  test('White ID remains detectable on a saturated blue background', () {
+    final photo = img.Image(width: 420, height: 320);
+    img.fill(photo, color: img.ColorRgb8(54, 102, 180));
+    _rect(photo, 60, 72, 360, 246, img.ColorRgb8(229, 226, 217));
+    _rect(photo, 132, 117, 196, 195, img.ColorRgb8(72, 86, 105));
+    final result = OfflineDocumentContour.detectBytes(_png(photo));
+    expect(result?.quad, isNotNull);
+    expect(result!.quad!.topLeft.dy, closeTo(72 / 320, .05));
+    expect(result.quad!.bottomRight.dx, closeTo(359 / 420, .05));
   });
 
   test('Offline detector does not mistake a small printed label for a card', () {

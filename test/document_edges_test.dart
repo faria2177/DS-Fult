@@ -241,6 +241,17 @@ void main() {
     }
   });
 
+  test('A separately visible ID replaces a larger dark document holder', () {
+    const size = Size(1200, 900);
+    final holder = _detection(_rect(.08, .12, .92, .88), size: size);
+    final card = _detection(_rect(.22, .25, .78, .75), size: size);
+    expect(DocumentEdges.isCredibleCardInsideBackground(holder, card), isFalse);
+    expect(DocumentEdges.isCredibleCardInsideHolder(holder, card,
+        borderEvidence: .86), isTrue);
+    expect(DocumentEdges.isCredibleCardInsideHolder(holder, card,
+        borderEvidence: .27), isFalse);
+  });
+
   test('Independent recovery rejects inner labels and background rectangles', () {
     final innerName = _detection(_rect(.23, .43, .77, .59),
       size: const Size(1200, 900));

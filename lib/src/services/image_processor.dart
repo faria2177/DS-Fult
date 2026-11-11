@@ -185,6 +185,15 @@ img.Image _filterImage(img.Image input, ScanFilter filter,
               rr += (252 - rr).clamp(0.0, 252.0) * strength;
               gg += (252 - gg).clamp(0.0, 252.0) * strength;
               bb += (252 - bb).clamp(0.0, 252.0) * strength;
+            } else if (!likelySkin && tint < 43 && localPaper > 148 &&
+                relative < .75) {
+              // Text/black border ink stays crisp on an illuminated page.
+              // Limit the darkening to nearly neutral strokes so the printed
+              // photograph, red dates and government seals keep their colour.
+              const inkContrast = .86;
+              rr *= inkContrast;
+              gg *= inkContrast;
+              bb *= inkContrast;
             }
           }
           image.setPixelRgb(x, y, _byte(rr), _byte(gg), _byte(bb));

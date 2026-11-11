@@ -153,16 +153,23 @@ void main() {
         input.setPixelRgb(x, y, 28, 27, 26); // printed text
       }
     }
+    for (var y = 170; y < 185; y++) {
+      for (var x = 35; x < 65; x++) {
+        input.setPixelRgb(x, y, 208, 43, 49); // colour-printed expiry
+      }
+    }
     final source = Uint8List.fromList(img.encodePng(input));
     final output = img.decodeImage(await ImageProcessor.process(
       source, filter: ScanFilter.enhance, documentMode: true))!;
     final paper = output.getPixel(25, 35);
     final face = output.getPixel(80, 88);
     final text = output.getPixel(80, 158);
+    final colouredPrint = output.getPixel(45, 177);
     expect(paper.r, greaterThan(200));
     expect(paper.b, greaterThan(155));
     expect(face.r, lessThan(235));
     expect(text.r, lessThan(85));
+    expect(colouredPrint.r, greaterThan(colouredPrint.g * 2));
   });
 
   test('Invert effect reverses a mid-tone pixel', () async {

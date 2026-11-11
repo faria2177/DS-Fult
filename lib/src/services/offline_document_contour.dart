@@ -8,6 +8,16 @@ import 'package:image/image.dart' as img;
 
 import 'image_processor.dart';
 
+/// A proposed outside boundary together with evidence from all four edges.
+/// Geometry alone cannot distinguish a real ID from an inner printed box.
+class OfflineContourResult {
+  const OfflineContourResult(this.detection, this.borderEvidence);
+
+  final ImageDetection detection;
+  /// 0..1: how consistently the inside differs from the surrounding surface.
+  final double borderEvidence;
+}
+
 /// Native-independent, fully offline still-image detector. Gallery images
 /// must remain croppable when a device lacks the bundled OpenCV runtime or
 /// native contour scoring rejects a photograph on a contrasting background.
@@ -17,9 +27,15 @@ import 'image_processor.dart';
 class OfflineDocumentContour {
   static Future<ImageDetection?> detectFile(String path,
       {bool preferIdCardBounds = false}) async {
+    return (await detectDetailedFile(path,
+        preferIdCardBounds: preferIdCardBounds))?.detection;
+  }
+
+  static Future<OfflineContourResult?> detectDetailedFile(String path,
+      {bool preferIdCardBounds = false}) async {
     try {
       final bytes = await File(path).readAsBytes();
-      return await compute(_detectContourWorker, <String, Object>{
+      return await compute(_detectDetailedContourWorker, <String, Object>{
         'bytes': bytes,
         'card': preferIdCardBounds,
       });
@@ -32,6 +48,11 @@ class OfflineDocumentContour {
   /// Kept pure and callable from tests. Detection uses a <=512-pixel working
   /// frame; full-resolution perspective correction happens elsewhere.
   static ImageDetection? detectBytes(Uint8List bytes,
+      {bool preferIdCardBounds = false}) =>
+      detectDetailedBytes(bytes,
+          preferIdCardBounds: preferIdCardBounds)?.detection;
+
+  static OfflineContourResult? detectDetailedBytes(Uint8List bytes,
       {bool preferIdCardBounds = false}) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
@@ -49,6 +70,7 @@ class OfflineDocumentContour {
     final pixels = working.getBytes(order: img.ChannelOrder.rgb);
     final light = Uint8List(width * height);
     final chroma = Uint8List(width * height);
+    final neutral = Uint8List(width * height);
     var offset = 0;
     for (var i = 0; i < light.length; i++) {
       final r = pixels[offset++];
@@ -62,6 +84,7 @@ class OfflineDocumentContour {
       chroma[i] = (high >= 95 && (high - low) * 100 >= high * 32) ||
               (r >= 130 && g >= 105 && r - b >= 34 && g - b >= 14)
           ? 1 : 0;
+      neutral[i] = light[i] >= 130 && high - low <= 34 ? 1 : 0;
     }
 
     final patchW = math.max(4, (width * .08).round());
@@ -69,6 +92,8 @@ class OfflineDocumentContour {
     var lightCornerSum = 0;
     var lightCornerCount = 0;
     var neutralCorners = 0;
+    final patchColors = List.generate(4, (_) => List<int>.filled(3, 0));
+    final patchCounts = List<int>.filled(4, 0);
     for (var corner = 0; corner < 4; corner++) {
       final startX = corner.isOdd ? width - patchW : 0;
       final startY = corner >= 2 ? height - patchH : 0;
@@ -79,18 +104,44 @@ class OfflineDocumentContour {
           lightCornerSum += light[index];
           lightCornerCount++;
           colourful += chroma[index];
+          for (var channel = 0; channel < 3; channel++) {
+            patchColors[corner][channel] += pixels[index * 3 + channel];
+          }
+          patchCounts[corner]++;
         }
       }
       final count = ((patchW + 1) ~/ 2) * ((patchH + 1) ~/ 2);
       if (colourful * 4 < count) neutralCorners++;
     }
     final backgroundLight = lightCornerSum / math.max(1, lightCornerCount);
+    final background = List<int>.generate(3, (channel) {
+      final values = List<int>.generate(4, (corner) =>
+          patchColors[corner][channel] ~/ math.max(1, patchCounts[corner]))
+        ..sort();
+      return (values[1] + values[2]) ~/ 2;
+    });
+    final variations = List<double>.generate(4, (corner) {
+      var difference = 0;
+      for (var channel = 0; channel < 3; channel++) {
+        final average = patchColors[corner][channel] ~/
+            math.max(1, patchCounts[corner]);
+        difference += (average - background[channel]).abs();
+      }
+      return difference / 3;
+    })..sort();
+    // Only trust a background colour when three corner patches agree.
+    final consistentBackground = variations[2] <= 40;
+    final colourThreshold = math.max(22, 16 + variations[2] * 1.65);
+    final backgroundChroma = background.reduce(math.max) -
+        background.reduce(math.min);
     final mask = Uint8List(light.length);
     _ContourProposal? best;
     final modes = <int>[
       if (neutralCorners >= 3) 0, // coloured/gold card on neutral paper
       if (backgroundLight < 181) 1, // pale paper on a dark tabletop
       if (backgroundLight > 155) 2, // dark card on white paper
+      if (consistentBackground) 3, // colour difference from surrounding desk
+      if (backgroundChroma > 40) 4, // neutral paper on colourful background
     ];
     for (final mode in modes) {
       var pixelsInMask = 0;
@@ -100,7 +151,12 @@ class OfflineDocumentContour {
         final included = switch (mode) {
           0 => chroma[i] == 1,
           1 => light[i] >= brightCutoff,
-          _ => light[i] <= darkCutoff,
+          2 => light[i] <= darkCutoff,
+          3 => ((pixels[i * 3] - background[0]).abs() +
+                  (pixels[i * 3 + 1] - background[1]).abs() +
+                  (pixels[i * 3 + 2] - background[2]).abs()) /
+              3 >= colourThreshold,
+          _ => neutral[i] == 1,
         };
         mask[i] = included ? 1 : 0;
         if (included) pixelsInMask++;
@@ -110,7 +166,7 @@ class OfflineDocumentContour {
         continue;
       }
       final candidate = _bestComponent(mask, width, height,
-          preferIdCardBounds: preferIdCardBounds);
+          pixels: pixels, preferIdCardBounds: preferIdCardBounds);
       if (candidate != null &&
           (best == null || candidate.score > best.score)) {
         best = candidate;
@@ -118,19 +174,21 @@ class OfflineDocumentContour {
     }
     final quad = best?.quad;
     if (quad == null) return null;
-    return ImageDetection(quad: quad,
-        imageSize: Size(source.width.toDouble(), source.height.toDouble()));
+    return OfflineContourResult(ImageDetection(quad: quad,
+        imageSize: Size(source.width.toDouble(), source.height.toDouble())),
+        best!.borderEvidence);
   }
 }
 
 class _ContourProposal {
-  const _ContourProposal(this.quad, this.score);
+  const _ContourProposal(this.quad, this.score, this.borderEvidence);
   final Quad quad;
   final double score;
+  final double borderEvidence;
 }
 
 _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
-    {required bool preferIdCardBounds}) {
+    {required Uint8List pixels, required bool preferIdCardBounds}) {
   final seen = Uint8List(mask.length);
   final stack = Int32List(mask.length);
   _ContourProposal? best;
@@ -208,17 +266,69 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
         p.dy < .012 || p.dy > .988)) {
       continue;
     }
-    final score = math.min(1.0, solidity) * .49 +
-        (1 - (center.dx - .5).abs() - (center.dy - .5).abs()) * .27 +
-        math.min(1.0, coverage / .50) * .24;
+    final edgeEvidence = _boundaryContrast(pixels, width, height,
+        <Offset>[tl, tr, br, bl]);
+    final score = math.min(1.0, solidity) * .35 +
+        (1 - (center.dx - .5).abs() - (center.dy - .5).abs()) * .20 +
+        math.min(1.0, coverage / .50) * .19 + edgeEvidence * .26;
     if (best == null || score > best.score) {
       best = _ContourProposal(Quad(topLeft: corners[0], topRight: corners[1],
-          bottomRight: corners[2], bottomLeft: corners[3]), score);
+          bottomRight: corners[2], bottomLeft: corners[3]), score,
+          edgeEvidence);
     }
   }
   return best;
 }
 
-ImageDetection? _detectContourWorker(Map<String, Object> options) =>
-    OfflineDocumentContour.detectBytes(options['bytes']! as Uint8List,
+/// Contrast sampled *across* the four actual outer edges. Printed text is
+/// high-contrast internally but seldom forms four uninterrupted outer sides.
+double _boundaryContrast(Uint8List pixels, int width, int height,
+    List<Offset> corners) {
+  var sum = 0.0;
+  var strongSides = 0;
+  for (var side = 0; side < 4; side++) {
+    final a = corners[side];
+    final b = corners[(side + 1) % 4];
+    final dx = b.dx - a.dx;
+    final dy = b.dy - a.dy;
+    final length = math.sqrt(dx * dx + dy * dy);
+    if (length < 12) continue;
+    final nx = dy / length;
+    final ny = -dx / length;
+    var sideTotal = 0.0;
+    var sampleCount = 0;
+    for (var sample = 1; sample <= 7; sample++) {
+      final fraction = sample / 8;
+      final x = a.dx + dx * fraction;
+      final y = a.dy + dy * fraction;
+      final insideX = (x - nx * 5).round();
+      final insideY = (y - ny * 5).round();
+      final outsideX = (x + nx * 5).round();
+      final outsideY = (y + ny * 5).round();
+      if (insideX < 0 || insideX >= width || insideY < 0 ||
+          insideY >= height || outsideX < 0 || outsideX >= width ||
+          outsideY < 0 || outsideY >= height) {
+        continue;
+      }
+      final inner = (insideY * width + insideX) * 3;
+      final outer = (outsideY * width + outsideX) * 3;
+      var distance = 0;
+      for (var channel = 0; channel < 3; channel++) {
+        distance += (pixels[inner + channel] -
+            pixels[outer + channel]).abs();
+      }
+      sideTotal += ((distance / 3 - 8) / 28).clamp(0.0, 1.0);
+      sampleCount++;
+    }
+    final sideEvidence = sideTotal / math.max(1, sampleCount);
+    sum += sideEvidence;
+    if (sideEvidence >= .53) strongSides++;
+  }
+  return (sum / 4 * .65 + strongSides / 4 * .35)
+      .clamp(0.0, 1.0).toDouble();
+}
+
+OfflineContourResult? _detectDetailedContourWorker(
+        Map<String, Object> options) =>
+    OfflineDocumentContour.detectDetailedBytes(options['bytes']! as Uint8List,
         preferIdCardBounds: options['card']! as bool);
