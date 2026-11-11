@@ -170,6 +170,14 @@ class OfflineDocumentContour {
         mask[i] = included ? 1 : 0;
         if (included) pixelsInMask++;
       }
+      if (mode == 0) {
+        // A blue ruled-notebook line can satisfy the generic saturation test
+        // and physically touch a gold card. Without opening, the notebook
+        // stroke becomes part of the *same* connected component and makes
+        // its supposed card corners touch the photo frame. Remove sub-3px
+        // colour strokes before collecting a contiguous card surface.
+        _openThinChromaLines(mask, width, height);
+      }
       if (pixelsInMask < mask.length * .10 ||
           pixelsInMask > mask.length * .88) {
         if (kDebugMode) {
@@ -200,6 +208,42 @@ class OfflineDocumentContour {
         imageSize: Size(source.width.toDouble(), source.height.toDouble())),
         best!.borderEvidence,
         colorOnNeutralBackground: best.mode == 0 && neutralCorners >= 3);
+  }
+}
+
+/// 3x3 binary opening with a noise-tolerant 7/9-pixel erosion. Keeps broad
+/// printed-card surfaces even with grainy photos while disconnecting the
+/// one- or two-pixel blue ruled lines that would otherwise reach image edges.
+/// Only the neutral-background colour mode uses this; fine dark-paper
+/// document outlines are left untouched.
+void _openThinChromaLines(Uint8List mask, int width, int height) {
+  final core = Uint8List(mask.length);
+  for (var y = 1; y < height - 1; y++) {
+    final row = y * width;
+    for (var x = 1; x < width - 1; x++) {
+      final index = row + x;
+      if (mask[index] == 0) continue;
+      var nearCount = 0;
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          if (mask[index + dy * width + dx] != 0) nearCount++;
+        }
+      }
+      if (nearCount >= 7) core[index] = 1;
+    }
+  }
+  mask.fillRange(0, mask.length, 0);
+  for (var y = 1; y < height - 1; y++) {
+    final row = y * width;
+    for (var x = 1; x < width - 1; x++) {
+      final index = row + x;
+      if (core[index] == 0) continue;
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          mask[index + dy * width + dx] = 1;
+        }
+      }
+    }
   }
 }
 
