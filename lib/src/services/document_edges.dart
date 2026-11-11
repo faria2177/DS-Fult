@@ -325,10 +325,10 @@ class DocumentEdges {
     if (offline != null && outside != null) {
       if (preferIdCardBounds) {
         final credible = isCredibleStandaloneCard(offline);
-        if (credible && (!normalIsSafe || (normal != null &&
-            (isCredibleOuterCardAlternative(normal, offline) ||
-             isCredibleCardInsideHolder(normal, offline,
-                 borderEvidence: independent!.borderEvidence))))) {
+        if (credible && (!normalIsSafe ||
+            isCredibleOuterCardAlternative(normal, offline) ||
+            isCredibleCardInsideHolder(normal, offline,
+                borderEvidence: independent!.borderEvidence))) {
           return offline;
         }
       }
