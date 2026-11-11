@@ -167,9 +167,14 @@ class OfflineDocumentContour {
       }
       final candidate = _bestComponent(mask, width, height,
           pixels: pixels, preferIdCardBounds: preferIdCardBounds);
-      if (candidate != null &&
-          (best == null || candidate.score > best.score)) {
-        best = candidate;
+      if (candidate != null) {
+        // Colour-distance segmentation can include an entire grey plastic
+        // sleeve *and* the white ID inside it. Prefer the cleaner direct
+        // brightness/chroma surface when both provide complete boundaries.
+        final priorityPenalty = mode == 3 ? .14 : (mode == 4 ? .035 : 0.0);
+        final ranked = _ContourProposal(candidate.quad,
+            candidate.score - priorityPenalty, candidate.borderEvidence);
+        if (best == null || ranked.score > best.score) best = ranked;
       }
     }
     final quad = best?.quad;
@@ -270,7 +275,8 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
         <Offset>[tl, tr, br, bl]);
     final score = math.min(1.0, solidity) * .35 +
         (1 - (center.dx - .5).abs() - (center.dy - .5).abs()) * .20 +
-        math.min(1.0, coverage / .50) * .19 + edgeEvidence * .26;
+        math.min(1.0, coverage / .50) * .19 + edgeEvidence * .26 +
+        (aspect >= 1.48 && aspect <= 2.12 ? .10 : 0);
     if (best == null || score > best.score) {
       best = _ContourProposal(Quad(topLeft: corners[0], topRight: corners[1],
           bottomRight: corners[2], bottomLeft: corners[3]), score,
