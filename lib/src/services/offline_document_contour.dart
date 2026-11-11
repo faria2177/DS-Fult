@@ -11,11 +11,16 @@ import 'image_processor.dart';
 /// A proposed outside boundary together with evidence from all four edges.
 /// Geometry alone cannot distinguish a real ID from an inner printed box.
 class OfflineContourResult {
-  const OfflineContourResult(this.detection, this.borderEvidence);
+  const OfflineContourResult(this.detection, this.borderEvidence,
+      {this.colorOnNeutralBackground = false});
 
   final ImageDetection detection;
   /// 0..1: how consistently the inside differs from the surrounding surface.
   final double borderEvidence;
+  /// True only when a substantial connected coloured surface was segmented
+  /// against neutral exterior corners. Useful to distinguish a real card
+  /// from a native page detector's broader notebook/tabletop contour.
+  final bool colorOnNeutralBackground;
 }
 
 /// Native-independent, fully offline still-image detector. Gallery images
@@ -143,6 +148,10 @@ class OfflineDocumentContour {
       if (consistentBackground) 3, // colour difference from surrounding desk
       if (backgroundChroma > 40) 4, // neutral paper on colourful background
     ];
+    if (kDebugMode) {
+      debugPrint('[AutoCrop] offline: ${width}x$height, modes=$modes, '
+          'backgroundLight=${backgroundLight.toStringAsFixed(1)}');
+    }
     for (final mode in modes) {
       var pixelsInMask = 0;
       final brightCutoff = math.max(117, backgroundLight + 34);
@@ -161,8 +170,20 @@ class OfflineDocumentContour {
         mask[i] = included ? 1 : 0;
         if (included) pixelsInMask++;
       }
+      if (mode == 0) {
+        // A blue ruled-notebook line can satisfy the generic saturation test
+        // and physically touch a gold card. Without opening, the notebook
+        // stroke becomes part of the *same* connected component and makes
+        // its supposed card corners touch the photo frame. Remove sub-3px
+        // colour strokes before collecting a contiguous card surface.
+        _openThinChromaLines(mask, width, height);
+      }
       if (pixelsInMask < mask.length * .10 ||
           pixelsInMask > mask.length * .88) {
+        if (kDebugMode) {
+          debugPrint('[AutoCrop] offline mode=$mode rejected: mask='
+              '${(pixelsInMask / mask.length).toStringAsFixed(3)}');
+        }
         continue;
       }
       final candidate = _bestComponent(mask, width, height,
@@ -173,23 +194,66 @@ class OfflineDocumentContour {
         // brightness/chroma surface when both provide complete boundaries.
         final priorityPenalty = mode == 3 ? .14 : (mode == 4 ? .035 : 0.0);
         final ranked = _ContourProposal(candidate.quad,
-            candidate.score - priorityPenalty, candidate.borderEvidence);
+            candidate.score - priorityPenalty, candidate.borderEvidence,
+            mode: mode);
         if (best == null || ranked.score > best.score) best = ranked;
       }
     }
     final quad = best?.quad;
-    if (quad == null) return null;
+    if (quad == null) {
+      if (kDebugMode) debugPrint('[AutoCrop] offline: no credible contour');
+      return null;
+    }
     return OfflineContourResult(ImageDetection(quad: quad,
         imageSize: Size(source.width.toDouble(), source.height.toDouble())),
-        best!.borderEvidence);
+        best!.borderEvidence,
+        colorOnNeutralBackground: best.mode == 0 && neutralCorners >= 3);
+  }
+}
+
+/// 3x3 binary opening with a noise-tolerant 7/9-pixel erosion. Keeps broad
+/// printed-card surfaces even with grainy photos while disconnecting the
+/// one- or two-pixel blue ruled lines that would otherwise reach image edges.
+/// Only the neutral-background colour mode uses this; fine dark-paper
+/// document outlines are left untouched.
+void _openThinChromaLines(Uint8List mask, int width, int height) {
+  final core = Uint8List(mask.length);
+  for (var y = 1; y < height - 1; y++) {
+    final row = y * width;
+    for (var x = 1; x < width - 1; x++) {
+      final index = row + x;
+      if (mask[index] == 0) continue;
+      var nearCount = 0;
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          if (mask[index + dy * width + dx] != 0) nearCount++;
+        }
+      }
+      if (nearCount >= 7) core[index] = 1;
+    }
+  }
+  mask.fillRange(0, mask.length, 0);
+  for (var y = 1; y < height - 1; y++) {
+    final row = y * width;
+    for (var x = 1; x < width - 1; x++) {
+      final index = row + x;
+      if (core[index] == 0) continue;
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          mask[index + dy * width + dx] = 1;
+        }
+      }
+    }
   }
 }
 
 class _ContourProposal {
-  const _ContourProposal(this.quad, this.score, this.borderEvidence);
+  const _ContourProposal(this.quad, this.score, this.borderEvidence,
+      {this.mode = -1});
   final Quad quad;
   final double score;
   final double borderEvidence;
+  final int mode;
 }
 
 _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
@@ -239,7 +303,7 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
       if (y > 0) add(index - width);
       if (y + 1 < height) add(index + width);
     }
-    if (count < minPixels || borderCount > count * .04) continue;
+    if (count < minPixels) continue;
     final corners = [tl, tr, br, bl].map((p) => Offset(
         p.dx / width, p.dy / height)).toList();
     final safe = CropQuad(corners);
@@ -252,27 +316,72 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
       twiceArea += a.dx * b.dy - b.dx * a.dy;
     }
     final coverage = twiceArea.abs() / 2;
-    if (coverage < (preferIdCardBounds ? .13 : .17) || coverage > .90) continue;
+    if (coverage < (preferIdCardBounds ? .13 : .17) || coverage > .90) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: coverage '
+            '${coverage.toStringAsFixed(3)}');
+      }
+      continue;
+    }
     final pixelArea = coverage * width * height;
     final solidity = count / math.max(1.0, pixelArea);
-    if (solidity < .47) continue;
+    if (solidity < .47) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: solidity '
+            '${solidity.toStringAsFixed(3)} < .47');
+      }
+      continue;
+    }
     final pixelWidth = ((tr - tl).distance + (br - bl).distance) / 2;
     final pixelHeight = ((bl - tl).distance + (br - tr).distance) / 2;
     if (pixelWidth < 10 || pixelHeight < 10) continue;
     final aspect = math.max(pixelWidth, pixelHeight) /
         math.min(pixelWidth, pixelHeight);
-    if (aspect < 1.08 || aspect > 2.40) continue;
+    if (aspect < 1.08 || aspect > 2.40) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: aspect '
+            '${aspect.toStringAsFixed(3)}');
+      }
+      continue;
+    }
+    // A card can nearly touch the source image frame. Permit that only when
+    // its complete rectangular geometry and four-edge contrast support it;
+    // the original .04 border and .012 margin remain for non-card surfaces.
+    final cardLike = aspect >= 1.48 && aspect <= 1.75;
+    final borderLimit = cardLike ? .12 : .04;
+    final margin = cardLike ? .003 : .012;
+    if (borderCount > count * borderLimit) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline component rejected: border fraction '
+            '${(borderCount / count).toStringAsFixed(3)} > $borderLimit');
+      }
+      continue;
+    }
     final center = corners.reduce((a, b) => a + b) / 4;
     if ((center.dx - .5).abs() > .30 ||
         (center.dy - .5).abs() > .30) {
+      if (kDebugMode) debugPrint('[AutoCrop] offline component rejected: centre=$center');
       continue;
     }
-    if (corners.any((p) => p.dx < .012 || p.dx > .988 ||
-        p.dy < .012 || p.dy > .988)) {
+    final nearFrame = corners.any((p) => p.dx < margin || p.dx > 1 - margin ||
+        p.dy < margin || p.dy > 1 - margin);
+    if (nearFrame) {
+      if (kDebugMode) debugPrint('[AutoCrop] offline component rejected: frame margin $margin');
       continue;
     }
     final edgeEvidence = _boundaryContrast(pixels, width, height,
         <Offset>[tl, tr, br, bl]);
+    // The relaxed margins must never admit a notebook edge or an inner text
+    // strip just because it has the outline of a standard-sized ID card.
+    if (cardLike && (borderCount > count * .04 ||
+        corners.any((p) => p.dx < .012 || p.dx > .988 ||
+            p.dy < .012 || p.dy > .988)) && edgeEvidence < .55) {
+      if (kDebugMode) {
+        debugPrint('[AutoCrop] offline card rejected: weak four-edge '
+            'evidence ${edgeEvidence.toStringAsFixed(3)} < .55');
+      }
+      continue;
+    }
     final score = math.min(1.0, solidity) * .35 +
         (1 - (center.dx - .5).abs() - (center.dy - .5).abs()) * .20 +
         math.min(1.0, coverage / .50) * .19 + edgeEvidence * .26 +

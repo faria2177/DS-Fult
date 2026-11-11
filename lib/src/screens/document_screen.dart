@@ -279,9 +279,8 @@ class _DocumentScreenState extends State<DocumentScreen> {
         );
         if (review == null || !mounted) return;
         paths = review.paths;
-        if (review.needsReview > 0) {
-          _message('${review.needsReview} image(s) need manual corner review.');
-        }
+        // GalleryImportReviewScreen already offers a four-handle correction
+        // route before these pages are appended to the document.
       }
       if (doc.compositeCardPages) {
         final combined = await _composeExtraCard(paths);
@@ -460,14 +459,16 @@ class _DocumentScreenState extends State<DocumentScreen> {
   }
 
   static const _referenceFilters = <ScanFilter>[
-    ScanFilter.original,
-    ScanFilter.lighten,
+    // Keep the post-import editor in the same order as the supplied
+    // CamScanner video: the automatic Enhance result is the first preset.
     ScanFilter.enhance,
     ScanFilter.magicColor,
     ScanFilter.noWatermark,
     ScanFilter.shadowFree,
     ScanFilter.noHandwriting,
     ScanFilter.blackWhite,
+    ScanFilter.original,
+    ScanFilter.lighten,
     ScanFilter.auto,
     ScanFilter.grayscale,
     ScanFilter.eco,

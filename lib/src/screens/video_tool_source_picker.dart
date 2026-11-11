@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models.dart';
 import '../services/pdf_import_service.dart';
 import '../storage/document_store.dart';
+import 'gallery_import_review_screen.dart';
 import 'video_tool_style.dart';
 
 /// Source selection shared by video-reference Tools. Returns document IDs,
@@ -53,8 +54,18 @@ class _VideoToolSourcePickerState extends State<VideoToolSourcePicker> {
     try {
       final images = await ImagePicker().pickMultiImage();
       if (images.isEmpty || !mounted) return;
+      // Tools → Import File / image sources must use the same complete
+      // four-corner, warp and Enhance pipeline as Home → Import Images.
+      // Previously this path saved the camera JPEG with its entire desk or
+      // notebook background without any document edge detection.
+      final reviewed = await Navigator.of(context).push<GalleryImportResult>(
+        MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
+          imagePaths: images.map((image) => image.path).toList(),
+        )),
+      );
+      if (reviewed == null || !mounted) return;
       final document = await widget.store.createFromPaths(
-        images.map((image) => image.path).toList(),
+        reviewed.paths,
         name: 'Imported Document',
       );
       if (!mounted) return;

@@ -1,7 +1,6 @@
 package dev.doclens.doclens
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -523,9 +522,11 @@ object QuadDetector {
         thresholdOffset: Int = DEFAULT_THRESHOLD_OFFSET,
         preferIdCardBounds: Boolean = false,
     ): Map<String, Any?> {
-        val raw = BitmapFactory.decodeFile(path)
+        // Keep the detector and perspective warper in the same EXIF-upright,
+        // memory-bounded pixel space. Decoding a 6000px gallery image at full
+        // resolution could otherwise OOM before returning any corners.
+        val upright = ExifRotator.decodeUpright(path)
             ?: throw ScannerException.CaptureFailed("Decode failed: $path")
-        val upright = ExifRotator.rotated(raw, path)
         try {
             val quad = detectInBitmap(upright, polarity, thresholdOffset,
                 preferIdCardBounds)
@@ -534,8 +535,7 @@ object QuadDetector {
                 "imageSize" to listOf(upright.width.toDouble(), upright.height.toDouble()),
             )
         } finally {
-            if (upright !== raw) upright.recycle()
-            raw.recycle()
+            upright.recycle()
         }
     }
 

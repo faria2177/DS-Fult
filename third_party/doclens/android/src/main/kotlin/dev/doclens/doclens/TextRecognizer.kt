@@ -1,6 +1,5 @@
 package dev.doclens.doclens
 
-import android.graphics.BitmapFactory
 import android.graphics.Rect
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -32,11 +31,11 @@ object TextRecognizer {
      * MUST be called off the main thread — it blocks on the recognizer.
      */
     fun recognize(path: String): Map<String, Any?> {
-        val raw = BitmapFactory.decodeFile(path)
+        // Same bounded, orientation-baked decoder as detection and warp: OCR
+        // boxes are only usable when they live in the pixel space the caller
+        // displays, and a full-resolution export otherwise risks an OOM here.
+        val bitmap = ExifRotator.decodeUpright(path)
             ?: throw ScannerException.CaptureFailed("Decode failed: $path")
-        // Bake EXIF orientation into the pixels so the bounding boxes are in the
-        // same upright pixel space the caller is displaying.
-        val bitmap = ExifRotator.rotated(raw, path)
         try {
             val text: Text = try {
                 Tasks.await(
@@ -77,8 +76,7 @@ object TextRecognizer {
                 "blocks" to blocks,
             )
         } finally {
-            if (bitmap !== raw) bitmap.recycle()
-            raw.recycle()
+            bitmap.recycle()
         }
     }
 

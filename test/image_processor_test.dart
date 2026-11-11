@@ -165,11 +165,25 @@ void main() {
     final face = output.getPixel(80, 88);
     final text = output.getPixel(80, 158);
     final colouredPrint = output.getPixel(45, 177);
-    expect(paper.r, greaterThan(200));
-    expect(paper.b, greaterThan(155));
+    expect(paper.r, greaterThan(238));
+    expect(paper.g, greaterThan(235));
+    expect(paper.b, greaterThan(224));
     expect(face.r, lessThan(235));
     expect(text.r, lessThan(85));
     expect(colouredPrint.r, greaterThan(colouredPrint.g * 2));
+  });
+
+  test('Raw gallery photos must not bleach gold paper without a crop',
+      () async {
+    final input = img.Image(width: 160, height: 200);
+    img.fill(input, color: img.ColorRgb8(190, 170, 123));
+    final source = Uint8List.fromList(img.encodePng(input));
+    final output = img.decodeImage(await ImageProcessor.process(
+      source, filter: ScanFilter.enhance, documentMode: false))!;
+    final paper = output.getPixel(25, 35);
+    // The stronger gold-card whitening belongs to confidently warped pages;
+    // it cannot run on an uncertain full-frame camera photo.
+    expect(paper.b, lessThan(210));
   });
 
   test('Invert effect reverses a mid-tone pixel', () async {

@@ -133,10 +133,8 @@ class _HomeShellState extends State<HomeShell> {
         )),
       );
       if (reviewed == null || !mounted) return;
-      if (reviewed.needsReview > 0) {
-        _message('${reviewed.needsReview} photo(s) had no reliable edges. '
-            'Use Crop to adjust them manually.');
-      }
+      // Uncertain photos were already offered interactive corner review on
+      // the import route, so no bottom snackbar should obscure the editor.
       await _create(reviewed.paths);
     } catch (error) {
       _message('Could not import photos: $error');
