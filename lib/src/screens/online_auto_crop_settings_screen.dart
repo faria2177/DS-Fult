@@ -43,14 +43,20 @@ class _OnlineAutoCropSettingsScreenState
         consent: _consent,
         newSecret: _secret.text,
       );
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (error) {
-      if (mounted) setState(() {
-        _error = error is FormatException
-            ? error.message : 'Could not save online detector settings.';
-      });
+      if (mounted) {
+        setState(() {
+          _error = error is FormatException
+              ? error.message : 'Could not save online detector settings.';
+        });
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 

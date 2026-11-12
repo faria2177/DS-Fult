@@ -102,15 +102,21 @@ class OnlineAutoCropService {
     if (confidence is! num || !confidence.isFinite ||
         confidence < .82 || confidence > 1 ||
         (documentType != 'document' && documentType != 'id_card') ||
-        pointsData is! Map) return null;
+        pointsData is! Map) {
+      return null;
+    }
     Offset? point(String key) {
       final v = pointsData[key];
       if (v is! List || v.length != 2 ||
-          v[0] is! num || v[1] is! num) return null;
+          v[0] is! num || v[1] is! num) {
+        return null;
+      }
       final x = (v[0] as num).toDouble();
       final y = (v[1] as num).toDouble();
       if (!x.isFinite || !y.isFinite || x < .003 || y < .003 ||
-          x > .997 || y > .997) return null;
+          x > .997 || y > .997) {
+        return null;
+      }
       return Offset(x, y);
     }
     final tl = point('top_left');

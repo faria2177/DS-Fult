@@ -350,7 +350,7 @@ class DocumentEdges {
             isCredibleStandaloneCard(online.detection);
         if (page || card) {
           _log(imagePath, 'accepted validated online boundary');
-          return QuadEdgeRefiner.refine(imagePath, online.detection);
+          return await QuadEdgeRefiner.refine(imagePath, online.detection);
         }
         _log(imagePath, 'online candidate rejected by local geometry gates');
       }
