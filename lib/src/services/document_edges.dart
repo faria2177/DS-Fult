@@ -570,9 +570,7 @@ class DocumentEdges {
                 crop: CropQuad(detection.quad!.points),
               );
               final file = File(p.join(Directory.systemTemp.path,
-                  'ds_offline_crop_' +
-                  DateTime.now().microsecondsSinceEpoch.toString() +
-                  '_$index.jpg'));
+                  'ds_offline_crop_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
               await file.writeAsBytes(croppedBytes, flush: true);
               croppedPath = file.path;
             }
