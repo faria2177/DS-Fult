@@ -471,7 +471,7 @@ class DocumentEdges {
         preferIdCardBounds: preferIdCardBounds);
     final offline = independent?.detection;
     final outside = offline?.quad;
-    if (offline != null && outside != null) {
+    if (independent != null && offline != null && outside != null) {
       if (preferIdCardBounds) {
         final credible = isCredibleStandaloneCard(offline);
         if (credible && (!normalIsSafe ||
