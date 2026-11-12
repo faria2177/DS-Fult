@@ -409,8 +409,18 @@ class DocumentEdges {
           _log(imagePath, 'accepted independent ${safeCard ? 'card' : 'page'} outline');
           return offline;
         }
+        // The page detector's own result was rejected (e.g. it returned the
+        // ruled sheet *around* a card, which looks like an inner printed box).
+        // A coloured card on a neutral background with strong evidence on all
+        // four sides is then far better than dropping to manual review. A
+        // smaller card can never "enclose" a rejected page quad, so the
+        // alternatives below cannot accept it.
+        final strongColoredCard = !normalIsSafe && safeCard &&
+            independent!.colorOnNeutralBackground &&
+            independent.borderEvidence >= .56;
         if (normal != null &&
-            (isCredibleOuterCardAlternative(normal, offline) ||
+            (strongColoredCard ||
+             isCredibleOuterCardAlternative(normal, offline) ||
              isCredibleCardInsideBackground(normal, offline) ||
              (safeCard && isCredibleColoredCardOverPage(
                  normal, independent!)) ||
