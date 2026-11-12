@@ -1,5 +1,6 @@
 import 'package:doclens/doclens.dart';
 import 'package:docscanner/src/services/document_edges.dart';
+import 'package:docscanner/src/services/online_auto_crop_service.dart';
 import 'package:docscanner/src/services/offline_document_contour.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,6 +53,46 @@ class _StillFakePlatform extends DoclensPlatform {
 }
 
 void main() {
+  test('Online First uses a validated server quad before native detection',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(page: _detection(
+        _rect(.12, .12, .88, .88)));
+    DoclensPlatform.instance = fake;
+    DocumentEdges.onlineDetectorForTesting = (path, preferCard) async =>
+      OnlineCropCandidate(_detection(_rect(.08, .08, .92, .92)),
+          .96, 'document');
+    try {
+      final found = await DocumentEdges.detectSafeStillOutline(
+          'nonexistent-online-source.jpg');
+      expect(found?.quad?.area, closeTo(.7056, .001));
+      expect(fake.preferCardCalls, isEmpty);
+    } finally {
+      DocumentEdges.onlineDetectorForTesting = null;
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  test('Unreliable online corners fall back to the existing local detector',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final native = _detection(_rect(.08, .08, .92, .92));
+    final fake = _StillFakePlatform(page: native);
+    DoclensPlatform.instance = fake;
+    DocumentEdges.onlineDetectorForTesting = (path, preferCard) async =>
+      OnlineCropCandidate(_detection(_rect(.28, .38, .70, .60)),
+          .99, 'document');
+    try {
+      final found = await DocumentEdges.detectSafeStillOutline(
+          'nonexistent-local-fallback.jpg');
+      expect(found?.quad?.area, closeTo(.7056, .001));
+      expect(fake.preferCardCalls, isNotEmpty);
+    } finally {
+      DocumentEdges.onlineDetectorForTesting = null;
+      DoclensPlatform.instance = previous;
+    }
+  });
+
   test('Scanner tracks a stable four-corner outline with manual capture', () {
     final config = DocumentEdges.scannerConfig;
     expect(config.enableAutoCapture, isFalse);

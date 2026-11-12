@@ -7,11 +7,17 @@ import 'package:path/path.dart' as p;
 
 import 'image_processor.dart';
 import 'offline_document_contour.dart';
+import 'online_auto_crop_service.dart';
 import 'quad_edge_refiner.dart';
 
 /// The same on-device document contour detector is used by camera capture,
 /// gallery auto-crop and the manual corner editor.
 class DocumentEdges {
+  /// Deterministic offline/online integration seam for widget/unit tests.
+  @visibleForTesting
+  static Future<OnlineCropCandidate?> Function(String, bool)?
+      onlineDetectorForTesting;
+
   static const scannerConfig = ScannerConfig(
     // Never fire the camera automatically. Edge detection and auto-crop still
     // run; the user chooses when to take the picture.
@@ -327,6 +333,30 @@ class DocumentEdges {
   /// ordinary page detector returned null; otherwise leave the photo whole.
   static Future<ImageDetection?> detectSafeStillOutline(String imagePath,
       {bool preferIdCardBounds = false}) async {
+    // Online First applies to still images only (not live CameraX frames).
+    // Explicit opt-in and a private HTTPS endpoint are required; malformed or
+    // misleading cloud coordinates never bypass local crop-safety gates.
+    try {
+      final online = onlineDetectorForTesting != null
+          ? await onlineDetectorForTesting!(imagePath, preferIdCardBounds)
+          : await const OnlineAutoCropService().detect(imagePath,
+              preferIdCardBounds: preferIdCardBounds);
+      if (online != null) {
+        final page = online.documentType == 'document' &&
+            online.confidence >= .86 &&
+            isReliableGalleryCrop(online.detection);
+        final card = online.documentType == 'id_card' &&
+            online.confidence >= .90 &&
+            isCredibleStandaloneCard(online.detection);
+        if (page || card) {
+          _log(imagePath, 'accepted validated online boundary');
+          return QuadEdgeRefiner.refine(imagePath, online.detection);
+        }
+        _log(imagePath, 'online candidate rejected by local geometry gates');
+      }
+    } catch (error) {
+      _log(imagePath, 'online unavailable; offline fallback: $error');
+    }
     final found = await _detectSafeStillOutlineCoarse(imagePath,
         preferIdCardBounds: preferIdCardBounds);
     if (found == null) return null;

@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/document_edges.dart';
 import '../services/image_processor.dart';
+import '../services/online_auto_crop_service.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
 import 'gallery_import_review_screen.dart';
@@ -281,12 +282,25 @@ class _CameraScreenState extends State<CameraScreen> {
     final confirmedCrops = <String>{};
     for (final result in results) {
       final nativeCrop = result.croppedImagePath;
+      final raw = result.rawImagePath;
+      if (raw.isEmpty && (nativeCrop == null || nativeCrop.isEmpty)) continue;
+      // A ready, consented Online First detector gets the raw still before
+      // accepting a native-cropped candidate. A failed online/offline attempt
+      // must not discard a usable native crop.
+      if (raw.isNotEmpty && await OnlineAutoCropConfig.canUpload()) {
+        final first = await DocumentEdges.autoCropFiles([raw],
+            preferIdCardBounds: _detectCardBounds);
+        if (first.croppedCount > 0) {
+          outputs.add(first.paths.single);
+          confirmedCrops.add(first.paths.single);
+          continue;
+        }
+      }
       if (nativeCrop != null && nativeCrop.isNotEmpty) {
         outputs.add(nativeCrop);
         confirmedCrops.add(nativeCrop);
         continue;
       }
-      final raw = result.rawImagePath;
       if (raw.isEmpty) continue;
       if (_settings.autoCrop || widget.cardMode) {
         final recovered = await DocumentEdges.autoCropFiles([raw],

@@ -2,6 +2,7 @@ import 'package:doclens/doclens.dart';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'online_auto_crop_settings_screen.dart';
 
 class ScanMoreSettingsScreen extends StatelessWidget {
   const ScanMoreSettingsScreen({super.key, required this.settings});
@@ -26,6 +27,19 @@ class ScanMoreSettingsScreen extends StatelessWidget {
           body: AnimatedBuilder(
             animation: settings,
             builder: (context, _) => ListView(children: [
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 8),
+                title: const Text('Online First Auto Crop'),
+                subtitle: const Text('Private HTTPS AI boundary detection; '
+                    'automatic offline fallback'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute(builder: (_) =>
+                      const OnlineAutoCropSettingsScreen())),
+              ),
+              const Divider(color: Color(0xFF39393D), height: 1,
+                  indent: 20, endIndent: 20),
               _toggle(
                 'Auto Adjust Borders',
                 'Auto adjust borders when batch scanning',
