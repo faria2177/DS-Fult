@@ -571,6 +571,11 @@ object QuadDetector {
         } finally {
             if (small !== bitmap) small.recycle()
         }
+        // Extra native evidence is computed on the existing 512px upright
+        // working image, never on CameraX live frames or the large raw JPEG.
+        // If the .so is absent or a proposal is ambiguous, all old paths work.
+        val native = NativePageScanner.detectArgb(
+            pixels, dw, dh, preferCard = preferIdCardBounds)
         if (preferIdCardBounds) {
             val contrast = detectBackgroundContrastPage(pixels, dw, dh)
             val neutral = detectNeutralPaper(pixels, dw, dh)
@@ -580,9 +585,19 @@ object QuadDetector {
             // proposal can recover its actual outside without tracing text.
             val colouredCard = detectSaturatedPanel(pixels, dw, dh)
             val smallColouredCard = detectColoredCardOnNeutralPage(pixels, dw, dh)
+            val nativeCard = native?.quad?.takeIf {
+                native.confidence >= .72f &&
+                    StillCaptureCropSafety.isCredibleCard(it, dw, dh)
+            }
+            val nativeColor = native?.quad?.takeIf {
+                native.mode == 0 && native.confidence >= .74f &&
+                    StillCaptureCropSafety.isCredibleColorCard(it, dw, dh)
+            }
+            val bestColor = listOfNotNull(smallColouredCard, nativeColor)
+                .maxByOrNull { StillCaptureCropSafety.area(it) }
             return StillCaptureCropSafety.chooseCardStillBoundary(
-                cvQuad, contrast, neutral, dw, dh, colouredCard,
-                smallColouredCard)
+                cvQuad, contrast, neutral, dw, dh,
+                nativeCard ?: colouredCard, bestColor)
         }
         // The independently segmented outside sheet must outweigh any inner
         // text rectangle, but cannot displace an equally sized strong CV page.
@@ -598,7 +613,22 @@ object QuadDetector {
                 ?.takeIf { cvQuad == null ||
                     StillCaptureCropSafety.encloses(it, cvQuad) }
         } else null
-        val wholePage = listOfNotNull(neutralQuad, contrastQuad, saturatedPanelQuad)
+        // A confident, independently segmented gold ID may be a better
+        // document than a broad near-frame notebook contour.
+        val nativeColorCard = native?.quad?.takeIf {
+            native.mode == 0 && native.confidence >= .78f &&
+                StillCaptureCropSafety.isCredibleColorCard(it, dw, dh)
+        }
+        if (StillCaptureCropSafety.verifiedColorCardOverBackground(
+                cvQuad, nativeColorCard, dw, dh)) {
+            return nativeColorCard
+        }
+        val nativePage = native?.quad?.takeIf {
+            native.confidence >= .75f &&
+                StillCaptureCropSafety.isCrediblePage(it, dw, dh)
+        }
+        val wholePage = listOfNotNull(
+                neutralQuad, contrastQuad, saturatedPanelQuad, nativePage)
             .filter { StillCaptureCropSafety.isCrediblePage(it, dw, dh) }
             .maxByOrNull { StillCaptureCropSafety.area(it) }
         if (cvQuad != null) {

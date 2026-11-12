@@ -33,6 +33,13 @@ jobs:
         run: flutter pub get
       - name: Repair legacy Tesseract Android build script
         run: bash tool/patch_tesseract_gradle.sh
+      - name: Verify independent C++ boundary engine
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            third_party/doclens/android/src/main/cpp/ds_page_scanner.cpp \
+            third_party/doclens/android/src/test/cpp/ds_page_scanner_test.cpp \
+            -o /tmp/ds_native_scanner_test
+          /tmp/ds_native_scanner_test
       - name: Verify native four-corner detector
         run: cd android && ./gradlew :doclens:testDebugUnitTest --no-daemon
       - name: Static analysis

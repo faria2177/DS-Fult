@@ -44,6 +44,15 @@ android {
         minSdk = 21
     }
 
+    // Compile an independently authored document-contour engine. AGP
+    // packages libds_pagescanner.so automatically for each target ABI;
+    // the user-supplied proprietary JNI archive remains excluded.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
