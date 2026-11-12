@@ -54,6 +54,9 @@ class DoclensPlugin :
     private var activityBinding: ActivityPluginBinding? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    // At most two still-image tasks in parallel; avoid queuing gallery
+    // detection behind unrelated OCR/PDF calls.
+    private val stillImageExecutor = Executors.newFixedThreadPool(2)
 
     private var session: ScannerSession? = null
     private var pendingPermissionInit: (() -> Unit)? = null
@@ -83,6 +86,7 @@ class DoclensPlugin :
         session?.dispose()
         session = null
         backgroundExecutor.shutdown()
+        stillImageExecutor.shutdown()
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -416,7 +420,7 @@ class DoclensPlugin :
         if (rawPath == null || quadMap == null) {
             result.error("capture_failed", "Invalid warp args", null); return
         }
-        backgroundExecutor.execute {
+        stillImageExecutor.execute {
             try {
                 val q = Quad.fromMap(quadMap)
                 val out = ImageWarper.warpFile(rawPath, q, quality, enhancement, autoOrientation)
@@ -439,7 +443,7 @@ class DoclensPlugin :
         val thresholdOffset = call.argument<Int>("detectionThresholdOffset")
             ?: QuadDetector.DEFAULT_THRESHOLD_OFFSET
         val preferIdCardBounds = call.argument<Boolean>("preferIdCardBounds") ?: false
-        backgroundExecutor.execute {
+        stillImageExecutor.execute {
             try {
                 val out = QuadDetector.detectInFile(path, polarity, thresholdOffset,
                     preferIdCardBounds)

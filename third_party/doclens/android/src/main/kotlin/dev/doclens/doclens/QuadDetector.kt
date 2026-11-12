@@ -525,7 +525,10 @@ object QuadDetector {
         // Keep the detector and perspective warper in the same EXIF-upright,
         // memory-bounded pixel space. Decoding a 6000px gallery image at full
         // resolution could otherwise OOM before returning any corners.
-        val upright = ExifRotator.decodeUpright(path)
+        // Boundary detection is performed on a <=512px working frame.
+        // Decode just 1536px for still-image detection to reduce allocation,
+        // while final perspective warp continues using full-resolution JPEG.
+        val upright = ExifRotator.decodeUpright(path, maxDimension = 1536)
             ?: throw ScannerException.CaptureFailed("Decode failed: $path")
         try {
             val quad = detectInBitmap(upright, polarity, thresholdOffset,

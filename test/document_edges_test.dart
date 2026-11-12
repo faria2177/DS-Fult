@@ -52,6 +52,31 @@ class _StillFakePlatform extends DoclensPlatform {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// Simulates a slow native warp so batch tests can verify the exact
+/// concurrency bound and original-order preservation without real images.
+class _DelayedWarpPlatform extends _StillFakePlatform {
+  int inFlight = 0;
+  int maxInFlight = 0;
+
+  @override
+  Future<String> warpImage({
+    required String rawImagePath,
+    required Quad quad,
+    int jpegQuality = 100,
+    ImageEnhancement enhancement = ImageEnhancement.none,
+    AutoOrientation autoOrientation = AutoOrientation.none,
+  }) async {
+    inFlight++;
+    if (inFlight > maxInFlight) maxInFlight = inFlight;
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      return '$rawImagePath.cropped';
+    } finally {
+      inFlight--;
+    }
+  }
+}
+
 void main() {
   test('Online First uses a validated server quad before native detection',
       () async {
@@ -421,5 +446,52 @@ void main() {
       OfflineContourResult(edgeToEdge, .99)), isFalse);
   });
 
+
+
+  test('Seven gallery pages crop in bounded parallel workers with stable order',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _DelayedWarpPlatform();
+    DoclensPlatform.instance = fake;
+    DocumentEdges.onlineDetectorForTesting = (path, card) async {
+      if (path == 'unreliable-3.jpg') return null;
+      return OnlineCropCandidate(
+          _detection(_rect(.08, .08, .92, .92)), .96, 'document');
+    };
+    final progress = <int>[];
+    try {
+      final sources = [
+        'page-0.jpg', 'page-1.jpg', 'page-2.jpg', 'unreliable-3.jpg',
+        'page-4.jpg', 'page-5.jpg', 'page-6.jpg',
+      ];
+      final result = await DocumentEdges.autoCropFiles(sources,
+          onProgress: (processed, total) {
+        expect(total, 7);
+        progress.add(processed);
+      });
+      expect(result.paths, [
+        'page-0.jpg.cropped', 'page-1.jpg.cropped', 'page-2.jpg.cropped',
+        'unreliable-3.jpg', 'page-4.jpg.cropped', 'page-5.jpg.cropped',
+        'page-6.jpg.cropped',
+      ]);
+      expect(result.failedIndexes, [3]);
+      expect(result.croppedCount, 6);
+      expect(result.failedCount, 0);
+      expect(fake.maxInFlight, 2);
+      expect(progress, [1, 2, 3, 4, 5, 6, 7]);
+    } finally {
+      DocumentEdges.onlineDetectorForTesting = null;
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  test('Empty gallery selection completes without processing or progress', () async {
+    var progressCalled = false;
+    final result = await DocumentEdges.autoCropFiles(const [],
+        onProgress: (done, total) => progressCalled = true);
+    expect(result.paths, isEmpty);
+    expect(result.croppedCount, 0);
+    expect(progressCalled, isFalse);
+  });
 
 }

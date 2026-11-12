@@ -530,55 +530,79 @@ class DocumentEdges {
     return normalIsSafe ? normal : null;
   }
 
-  /// Original photos remain unchanged, including when no document is found.
-  /// Per-file failure falls back to the original so imports never disappear.
+  /// Run at most two still-image scans concurrently. The previous serial
+  /// loop made large gallery selections wait for every decode and warp.
+  /// This fixed-size pool protects memory and preserves the original order.
   static Future<AutoCropBatch> autoCropFiles(List<String> images,
-      {bool preferIdCardBounds = false}) async {
-    final output = <String>[];
-    final failed = <int>[];
+      {bool preferIdCardBounds = false,
+       void Function(int processed, int total)? onProgress}) async {
+    if (images.isEmpty) return const AutoCropBatch([], 0);
+    final output = List<String>.of(images);
+    final failedFlags = List<bool>.filled(images.length, false);
+    var nextIndex = 0;
+    var processed = 0;
     var cropped = 0;
     var thrownFailures = 0;
-    for (var index = 0; index < images.length; index++) {
-      final image = images[index];
-      try {
-        final detection = await detectSafeStillOutline(image,
-            preferIdCardBounds: preferIdCardBounds);
-        if (detection == null) {
-          output.add(image);
-          failed.add(index);
-          continue;
-        }
-        String croppedPath;
+
+    Future<void> work() async {
+      while (true) {
+        final index = nextIndex++;
+        if (index >= images.length) return;
+        final image = images[index];
         try {
-          croppedPath = await DoclensPlatform.instance.warpImage(
-            rawImagePath: image,
-            quad: detection.quadIn,
-            jpegQuality: 95,
-            // Keep colour effects separate from irreversible geometry.
-            enhancement: ImageEnhancement.none,
-          );
+          final detection = await detectSafeStillOutline(image,
+              preferIdCardBounds: preferIdCardBounds);
+          if (detection == null) {
+            failedFlags[index] = true;
+          } else {
+            String croppedPath;
+            try {
+              croppedPath = await DoclensPlatform.instance.warpImage(
+                rawImagePath: image,
+                quad: detection.quadIn,
+                jpegQuality: 95,
+                enhancement: ImageEnhancement.none,
+              );
+            } catch (error) {
+              _log(image, 'native warp failed, trying Dart: $error');
+              final croppedBytes = await ImageProcessor.process(
+                await File(image).readAsBytes(),
+                crop: CropQuad(detection.quad!.points),
+              );
+              final file = File(p.join(Directory.systemTemp.path,
+                  'ds_offline_crop_' +
+                  DateTime.now().microsecondsSinceEpoch.toString() +
+                  '_$index.jpg'));
+              await file.writeAsBytes(croppedBytes, flush: true);
+              croppedPath = file.path;
+            }
+            output[index] = croppedPath;
+            cropped++;
+          }
         } catch (error) {
-          _log(image, 'native warp failed, trying Dart: $error');
-          final croppedBytes = await ImageProcessor.process(
-            await File(image).readAsBytes(),
-            crop: CropQuad(detection.quad!.points),
-          );
-          final file = File(p.join(Directory.systemTemp.path,
-              'ds_offline_crop_${DateTime.now().microsecondsSinceEpoch}.jpg'));
-          await file.writeAsBytes(croppedBytes, flush: true);
-          croppedPath = file.path;
+          _log(image, 'auto-crop skipped: $error');
+          output[index] = image;
+          failedFlags[index] = true;
+          thrownFailures++;
+        } finally {
+          processed++;
+          try {
+            onProgress?.call(processed, images.length);
+          } catch (error) {
+            _log(image, 'progress listener ignored: $error');
+          }
         }
-        output.add(croppedPath);
-        cropped++;
-      } catch (error) {
-        _log(image, 'auto-crop skipped: $error');
-        output.add(image);
-        failed.add(index);
-        thrownFailures++;
       }
     }
+
+    final workerCount = math.min(2, images.length);
+    await Future.wait(List.generate(workerCount, (_) => work()));
+    final failedIndexes = <int>[
+      for (var i = 0; i < failedFlags.length; i++)
+        if (failedFlags[i]) i,
+    ];
     return AutoCropBatch(output, cropped,
-        failedIndexes: failed, failedCount: thrownFailures);
+        failedIndexes: failedIndexes, failedCount: thrownFailures);
   }
 }
 

@@ -105,7 +105,12 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
     try {
       final crop = _autoCrop
           ? await DocumentEdges.autoCropFiles(sourcePaths,
-              preferIdCardBounds: widget.preferIdCardBounds)
+              preferIdCardBounds: widget.preferIdCardBounds,
+              onProgress: (processed, total) {
+                if (!mounted) return;
+                setState(() => _progress =
+                    'Detecting document edges $processed / $total…');
+              })
           : AutoCropBatch(sourcePaths, 0);
       // Keep automatic four-corner detection but never interrupt imports with
       // an edge-detection failure dialog. Uncertain pages retain their
