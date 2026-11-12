@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'image_processor.dart';
 import 'offline_document_contour.dart';
+import 'quad_edge_refiner.dart';
 
 /// The same on-device document contour detector is used by camera capture,
 /// gallery auto-crop and the manual corner editor.
@@ -325,6 +326,19 @@ class DocumentEdges {
   /// complete document. Try the independent card outline even when the
   /// ordinary page detector returned null; otherwise leave the photo whole.
   static Future<ImageDetection?> detectSafeStillOutline(String imagePath,
+      {bool preferIdCardBounds = false}) async {
+    final found = await _detectSafeStillOutlineCoarse(imagePath,
+        preferIdCardBounds: preferIdCardBounds);
+    if (found == null) return null;
+    // Every detector path (native OpenCV, native colour masks, offline Dart)
+    // tends to land a few percent inside the real paper edge. Snap the
+    // accepted outline onto the actual edge pixels; on any doubt this returns
+    // the unchanged detection.
+    return QuadEdgeRefiner.refine(imagePath, found);
+  }
+
+  static Future<ImageDetection?> _detectSafeStillOutlineCoarse(
+      String imagePath,
       {bool preferIdCardBounds = false}) async {
     ImageDetection? normal;
     try {
