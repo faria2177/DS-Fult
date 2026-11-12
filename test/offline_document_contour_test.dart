@@ -127,4 +127,23 @@ void main() {
   });
 
 
+
+  test('White NID touching photo sides may trim only dark top and bottom', () {
+    final photo = img.Image(width: 480, height: 640);
+    img.fill(photo, color: img.ColorRgb8(30, 32, 34));
+    _rect(photo, 0, 144, 480, 482, img.ColorRgb8(147, 148, 146));
+    // The white ID reaches both photo sides; there are no outside side
+    // pixels to sample. It still has two real, strong horizontal edges.
+    _rect(photo, 0, 179, 480, 456, img.ColorRgb8(240, 238, 231));
+    _rect(photo, 0, 275, 480, 281, img.ColorRgb8(29, 30, 31));
+    final detail = OfflineDocumentContour.detectDetailedBytes(_png(photo));
+    expect(detail?.whiteOnDarkBackground, isTrue);
+    final q = detail!.detection.quad!;
+    expect(q.topLeft.dy, closeTo(179 / 640, .04));
+    expect(q.bottomRight.dy, closeTo(455 / 640, .04));
+    expect(q.topLeft.dx, lessThan(.025));
+    expect(q.bottomRight.dx, greaterThan(.96));
+  });
+
+
 }

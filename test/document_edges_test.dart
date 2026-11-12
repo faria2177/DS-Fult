@@ -401,4 +401,25 @@ void main() {
   });
 
 
+
+  test('Full-width white card on dark table can retain lateral source edges', () {
+    const size = Size(550, 690);
+    final edgeToEdge = _detection(_rect(0, .16, .995, .73),
+        size: size);
+    final result = OfflineContourResult(edgeToEdge, .51,
+        whiteOnDarkBackground: true);
+    final mistakenNative = _detection(_rect(.12, .26, .86, .61),
+        size: size);
+    expect(DocumentEdges.isCredibleStandaloneCard(edgeToEdge), isFalse);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(null, result), isTrue);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(
+        mistakenNative, result), isTrue);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(null,
+      OfflineContourResult(edgeToEdge, .18,
+          whiteOnDarkBackground: true)), isFalse);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(null,
+      OfflineContourResult(edgeToEdge, .99)), isFalse);
+  });
+
+
 }

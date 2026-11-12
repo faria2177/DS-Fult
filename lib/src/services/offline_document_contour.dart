@@ -227,7 +227,7 @@ class OfflineDocumentContour {
         best!.borderEvidence,
         colorOnNeutralBackground: best.mode == 0 && neutralCorners >= 3,
         whiteOnDarkBackground: best.mode == 5 &&
-            backgroundLight < 131 && best.borderEvidence >= .57);
+            backgroundLight < 131 && best.borderEvidence >= .45);
   }
 }
 
@@ -419,14 +419,31 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
     }
     final nearFrame = corners.any((p) => p.dx < margin || p.dx > 1 - margin ||
         p.dy < margin || p.dy > 1 - margin);
-    if (nearFrame) {
+    // A photographed ID can be almost edge-to-edge horizontally. When the
+    // actual left/right exterior is outside the photo, never invent either
+    // side: retain the full source width and only trim strongly evidenced
+    // dark bands above/below the bright card. Never accept a thin name strip.
+    final spanX = corners.map((p) => p.dx).reduce(math.max) -
+        corners.map((p) => p.dx).reduce(math.min);
+    final spanY = corners.map((p) => p.dy).reduce(math.max) -
+        corners.map((p) => p.dy).reduce(math.min);
+    final frameWideCard = whiteOnDark &&
+        spanX >= .89 && spanY >= .42 && spanY <= .78 &&
+        coverage >= .40 && coverage <= .78 &&
+        aspect >= 1.15 && aspect <= 2.15 &&
+        corners.every((p) => p.dy >= .055 && p.dy <= .94) &&
+        !(corners.any((p) => p.dy < margin || p.dy > 1 - margin));
+    if (nearFrame && !frameWideCard) {
       if (kDebugMode) debugPrint('[AutoCrop] offline component rejected: frame margin $margin');
       continue;
     }
     final edgeEvidence = _boundaryContrast(pixels, width, height,
         <Offset>[tl, tr, br, bl]);
-    // Do not accept the interior name block on the strength of one edge.
-    if (whiteOnDark && edgeEvidence < .57) continue;
+    // A full-width card has no visible left/right outside pixels; require
+    // strong top/bottom evidence and a substantial height before trimming.
+    if (whiteOnDark && edgeEvidence < (frameWideCard ? .45 : .57)) {
+      continue;
+    }
     // The relaxed margins must never admit a notebook edge or an inner text
     // strip just because it has the outline of a standard-sized ID card.
     if (cardLike && (borderCount > count * .04 ||

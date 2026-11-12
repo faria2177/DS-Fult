@@ -318,9 +318,28 @@ class DocumentEdges {
   /// from all four outside edges before allowing a compact landscape crop.
   static bool isVerifiedWhiteCardOnDark(
       ImageDetection? existing, OfflineContourResult proposed) {
-    if (!proposed.whiteOnDarkBackground ||
-        proposed.borderEvidence < .57 ||
-        !isCredibleStandaloneCard(proposed.detection)) {
+    if (!proposed.whiteOnDarkBackground) return false;
+    final quad = proposed.detection.quad;
+    if (quad == null) return false;
+    final points = quad.points;
+    final left = points.map((p) => p.dx).reduce(math.min);
+    final right = points.map((p) => p.dx).reduce(math.max);
+    final top = points.map((p) => p.dy).reduce(math.min);
+    final bottom = points.map((p) => p.dy).reduce(math.max);
+    final pixel = quad.scaleToSize(proposed.detection.imageSize).points;
+    final cardWidth = ((pixel[1] - pixel[0]).distance +
+        (pixel[2] - pixel[3]).distance) / 2;
+    final cardHeight = ((pixel[3] - pixel[0]).distance +
+        (pixel[2] - pixel[1]).distance) / 2;
+    final ratio = math.max(cardWidth, cardHeight) /
+        math.max(1, math.min(cardWidth, cardHeight));
+    final frameWideCard = proposed.borderEvidence >= .45 &&
+        quad.area >= .40 && quad.area <= .78 &&
+        right - left >= .89 && bottom - top >= .42 &&
+        bottom - top <= .78 && top >= .055 && bottom <= .94 &&
+        ratio >= 1.15 && ratio <= 2.15;
+    if (!frameWideCard && (proposed.borderEvidence < .57 ||
+        !isCredibleStandaloneCard(proposed.detection))) {
       return false;
     }
     final inner = proposed.detection.quad;
@@ -334,6 +353,9 @@ class DocumentEdges {
     final same = outer.points.asMap().entries.every((entry) =>
         (entry.value - inner.points[entry.key]).distance < .06);
     if (same) return true;
+    // Frame-wide detection preserves the entire lateral source. A false
+    // native rectangle should not stop safe top/bottom background trimming.
+    if (frameWideCard && !isReliableGalleryCrop(existing)) return true;
     // Only an enclosing larger sleeve/page can be replaced. Do not crop a
     // physically unrelated white printed inset from a well-framed page.
     return outer.area >= inner.area * 1.18 &&
@@ -455,7 +477,7 @@ class DocumentEdges {
         if (credible && (!normalIsSafe ||
             isCredibleOuterCardAlternative(normal, offline) ||
             isCredibleCardInsideHolder(normal, offline,
-                borderEvidence: independent!.borderEvidence))) {
+                borderEvidence: independent.borderEvidence))) {
           _log(imagePath, 'accepted independent card outline');
           return offline;
         }
@@ -463,7 +485,7 @@ class DocumentEdges {
       if (!preferIdCardBounds) {
         final safePage = isReliableGalleryCrop(offline);
         final safeCard = isCredibleStandaloneCard(offline);
-        if (isVerifiedWhiteCardOnDark(normal, independent!)) {
+        if (isVerifiedWhiteCardOnDark(normal, independent)) {
           _log(imagePath, 'accepted complete white card over dark background');
           return offline;
         }
@@ -478,16 +500,16 @@ class DocumentEdges {
         // smaller card can never "enclose" a rejected page quad, so the
         // alternatives below cannot accept it.
         final strongColoredCard = !normalIsSafe && safeCard &&
-            independent!.colorOnNeutralBackground &&
+            independent.colorOnNeutralBackground &&
             independent.borderEvidence >= .56;
         if (normal != null &&
             (strongColoredCard ||
              isCredibleOuterCardAlternative(normal, offline) ||
              isCredibleCardInsideBackground(normal, offline) ||
              (safeCard && isCredibleColoredCardOverPage(
-                 normal, independent!)) ||
+                 normal, independent)) ||
              (safeCard && isCredibleCardInsideHolder(normal, offline,
-                 borderEvidence: independent!.borderEvidence)) ||
+                 borderEvidence: independent.borderEvidence)) ||
              (!normalIsSafe && safePage && normalQuad != null &&
               outside.area >= normalQuad.area * 1.3 &&
               normalQuad.points.every(outside.contains)))) {
