@@ -448,10 +448,11 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
     // strip just because it has the outline of a standard-sized ID card.
     if (cardLike && (borderCount > count * .04 ||
         corners.any((p) => p.dx < .012 || p.dx > .988 ||
-            p.dy < .012 || p.dy > .988)) && edgeEvidence < .55) {
+            p.dy < .012 || p.dy > .988)) &&
+        edgeEvidence < (frameWideCard ? .45 : .55)) {
       if (kDebugMode) {
         debugPrint('[AutoCrop] offline card rejected: weak four-edge '
-            'evidence ${edgeEvidence.toStringAsFixed(3)} < .55');
+            'evidence ${edgeEvidence.toStringAsFixed(3)} below geometric gate');
       }
       continue;
     }
