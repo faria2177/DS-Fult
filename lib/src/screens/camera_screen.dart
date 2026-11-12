@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:doclens/doclens.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,7 +12,6 @@ import '../services/document_edges.dart';
 import '../services/image_processor.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
-import 'crop_screen.dart';
 import 'gallery_import_review_screen.dart';
 import 'manual_camera_screen.dart';
 import 'id_card_templates.dart';
@@ -281,7 +279,6 @@ class _CameraScreenState extends State<CameraScreen> {
     if (!mounted || _finished || results.isEmpty) return;
     final outputs = <String>[];
     final confirmedCrops = <String>{};
-    final unrecognized = <int>[];
     for (final result in results) {
       final nativeCrop = result.croppedImagePath;
       if (nativeCrop != null && nativeCrop.isNotEmpty) {
@@ -298,62 +295,13 @@ class _CameraScreenState extends State<CameraScreen> {
         outputs.add(path);
         if (recovered.croppedCount > 0) {
           confirmedCrops.add(path);
-        } else {
-          unrecognized.add(outputs.length - 1);
         }
       } else {
         outputs.add(raw);
       }
     }
     if (outputs.isNotEmpty) {
-      await _reviewCaptureCorners(outputs, confirmedCrops, unrecognized);
       await _finishProcessed(outputs, confirmedCrops: confirmedCrops);
-    }
-  }
-
-  /// A still capture without a reliable outer quad must not silently become
-  /// an uncropped document. Offer the same four-handle editor as gallery
-  /// imports, while keeping the original when the user skips the review.
-  Future<void> _reviewCaptureCorners(List<String> paths,
-      Set<String> confirmedCrops, List<int> failedIndexes) async {
-    if (failedIndexes.isEmpty || !mounted) return;
-    final reviewNow = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Check document corners'),
-        content: Text('${failedIndexes.length} scan(s) have no reliable '
-            'document border. Adjust the four corners before saving?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: const Text('Keep originals'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialog, true),
-            child: const Text('Review corners'),
-          ),
-        ],
-      ),
-    );
-    if (reviewNow != true || !mounted) return;
-    final folder = await getTemporaryDirectory();
-    for (final index in failedIndexes) {
-      if (!mounted) return;
-      final sourcePath = paths[index];
-      final cropBytes = await Navigator.of(context).push<Uint8List>(
-        MaterialPageRoute(builder: (_) => CropScreen(
-          imagePath: sourcePath, preferIdCardBounds: _detectCardBounds,
-        )),
-      );
-      if (cropBytes == null) continue;
-      final originalBytes = await File(sourcePath).readAsBytes();
-      if (listEquals(cropBytes, originalBytes)) continue;
-      final target = File(p.join(folder.path,
-          'ds_capture_review_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
-      await target.writeAsBytes(cropBytes, flush: true);
-      paths[index] = target.path;
-      confirmedCrops.add(target.path);
     }
   }
 
@@ -420,7 +368,6 @@ class _CameraScreenState extends State<CameraScreen> {
       final outputs = List<String>.of(cropped.paths);
       final confirmed = cropped.croppedCount == 0
           ? <String>{} : outputs.toSet();
-      await _reviewCaptureCorners(outputs, confirmed, cropped.failedIndexes);
       await _finishProcessed(outputs, confirmedCrops: confirmed);
     } catch (error) {
       if (mounted) {

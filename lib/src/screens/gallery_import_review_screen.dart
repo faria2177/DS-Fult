@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -8,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import '../services/document_edges.dart';
 import '../services/image_processor.dart';
 import '../theme.dart';
-import 'crop_screen.dart';
 
 /// The user confirms their gallery selection, effect and auto-crop policy
 /// *before* any files are transformed. All processing is on-device.
@@ -109,58 +107,11 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
           ? await DocumentEdges.autoCropFiles(sourcePaths,
               preferIdCardBounds: widget.preferIdCardBounds)
           : AutoCropBatch(sourcePaths, 0);
-      final adjustedPaths = List<String>.of(crop.paths);
-      final needsManualReview = <int>{...crop.failedIndexes};
-      if (_autoCrop && needsManualReview.isNotEmpty && mounted) {
-        // Show an actionable review before returning to the camera or the
-        // document editor. A snackbar on CameraScreen disappears when that
-        // route pops and can obscure the destination toolbar.
-        final reviewNow = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialog) => AlertDialog(
-            title: const Text('Check document corners'),
-            content: Text('${needsManualReview.length} photo(s) have no '
-                'reliable outer border. You can drag the four corners now, '
-                'or keep the original photos and crop them later.'),
-            actions: [
-              TextButton(
-                key: const Key('import-keep-originals'),
-                onPressed: () => Navigator.pop(dialog, false),
-                child: const Text('Keep originals'),
-              ),
-              FilledButton(
-                key: const Key('import-review-corners'),
-                onPressed: () => Navigator.pop(dialog, true),
-                child: const Text('Review corners'),
-              ),
-            ],
-          ),
-        );
-        if (!mounted) return;
-        if (reviewNow == true) {
-          final directory = await getTemporaryDirectory();
-          for (final index in needsManualReview.toList()..sort()) {
-            if (!mounted) return;
-            final corrected = await Navigator.of(context).push<Uint8List>(
-              MaterialPageRoute(builder: (_) => CropScreen(
-                imagePath: sourcePaths[index],
-                preferIdCardBounds: widget.preferIdCardBounds,
-              )),
-            );
-            if (corrected == null) continue;
-            // Done without moving a handle intentionally retains the original
-            // bytes; never treat that as a confirmed document crop.
-            final sourceBytes = await File(sourcePaths[index]).readAsBytes();
-            if (listEquals(corrected, sourceBytes)) continue;
-            final file = File(p.join(directory.path,
-                'ds_manual_crop_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
-            await file.writeAsBytes(corrected, flush: true);
-            adjustedPaths[index] = file.path;
-            needsManualReview.remove(index);
-          }
-        }
-      }
+      // Keep automatic four-corner detection but never interrupt imports with
+      // an edge-detection failure dialog. Uncertain pages retain their
+      // original images and remain adjustable through the document editor.
+      final adjustedPaths = crop.paths;
+      final needsManualReview = crop.failedIndexes;
       final paths = <String>[];
       final folder = _filter == ScanFilter.original
           ? null : await getTemporaryDirectory();
@@ -174,8 +125,8 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
           try {
             final enhanced = await ImageProcessor.process(
               await File(result).readAsBytes(), filter: _filter,
-              // Manual corner corrections receive the same full document
-              // enhancement as automatically perspective-cropped pages.
+              // Strong document enhancement only applies after a reliable
+              // crop, avoiding bleaching the untouched background.
               documentMode: adjustedPaths[index] != sourcePaths[index]);
             final target = File(p.join(folder.path,
                 'ds_import_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
@@ -192,7 +143,7 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
           paths: paths,
           sourcePaths: sourcePaths,
           needsReview: needsManualReview.length,
-          failedIndexes: needsManualReview.toList()..sort(),
+          failedIndexes: needsManualReview,
         ));
       }
     } catch (error) {
