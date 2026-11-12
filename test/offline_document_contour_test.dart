@@ -95,4 +95,36 @@ void main() {
     img.fill(photo, color: img.ColorRgb8(229, 228, 226));
     expect(OfflineDocumentContour.detectBytes(_png(photo)), isNull);
   });
+
+  test('White NID under reflective sleeve keeps header and text together', () {
+    final photo = img.Image(width: 480, height: 640);
+    img.fill(photo, color: img.ColorRgb8(32, 34, 36));
+    // The pale plastic holder spreads to the photograph frame. Its much
+    // lower luminance must not win over the complete near-white ID.
+    _rect(photo, 0, 143, 480, 468, img.ColorRgb8(148, 149, 147));
+    _rect(photo, 28, 173, 460, 426, img.ColorRgb8(241, 239, 233));
+    // A printed horizontal divider can disconnect the upper header region.
+    _rect(photo, 30, 264, 458, 270, img.ColorRgb8(30, 31, 34));
+    _rect(photo, 144, 314, 390, 319, img.ColorRgb8(65, 64, 65));
+    _rect(photo, 144, 344, 390, 349, img.ColorRgb8(65, 64, 65));
+    final detail = OfflineDocumentContour.detectDetailedBytes(_png(photo));
+    expect(detail?.detection.quad, isNotNull);
+    final q = detail!.detection.quad!;
+    expect(q.topLeft.dx, closeTo(28 / 480, .045));
+    expect(q.topLeft.dy, closeTo(173 / 640, .045));
+    expect(q.bottomRight.dy, closeTo(425 / 640, .045));
+    expect(detail.borderEvidence, greaterThan(.57));
+    expect(detail.whiteOnDarkBackground, isTrue);
+  });
+
+  test('Small bright name label in black holder is not a whole ID', () {
+    final photo = img.Image(width: 480, height: 640);
+    img.fill(photo, color: img.ColorRgb8(30, 32, 34));
+    _rect(photo, 0, 140, 480, 470, img.ColorRgb8(143, 144, 141));
+    _rect(photo, 155, 290, 320, 342, img.ColorRgb8(242, 240, 232));
+    final detected = OfflineDocumentContour.detectDetailedBytes(_png(photo));
+    expect(detected?.whiteOnDarkBackground ?? false, isFalse);
+  });
+
+
 }

@@ -623,6 +623,21 @@ object QuadDetector {
                 cvQuad, nativeColorCard, dw, dh)) {
             return nativeColorCard
         }
+        // On dark backgrounds a reflective sleeve can be detected as the
+        // document while a separate light-paper mask reveals the whole ID.
+        // Require a complete, strongly evidenced white-card shape, not
+        // merely a bright name/portrait box inside an A4 page.
+        val nativeWhiteCard = native?.quad?.takeIf {
+            native.mode == 5 && native.confidence >= .76f &&
+                StillCaptureCropSafety.isCredibleCard(it, dw, dh)
+        }
+        if (nativeWhiteCard != null &&
+            (cvQuad == null ||
+             (StillCaptureCropSafety.area(cvQuad) >=
+                  StillCaptureCropSafety.area(nativeWhiteCard) * 1.25 &&
+              StillCaptureCropSafety.encloses(cvQuad, nativeWhiteCard)))) {
+            return nativeWhiteCard
+        }
         val nativePage = native?.quad?.takeIf {
             native.confidence >= .75f &&
                 StillCaptureCropSafety.isCrediblePage(it, dw, dh)

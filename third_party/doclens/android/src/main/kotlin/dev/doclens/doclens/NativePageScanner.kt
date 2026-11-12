@@ -64,7 +64,7 @@ internal object NativePageScanner {
         val confidence = raw[8]
         val mode = raw[9].toInt()
         if (confidence < .66f || confidence > 1.1f ||
-            raw[9] != mode.toFloat() || mode !in 0..4) return null
+            raw[9] != mode.toFloat() || mode !in 0..5) return null
         val points = (0..3).map { index ->
             PointF(raw[2 * index], raw[2 * index + 1])
         }

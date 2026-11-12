@@ -60,6 +60,29 @@ int main() {
     Close(page.corners[4], 506.0f / w);
     Close(page.corners[5], 436.0f / h);
 
+    // Regression 382147.mp4: a white NID has a silver/grey reflective
+    // holder, lying on a black tabletop. The ordinary loose bright mask
+    // touches the photo frame, and a dark printed header divider splits
+    // the actual white document into two regions.
+    const int cardW = 640, cardH = 800;
+    std::vector<uint32_t> darkImage(cardW * cardH, Color(30, 32, 35));
+    Rect(&darkImage, cardW, cardH, 0, 175, cardW, 580,
+         Color(148, 149, 147));  // Holder touches image frame.
+    Rect(&darkImage, cardW, cardH, 30, 215, 610, 550,
+         Color(241, 239, 233));
+    Rect(&darkImage, cardW, cardH, 32, 333, 608, 340,
+         Color(28, 31, 34));  // Thick printed horizontal divider.
+    Rect(&darkImage, cardW, cardH, 175, 407, 484, 413,
+         Color(64, 65, 66));
+    ds::Boundary whiteNid;
+    assert(ds::DetectDocument(darkImage.data(), cardW, cardH,
+                              false, &whiteNid));
+    Close(whiteNid.corners[0], 30.0f / cardW);
+    Close(whiteNid.corners[1], 215.0f / cardH);
+    Close(whiteNid.corners[4], 609.0f / cardW);
+    Close(whiteNid.corners[5], 549.0f / cardH);
+    assert(whiteNid.mode == 5);
+
     // A page with only narrow dark ruling is not a freestanding document.
     std::fill(image.begin(), image.end(), Color(246, 246, 246));
     for (int y = 15; y < h; y += 25)

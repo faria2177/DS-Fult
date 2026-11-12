@@ -12,7 +12,8 @@ import 'image_processor.dart';
 /// Geometry alone cannot distinguish a real ID from an inner printed box.
 class OfflineContourResult {
   const OfflineContourResult(this.detection, this.borderEvidence,
-      {this.colorOnNeutralBackground = false});
+      {this.colorOnNeutralBackground = false,
+       this.whiteOnDarkBackground = false});
 
   final ImageDetection detection;
   /// 0..1: how consistently the inside differs from the surrounding surface.
@@ -21,6 +22,8 @@ class OfflineContourResult {
   /// against neutral exterior corners. Useful to distinguish a real card
   /// from a native page detector's broader notebook/tabletop contour.
   final bool colorOnNeutralBackground;
+  /// Confirmed near-white document surface against dark photo corners.
+  final bool whiteOnDarkBackground;
 }
 
 /// Native-independent, fully offline still-image detector. Gallery images
@@ -147,6 +150,7 @@ class OfflineDocumentContour {
       if (backgroundLight > 155) 2, // dark card on white paper
       if (consistentBackground) 3, // colour difference from surrounding desk
       if (backgroundChroma > 40) 4, // neutral paper on colourful background
+      if (backgroundLight < 131) 5, // white NID under a grey reflective cover
     ];
     if (kDebugMode) {
       debugPrint('[AutoCrop] offline: ${width}x$height, modes=$modes, '
@@ -156,6 +160,7 @@ class OfflineDocumentContour {
       var pixelsInMask = 0;
       final brightCutoff = math.max(117, backgroundLight + 34);
       final darkCutoff = math.min(152, backgroundLight - 43);
+      final brightCardCutoff = math.max(178, backgroundLight + 90);
       for (var i = 0; i < mask.length; i++) {
         final included = switch (mode) {
           0 => chroma[i] == 1,
@@ -165,10 +170,20 @@ class OfflineDocumentContour {
                   (pixels[i * 3 + 1] - background[1]).abs() +
                   (pixels[i * 3 + 2] - background[2]).abs()) /
               3 >= colourThreshold,
+          5 => light[i] >= brightCardCutoff &&
+              (math.max(pixels[i * 3],
+                  math.max(pixels[i * 3 + 1], pixels[i * 3 + 2])) -
+               math.min(pixels[i * 3],
+                  math.min(pixels[i * 3 + 1], pixels[i * 3 + 2]))) <= 42,
           _ => neutral[i] == 1,
         };
         mask[i] = included ? 1 : 0;
         if (included) pixelsInMask++;
+      }
+      if (mode == 5) {
+        // Horizontal black lines can split a complete white ID into a header
+        // and a smaller text block. Join only narrow dark gaps.
+        _bridgeDarkCardRules(mask, width, height);
       }
       if (mode == 0) {
         // A blue ruled-notebook line can satisfy the generic saturation test
@@ -187,15 +202,18 @@ class OfflineDocumentContour {
         continue;
       }
       final candidate = _bestComponent(mask, width, height,
-          pixels: pixels, preferIdCardBounds: preferIdCardBounds);
+          pixels: pixels, preferIdCardBounds: preferIdCardBounds,
+          whiteOnDark: mode == 5);
       if (candidate != null) {
         // Colour-distance segmentation can include an entire grey plastic
         // sleeve *and* the white ID inside it. Prefer the cleaner direct
         // brightness/chroma surface when both provide complete boundaries.
         final priorityPenalty = mode == 3 ? .14 : (mode == 4 ? .035 : 0.0);
+        final priorityBonus = mode == 5 &&
+                candidate.borderEvidence >= .60 ? .11 : 0.0;
         final ranked = _ContourProposal(candidate.quad,
-            candidate.score - priorityPenalty, candidate.borderEvidence,
-            mode: mode);
+            candidate.score - priorityPenalty + priorityBonus,
+            candidate.borderEvidence, mode: mode);
         if (best == null || ranked.score > best.score) best = ranked;
       }
     }
@@ -207,7 +225,9 @@ class OfflineDocumentContour {
     return OfflineContourResult(ImageDetection(quad: quad,
         imageSize: Size(source.width.toDouble(), source.height.toDouble())),
         best!.borderEvidence,
-        colorOnNeutralBackground: best.mode == 0 && neutralCorners >= 3);
+        colorOnNeutralBackground: best.mode == 0 && neutralCorners >= 3,
+        whiteOnDarkBackground: best.mode == 5 &&
+            backgroundLight < 131 && best.borderEvidence >= .57);
   }
 }
 
@@ -256,8 +276,42 @@ class _ContourProposal {
   final int mode;
 }
 
+/// Vertical closing fills thin printed black rules without expanding the
+/// document boundary or connecting unrelated patches across wide gaps.
+void _bridgeDarkCardRules(Uint8List mask, int width, int height) {
+  final radius = (height ~/ 85).clamp(3, 7).toInt();
+  final expanded = Uint8List(mask.length);
+  for (var y = 0; y < height; y++) {
+    final first = math.max(0, y - radius);
+    final last = math.min(height - 1, y + radius);
+    for (var x = 0; x < width; x++) {
+      for (var k = first; k <= last; k++) {
+        if (mask[k * width + x] != 0) {
+          expanded[y * width + x] = 1;
+          break;
+        }
+      }
+    }
+  }
+  for (var y = 0; y < height; y++) {
+    final first = math.max(0, y - radius);
+    final last = math.min(height - 1, y + radius);
+    for (var x = 0; x < width; x++) {
+      var keep = true;
+      for (var k = first; k <= last; k++) {
+        if (expanded[k * width + x] == 0) {
+          keep = false;
+          break;
+        }
+      }
+      mask[y * width + x] = keep ? 1 : 0;
+    }
+  }
+}
+
 _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
-    {required Uint8List pixels, required bool preferIdCardBounds}) {
+    {required Uint8List pixels, required bool preferIdCardBounds,
+     bool whiteOnDark = false}) {
   final seen = Uint8List(mask.length);
   final stack = Int32List(mask.length);
   _ContourProposal? best;
@@ -347,7 +401,7 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
     // A card can nearly touch the source image frame. Permit that only when
     // its complete rectangular geometry and four-edge contrast support it;
     // the original .04 border and .012 margin remain for non-card surfaces.
-    final cardLike = aspect >= 1.48 && aspect <= 1.75;
+    final cardLike = aspect >= 1.44 && aspect <= 2.12;
     final borderLimit = cardLike ? .12 : .04;
     final margin = cardLike ? .003 : .012;
     if (borderCount > count * borderLimit) {
@@ -371,6 +425,8 @@ _ContourProposal? _bestComponent(Uint8List mask, int width, int height,
     }
     final edgeEvidence = _boundaryContrast(pixels, width, height,
         <Offset>[tl, tr, br, bl]);
+    // Do not accept the interior name block on the strength of one edge.
+    if (whiteOnDark && edgeEvidence < .57) continue;
     // The relaxed margins must never admit a notebook edge or an inner text
     // strip just because it has the outline of a standard-sized ID card.
     if (cardLike && (borderCount > count * .04 ||

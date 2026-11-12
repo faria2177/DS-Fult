@@ -383,4 +383,22 @@ void main() {
       DoclensPlatform.instance = previous;
     }
   });
+
+  test('Verified white NID wins against reflective sleeve or no native quad', () {
+    const size = Size(1200, 1600);
+    final whiteCard = _detection(_rect(.08, .28, .92, .68), size: size);
+    final holder = _detection(_rect(.02, .20, .98, .77), size: size);
+    final proven = OfflineContourResult(whiteCard, .84,
+        whiteOnDarkBackground: true);
+    expect(DocumentEdges.isCredibleStandaloneCard(whiteCard), isTrue);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(null, proven), isTrue);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(holder, proven), isTrue);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(holder,
+      OfflineContourResult(whiteCard, .25,
+          whiteOnDarkBackground: true)), isFalse);
+    expect(DocumentEdges.isVerifiedWhiteCardOnDark(holder,
+      OfflineContourResult(whiteCard, .9)), isFalse);
+  });
+
+
 }

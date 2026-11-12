@@ -312,6 +312,34 @@ class DocumentEdges {
     return true;
   }
 
+  /// A pale ID inside a reflective grey sleeve over a dark table is a
+  /// different scene from a narrow printed name box on white A4 paper.
+  /// Require independently segmented near-white surface and strong evidence
+  /// from all four outside edges before allowing a compact landscape crop.
+  static bool isVerifiedWhiteCardOnDark(
+      ImageDetection? existing, OfflineContourResult proposed) {
+    if (!proposed.whiteOnDarkBackground ||
+        proposed.borderEvidence < .57 ||
+        !isCredibleStandaloneCard(proposed.detection)) {
+      return false;
+    }
+    final inner = proposed.detection.quad;
+    if (inner == null) return false;
+    if (existing == null || existing.quad == null) return true;
+    final outer = existing.quad!;
+    if ((existing.imageSize.width - proposed.detection.imageSize.width).abs() > 1 ||
+        (existing.imageSize.height - proposed.detection.imageSize.height).abs() > 1) {
+      return false;
+    }
+    final same = outer.points.asMap().entries.every((entry) =>
+        (entry.value - inner.points[entry.key]).distance < .06);
+    if (same) return true;
+    // Only an enclosing larger sleeve/page can be replaced. Do not crop a
+    // physically unrelated white printed inset from a well-framed page.
+    return outer.area >= inner.area * 1.18 &&
+        inner.points.every(outer.contains);
+  }
+
   /// A ruled notebook/tabletop detected as the outer quadrilateral nearly
   /// fills the photo. Its four-sided frame evidence is very different from a
   /// properly framed paper page with a visible margin on every side.
@@ -435,6 +463,10 @@ class DocumentEdges {
       if (!preferIdCardBounds) {
         final safePage = isReliableGalleryCrop(offline);
         final safeCard = isCredibleStandaloneCard(offline);
+        if (isVerifiedWhiteCardOnDark(normal, independent!)) {
+          _log(imagePath, 'accepted complete white card over dark background');
+          return offline;
+        }
         if (normal == null && (safePage || safeCard)) {
           _log(imagePath, 'accepted independent ${safeCard ? 'card' : 'page'} outline');
           return offline;

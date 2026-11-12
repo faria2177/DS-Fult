@@ -93,6 +93,39 @@ float FourEdgeContrast(const uint32_t* data, int w, int h,
     return Clamp01(sum / 4.0f * .65f + (strong / 4.0f) * .35f);
 }
 
+
+void BridgeDarkCardRules(std::vector<uint8_t>* mask, int w, int h) {
+    // Printed horizontal black rules may split the pale NID into separate
+    // connected regions. A 1-D vertical morphological closing joins gaps
+    // of at most 2 * radius pixels, without expanding the outer boundary.
+    const int radius = std::clamp(h / 85, 3, 7);
+    std::vector<uint8_t> expanded(mask->size(), 0);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            for (int k = std::max(0, y - radius);
+                 k <= std::min(h - 1, y + radius); ++k) {
+                if ((*mask)[k * w + x]) {
+                    expanded[y * w + x] = 1;
+                    break;
+                }
+            }
+        }
+    }
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            uint8_t keep = 1;
+            for (int k = std::max(0, y - radius);
+                 k <= std::min(h - 1, y + radius); ++k) {
+                if (!expanded[k * w + x]) {
+                    keep = 0;
+                    break;
+                }
+            }
+            (*mask)[y * w + x] = keep;
+        }
+    }
+}
+
 void OpenThinRules(std::vector<uint8_t>* mask, int w, int h) {
     // 3x3 7/9 erosion, followed by dilation, removes 1-2px coloured
     // notebook ruling while retaining a wide connected coloured ID surface.
@@ -143,12 +176,20 @@ bool AnalyzeMode(const uint32_t* pixels, int w, int h, int mode,
             case 4:
                 selected = light >= 130 && c.chroma() <= 34;
                 break;
+            case 5:
+                // White/grey ID inside a reflective plastic sleeve. The old
+                // +34 luma cutoff includes the entire sleeve and often joins
+                // the photo frame. Prefer the near-white printed surface.
+                selected = light >= std::max(178, background_light + 90) &&
+                           c.chroma() <= 42;
+                break;
         }
         mask[i] = static_cast<uint8_t>(selected);
         on += selected;
     }
     if (on < n * .10f || on > n * .88f) return false;
     if (mode == 0) OpenThinRules(&mask, w, h);
+    if (mode == 5) BridgeDarkCardRules(&mask, w, h);
 
     std::vector<uint8_t> seen(n, 0);
     std::vector<int> stack;
@@ -213,13 +254,14 @@ bool AnalyzeMode(const uint32_t* pixels, int w, int h, int mode,
         }
         if (near_frame) continue;
         const float edge = FourEdgeContrast(pixels, w, h, q);
-        if (edge < .42f) continue;
+        if (edge < (mode == 5 ? .57f : .42f)) continue;
         if (card && mode == 0 && coverage < .13f) continue;
         float score = std::min(1.0f, solidity) * .33f +
                       std::min(1.0f, coverage / .50f) * .21f +
                       edge * .27f +
                       (1.0f - std::abs(cx - .5f) - std::abs(cy - .5f)) * .17f +
-                      ((card && mode == 0) ? .08f : 0.0f) -
+                      ((card && mode == 0) ? .08f : 0.0f) +
+                      ((mode == 5 && card) ? .11f : 0.0f) -
                       ((mode == 3) ? .07f : 0.0f);
         if (score < .66f || score <= best->confidence) continue;
         best->confidence = score;
@@ -297,6 +339,9 @@ bool DetectDocument(const uint32_t* argb, int width, int height,
                     difference_threshold, prefer_card, &best);
     if (background.chroma() > 40)
         AnalyzeMode(argb, width, height, 4, background, background_light,
+                    difference_threshold, prefer_card, &best);
+    if (background_light < 131)
+        AnalyzeMode(argb, width, height, 5, background, background_light,
                     difference_threshold, prefer_card, &best);
     if (best.mode < 0) return false;
     *output = best;
