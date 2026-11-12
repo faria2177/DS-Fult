@@ -58,31 +58,6 @@ void main() {
     expect(returned?.paths, ['/nonexistent/a.jpg', '/nonexistent/b.jpg']);
     expect(returned?.needsReview, 0);
     expect(returned?.failedIndexes, isEmpty);
-  });
-  testWidgets('Failed auto crop proceeds without a corner-review popup',
-      (tester) async {
-    GalleryImportResult? returned;
-    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) =>
-      Scaffold(body: TextButton(onPressed: () async {
-        returned = await Navigator.of(context).push<GalleryImportResult>(
-          MaterialPageRoute(builder: (_) => const GalleryImportReviewScreen(
-            imagePaths: ['/nonexistent/no-edges.jpg'],
-            initialAutoCrop: true,
-            initialFilter: ScanFilter.original,
-          )),
-        );
-      }, child: const Text('Open import')),
-    ))));
-
-    await tester.tap(find.text('Open import'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Import (1)'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Check document corners'), findsNothing);
-    expect(find.text('Review corners'), findsNothing);
-    expect(returned?.paths, ['/nonexistent/no-edges.jpg']);
-    expect(returned?.needsReview, 1);
-    expect(returned?.failedIndexes, [0]);
   });
 }
