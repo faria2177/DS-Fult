@@ -21,3 +21,8 @@ coverage/
 # Model is fetched from the official open-source Tesseract repository before
 # local builds and in CI. Never check in binary models from third parties.
 assets/tessdata/*.traineddata
+
+# Proprietary native binaries extracted locally from user-provided archive.
+# They must never be committed to the public repository.
+third_party/doclens/android/src/main/optionalNativeJniLibs/
+third_party/doclens/android/src/main/import-manifest.json
