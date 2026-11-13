@@ -40,18 +40,26 @@ jobs:
             third_party/doclens/android/src/test/cpp/ds_page_scanner_test.cpp \
             -o /tmp/ds_native_scanner_test
           /tmp/ds_native_scanner_test
-      - name: Verify native four-corner detector
+      - name: Verify standalone C++ image enhancement (sanitizers)
+        run: |
+          g++ -std=c++17 -O1 -g -Wall -Wextra -pedantic \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tools/test_native_image_enhancer.cpp \
+            third_party/doclens/android/src/main/cpp/ds_image_enhancer.cpp \
+            -o /tmp/ds_native_enhance_test
+          /tmp/ds_native_enhance_test
+      - name: Verify native four-corner detector and JNI plugin
         run: cd android && ./gradlew :doclens:testDebugUnitTest --no-daemon
       - name: Static analysis
         run: flutter analyze
       - name: Unit tests
         run: flutter test
       - name: Build release APKs
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi
       - name: Upload installable APKs
         uses: actions/upload-artifact@v4
         with:
           name: DocScanner-Android-APKs
-          path: build/app/outputs/flutter-apk/*-release.apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
           retention-days: 30
