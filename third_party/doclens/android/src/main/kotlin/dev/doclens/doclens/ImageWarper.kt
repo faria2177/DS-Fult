@@ -208,6 +208,11 @@ object ImageWarper {
         }
         if (mode != "enhanced" && mode != "blackAndWhite") return
 
+        // Prefer the independent C++ adaptive engine for bounded stills.
+        // Large pages, missing native ABI, and failed processing use the
+        // existing Kotlin per-row algorithm without changing the scan flow.
+        if (NativeImageEnhancer.enhanceInPlace(bmp, mode)) return
+
         // Smooth background illumination estimate: downscale away the text
         // (keeping only the lighting gradient) into a tiny bitmap, then read
         // its pixels once. `factor` is clamped to >= 2 so the downscale always
