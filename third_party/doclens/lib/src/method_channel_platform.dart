@@ -51,6 +51,20 @@ class MethodChannelDoclens extends DoclensPlatform {
     }
   }
 
+  /// Diagnostics only. Reports package presence without loading third-party
+  /// libraries or claiming their JNI functions are usable. Android-only;
+  /// returns an empty map when the plugin is absent.
+  Future<Map<String, dynamic>> getNativeLibraryStatus() async {
+    try {
+      final result = await _method.invokeMapMethod<String, dynamic>(
+        'getNativeLibraryStatus',
+      );
+      return result ?? <String, dynamic>{};
+    } on MissingPluginException {
+      return <String, dynamic>{};
+    }
+  }
+
   @override
   Future<void> dispose() async {
     try {
