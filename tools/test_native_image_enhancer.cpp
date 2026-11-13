@@ -6,6 +6,7 @@
 #include "../third_party/doclens/android/src/main/cpp/ds_image_enhancer.h"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -14,12 +15,12 @@ int main() {
     assert(!ds::EnhanceArgb(nullptr, 160, 120, true));
 
     const int width = 160, height = 120;
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
+    std::vector<uint32_t> pixels(static_cast<std::size_t>(width) * height);
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             const int paper = 110 + x * 140 / width;
             const int light = (y > 30 && y < 36) ? paper * 65 / 100 : paper;
-            pixels[static_cast<size_t>(y) * width + x] = 0xff000000u |
+            pixels[static_cast<std::size_t>(y) * width + x] = 0xff000000u |
                 (static_cast<uint32_t>(light) << 16) |
                 (static_cast<uint32_t>(light) << 8) |
                 static_cast<uint32_t>(light);
