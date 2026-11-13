@@ -48,6 +48,15 @@ jobs:
             third_party/doclens/android/src/main/cpp/ds_image_enhancer.cpp \
             -o /tmp/ds_native_enhance_test
           /tmp/ds_native_enhance_test
+      - name: Compile and verify native JNI enhancement entry point
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -fPIC -shared \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            third_party/doclens/android/src/main/cpp/ds_image_enhancer.cpp \
+            third_party/doclens/android/src/main/cpp/ds_image_enhancer_jni.cpp \
+            -o /tmp/libds_enhancer_jni_host.so
+          nm -D /tmp/libds_enhancer_jni_host.so | grep -F \
+            'Java_dev_doclens_doclens_NativeImageEnhancer_enhanceArgbNative'
       - name: Verify native four-corner detector and JNI plugin
         run: cd android && ./gradlew :doclens:testDebugUnitTest --no-daemon
       - name: Static analysis
