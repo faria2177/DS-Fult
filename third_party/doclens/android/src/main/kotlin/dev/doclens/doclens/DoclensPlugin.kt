@@ -192,6 +192,7 @@ class DoclensPlugin :
             }
             "scanWithNativeUI" -> handleNativeUIScan(call, result)
             "detectInImage" -> handleDetectInImage(call, result)
+            "getNativeLibraryStatus" -> result.success(NativeLibraryDiagnostics.status(context))
             else -> result.notImplemented()
         }
     }
