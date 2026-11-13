@@ -33,7 +33,31 @@ android {
             // duplicate native libs (e.g. datastore_shared_counter.so) and
             // may override Flutter's own libflutter.so. The OpenCV AAR below
             // independently packages its supported JNI library.
-            jniLibs.setSrcDirs(listOf("src/main/managedJniLibs"))
+            // Optional imported native binaries are explicitly opt-in.
+            // Keeping them off by default preserves the working independent engine.
+            val importedNativeEnabled = providers.gradleProperty("docscannerIncludeImportedNative")
+                .map { it.equals("true", ignoreCase = true) }
+                .getOrElse(false)
+            val importedNativeRoot = "src/main/optionalNativeJniLibs"
+            if (importedNativeEnabled) {
+                val requiredArm64Libraries = listOf(
+                    "libpagescanner.so", "libscannercs.so", "libopencv.so",
+                    "libimageprocessor.so", "libmagicenhancer.so",
+                    "libenhance4draft.so", "liboctopus_classifier.so",
+                    "libMNN.so", "libncnn.so", "libCVNN.so", "libmainstone.so"
+                )
+                val missing = requiredArm64Libraries.filterNot {
+                    file("$importedNativeRoot/arm64-v8a/$it").isFile
+                }
+                require(missing.isEmpty()) {
+                    "Incomplete optional native bundle: " + missing.joinToString(", ") +
+                        ". See docs/OPTIONAL_NATIVE_IMPORT.md"
+                }
+            }
+            jniLibs.setSrcDirs(
+                listOf("src/main/managedJniLibs") +
+                    if (importedNativeEnabled) listOf(importedNativeRoot) else emptyList()
+            )
         }
         getByName("test") {
             java.srcDirs("src/test/kotlin")
@@ -46,7 +70,7 @@ android {
 
     // Compile an independently authored document-contour engine. AGP
     // packages libds_pagescanner.so automatically for each target ABI;
-    // the user-supplied proprietary JNI archive remains excluded.
+    // user-supplied proprietary JNI binaries remain excluded by default.
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
