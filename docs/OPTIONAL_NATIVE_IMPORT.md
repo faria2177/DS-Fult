@@ -62,3 +62,42 @@ The Android NDK/OS supplies the system dependencies `libandroid.so`,
 Further work requires validating library licenses, JNI signatures, model
 dependencies, input/output pixel formats, Android runtime loading, device
 stability, and quality tests before enabling any of these algorithms.
+
+## Independent enhancement engine (now connected)
+
+A new, original `ds_image_enhancer.cpp` is compiled into DocScanner's
+`libds_pagescanner.so` through CMake. The JNI method in
+`NativeImageEnhancer.kt` is used by `ImageWarper` automatically for the
+existing `enhanced` and `blackAndWhite` modes on bounded still images
+(up to 6 megapixels). Larger images, unavailable ABI, or failed JNI calls
+fall back to the original memory-bounded Kotlin enhancement. This is *not*
+an invocation of proprietary CamScanner functions.
+
+The algorithm estimates local background from 85th-percentile tile
+luminance and bilinearly interpolates illumination before per-pixel
+normalization. It does not require network, neural-network model files,
+or any of the eleven imported libraries.
+
+On Android, test package presence without loading the third-party code:
+
+```dart
+final info = await MethodChannelDoclens().getNativeLibraryStatus();
+print(info['importedCount']);          // 0 for a normal build
+print(info['importedFunctionsEnabled']); // always false
+```
+
+`importedCount` is a **packaging diagnostic**, not an indication that
+proprietary algorithms are callable.
+
+Run the native host regression test before building Android:
+
+```sh
+c++ -std=c++17 -O2 -fsanitize=address,undefined -fno-omit-frame-pointer \
+    tools/test_native_image_enhancer.cpp \
+    third_party/doclens/android/src/main/cpp/ds_image_enhancer.cpp \
+    -o /tmp/ds-native-test && /tmp/ds-native-test
+```
+
+The host test covers uneven page lighting, black text preservation,
+colored-ink hue preservation, and invalid input guards. Android JNI
+compilation and real-device imaging have not yet been verified.
