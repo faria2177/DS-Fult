@@ -194,6 +194,33 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     }
   }
 
+  Future<void> _compare() async {
+    if (_working || _index >= widget.comparisonPaths.length) return;
+    final current = widget.comparisonPaths[_index];
+    final original = widget.imagePaths[_index];
+    await showDialog<void>(context: context, builder: (dialog) => Dialog(
+      backgroundColor: const Color(0xFF232428),
+      child: Padding(padding: const EdgeInsets.all(12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Compare', style: TextStyle(
+            color: Colors.white, fontSize: 17)),
+          const SizedBox(height: 12),
+          Row(children: [
+            for (final entry in [('Original', original), ('Current', current)])
+              Expanded(child: Column(children: [
+                Text(entry.$1, style: const TextStyle(color: Colors.white70)),
+                const SizedBox(height: 8),
+                SizedBox(height: 210, child: Image.file(File(entry.$2),
+                    fit: BoxFit.contain)),
+              ])),
+          ]),
+          TextButton(onPressed: () => Navigator.pop(dialog),
+            child: const Text('Close')),
+        ]),
+      ),
+    ));
+  }
+
   Widget _tool(IconData icon, String title, VoidCallback action) =>
       Expanded(child: InkWell(onTap: _working ? null : action,
         child: Column(mainAxisAlignment: MainAxisAlignment.center,
@@ -215,6 +242,14 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         foregroundColor: Colors.white,
         title: Text(widget.sideLabels.isEmpty ? 'Adjust Corners' : 'Crop',
             style: const TextStyle(fontSize: 17)),
+        actions: [
+          if (widget.comparisonPaths.length == widget.imagePaths.length)
+            TextButton.icon(
+              onPressed: _working ? null : _compare,
+              icon: const Icon(Icons.compare, color: Colors.white),
+              label: const Text('Compare', style: TextStyle(color: Colors.white)),
+            ),
+        ],
       ),
       body: SafeArea(child: Column(children: [
         if (_working) const LinearProgressIndicator(color: dsTeal),
