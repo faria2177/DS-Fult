@@ -140,7 +140,7 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
             final sourceIndex = unresolved[entry.key];
             final file = File(p.join(dir.path,
                 'ds_review_${DateTime.now().microsecondsSinceEpoch}_'
-                '${sourceIndex}.jpg'));
+                '$sourceIndex.jpg'));
             await file.writeAsBytes(entry.value, flush: true);
             workflow = workflow.withManualCrop(sourceIndex, file.path);
           }
