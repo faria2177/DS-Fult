@@ -369,18 +369,33 @@ class ScannerSession(
     }
 
     @MainThread
-    fun capture(result: MethodChannel.Result) {
+    fun capture(result: MethodChannel.Result, displayedQuad: Quad? = null) {
         val capture = imageCapture
         if (capture == null) {
             result.error("init_failed", "ImageCapture not ready", null); return
         }
-        val file = File(context.cacheDir, "fnds_raw_${System.currentTimeMillis()}.jpg")
-        val previewHintAtShutter = latestPagePreviewHint?.takeIf {
-            System.currentTimeMillis() - it.timestampMs in 0L..900L
+        val shutterTime = System.currentTimeMillis()
+        val file = File(context.cacheDir, "fnds_raw_${shutterTime}.jpg")
+        val rawNativeHint = latestPagePreviewHint?.takeIf {
+            shutterTime - it.timestampMs in 0L..900L
         }
         val frameOrientationAtShutter = latestFrameOrientation?.takeIf {
-            System.currentTimeMillis() - it.timestampMs in 0L..1200L
+            shutterTime - it.timestampMs in 0L..1200L
         }
+        // The four-corner Flutter overlay may be smoothed/hysteresis-filtered
+        // and differ from this frame's raw OpenCV proposal. Use exactly the
+        // visible quad when it is plausible in the upright analysis space.
+        // Its *actual still-image pixels* must separately corroborate that
+        // shape before any automatic perspective warp is allowed.
+        val displayedHint = displayedQuad?.let { visible ->
+            frameOrientationAtShutter?.takeIf {
+                StillCaptureCropSafety.isCrediblePage(
+                    visible, it.width, it.height)
+            }?.let { frame ->
+                PagePreviewHint(visible, shutterTime, frame.width, frame.height)
+            }
+        }
+        val previewHintAtShutter = displayedHint ?: rawNativeHint
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, captureExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onError(exception: ImageCaptureException) {
