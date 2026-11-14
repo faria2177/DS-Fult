@@ -39,6 +39,24 @@ void main() {
     expect(page.touched, isTrue);
   });
 
+  test('All: copies confirmed corners without changing the source shape', () {
+    final original = BatchCropPageState();
+    final other = BatchCropPageState();
+    expect(other.copyCornersFrom(original), isFalse);
+    expect(original.updateHandle(4, const Offset(0, .025)), isTrue);
+    expect(other.copyCornersFrom(original), isTrue);
+    expect(other.corners, original.corners);
+    expect(other.confirmed, isTrue);
+    expect(other.touched, isTrue);
+    expect(CropQuad(other.corners).isValid, isTrue);
+  });
+
+  test('All: skips page geometry with incompatible image aspect ratio', () {
+    expect(BatchCropPageState.matchingPageAspect(.73, .74), isTrue);
+    expect(BatchCropPageState.matchingPageAspect(.73, 1.73), isFalse);
+    expect(BatchCropPageState.matchingPageAspect(0, 1.0), isFalse);
+  });
+
   test('Dragging a corner beyond the image is rejected without mutation', () {
     final page = BatchCropPageState();
     final original = [...page.corners];
