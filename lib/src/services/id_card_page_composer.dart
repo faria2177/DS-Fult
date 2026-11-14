@@ -8,6 +8,17 @@ class IdCardPageComposer {
   static const pageWidth = 1240;
   static const pageHeight = 1754;
 
+  // Reference A4 portrait layout: the card width is about 48% of the page
+  // and the two sides sit at 32% and 68% of its height. Keep the editor
+  // preview and exported raster driven by these same measurements.
+  static double cardWidthFraction({bool compact = false}) =>
+      (compact ? 565 : 600) / pageWidth;
+  static double cardHeightFraction({bool compact = false}) =>
+      (compact ? 355 : 380) / pageHeight;
+  static List<double> cardCenterFractions({bool compact = false}) =>
+      compact ? const [680 / pageHeight, 1080 / pageHeight]
+              : const [565 / pageHeight, 1190 / pageHeight];
+
   static Future<Uint8List> compose(List<Uint8List> sides,
       {bool compact = false}) =>
       compute(composeSync, (sides: sides, compact: compact));
@@ -32,11 +43,19 @@ class IdCardPageComposer {
         throw const FormatException('Could not read a card side.');
       }
       final upright = img.bakeOrientation(image);
-      final scale = math.min(maxWidth / upright.width,
-          maxHeight / upright.height);
-      final resized = img.copyResize(upright,
-        width: math.max(1, (upright.width * scale).round()),
-        height: math.max(1, (upright.height * scale).round()),
+      // A camera or gallery may return the same landscape ID/Bank card
+      // rotated by 90 degrees. Normalize only the *copy* placed on A4:
+      // never mutate or discard the original source/edited side.
+      // Portrait-shaped side images are turned to landscape so a pair
+      // cannot print as two tiny vertical strips (video 382719.mp4).
+      final placed = upright.height > upright.width
+          ? img.copyRotate(upright, angle: 90)
+          : upright;
+      final scale = math.min(maxWidth / placed.width,
+          maxHeight / placed.height);
+      final resized = img.copyResize(placed,
+        width: math.max(1, (placed.width * scale).round()),
+        height: math.max(1, (placed.height * scale).round()),
       );
       img.compositeImage(paper, resized,
         dstX: (pageWidth - resized.width) ~/ 2,
