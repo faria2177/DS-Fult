@@ -387,7 +387,9 @@ class DocumentEdges {
       {bool preferIdCardBounds = false}) {
     final size = capture.rawImageSize;
     if (!size.width.isFinite || !size.height.isFinite ||
-        size.width < 16 || size.height < 16) return null;
+        size.width < 16 || size.height < 16) {
+      return null;
+    }
     final points = capture.detectedQuad.points.map(
       (p) => Offset(p.dx / size.width, p.dy / size.height),
     ).toList(growable: false);
