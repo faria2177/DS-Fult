@@ -203,6 +203,62 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * The ordinary live Scan also finds small business cards. The regular
+     * isCrediblePage() gate (>=30% coverage) correctly rejects inner A4 text
+     * boxes, but must NOT discard the green frame around a small real card.
+     * This is only a preview hint. It is NOT authorization to crop without
+     * independent bright-paper edge evidence in the captured still.
+     */
+    fun isCredibleSmallDisplayedCard(q: Quad, width: Int, height: Int): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val points = listOf(q.topLeft, q.topRight, q.bottomRight, q.bottomLeft)
+        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
+                it.x !in .012f.. .988f || it.y !in .012f.. .988f }) return false
+        val coverage = area(q)
+        if (coverage !in .045.. .36) return false
+        val (a, b) = sideLengths(q, width, height)
+        val aspect = max(a, b) / min(a, b).coerceAtLeast(1.0)
+        if (aspect !in 1.24..2.55) return false
+        val centerX = points.sumOf { it.x.toDouble() } / 4
+        val centerY = points.sumOf { it.y.toDouble() } / 4
+        return abs(centerX - .5) <= .28 && abs(centerY - .5) <= .28
+    }
+
+    /**
+     * A neutral-white card on dark or vividly patterned cloth has an
+     * independently segmented outer contour in the captured JPEG. Match it
+     * with the small user-visible green quad by position and physical aspect,
+     * allowing 90-degree CameraX/EXIF rotation and different still crop scale.
+     * The strong pixel-border test is performed by QuadDetector before this
+     * comparison; a generic printed box is never sufficient.
+     */
+    fun sameSmallPaperCardAsLive(
+        live: Quad, stillCard: Quad,
+        previewWidth: Int, previewHeight: Int,
+        stillWidth: Int, stillHeight: Int,
+    ): Boolean {
+        if (!isCredibleSmallDisplayedCard(live, previewWidth, previewHeight) ||
+            !isCredibleSmallDisplayedCard(stillCard, stillWidth, stillHeight) &&
+                !isCredibleCard(stillCard, stillWidth, stillHeight)) return false
+        val (lw, lh) = sideLengths(live, previewWidth, previewHeight)
+        val (sw, sh) = sideLengths(stillCard, stillWidth, stillHeight)
+        val ratioLive = max(lw, lh) / min(lw, lh).coerceAtLeast(1.0)
+        val ratioStill = max(sw, sh) / min(sw, sh).coerceAtLeast(1.0)
+        if (ratioStill / ratioLive !in .77..1.28) return false
+        if (area(stillCard) / area(live) !in .40..3.5) return false
+        val liveX = (live.topLeft.x + live.topRight.x +
+            live.bottomRight.x + live.bottomLeft.x) / 4f
+        val liveY = (live.topLeft.y + live.topRight.y +
+            live.bottomRight.y + live.bottomLeft.y) / 4f
+        val stillX = (stillCard.topLeft.x + stillCard.topRight.x +
+            stillCard.bottomRight.x + stillCard.bottomLeft.x) / 4f
+        val stillY = (stillCard.topLeft.y + stillCard.topRight.y +
+            stillCard.bottomRight.y + stillCard.bottomLeft.y) / 4f
+        return hypot((liveX - stillX).toDouble(),
+            (liveY - stillY).toDouble()) <= .30
+    }
+
+    /**
      * A green contour at shutter time belongs to the *analysis* stream, not
      * the still JPEG. Trust its exact four corners only when the captured
      * image independently confirms the same document outside boundary and
