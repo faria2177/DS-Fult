@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+import 'method_channel_platform.dart';
 import 'models.dart';
 import 'ocr.dart';
 import 'platform_interface.dart';
@@ -346,7 +347,15 @@ class DoclensController extends ChangeNotifier {
     _capturing = true;
     notifyListeners();
     try {
-      return await DoclensPlatform.instance.capture();
+      final platform = DoclensPlatform.instance;
+      // The user sees the smoothed green quadrilateral, not a raw YUV
+      // detector proposal. Snapshot it here, at the shutter, and provide it
+      // to the Android native still verifier. Custom platform implementations
+      // retain the original interface unchanged.
+      if (platform is MethodChannelDoclens) {
+        return await platform.captureWithDisplayedQuad(_lastQuad);
+      }
+      return await platform.capture();
     } finally {
       _capturing = false;
       notifyListeners();
