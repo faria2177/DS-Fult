@@ -119,7 +119,7 @@ class _EditTextScreenState extends State<EditTextScreen>
           await recognizer.close();
         }
       }
-    } catch (error) {
+    } catch (_) {
       // The release ML Kit engine may still be missing or fail to initialise
       // on a particular device. English and Bengali Tesseract models are
       // bundled during the Android build; use them as an offline fallback.
