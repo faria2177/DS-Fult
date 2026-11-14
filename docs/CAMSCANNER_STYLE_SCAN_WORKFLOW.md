@@ -85,6 +85,23 @@ flowchart TD
 | Local document persistence | `lib/src/storage/document_store.dart`, `HomeShell` |
 | Export tools | `lib/src/services/document_export.dart` and individual Office/PDF services |
 
+## Durable source preservation
+
+A saved page now has two different editing references:
+
+- `path`: currently displayed scan (crop + enhancement/edit).
+- `originalPath`: perspective-corrected, unfiltered baseline so changing
+  Enhance/Magic Pro/B&W never accidentally removes the crop.
+- `rawSourcePath`: separate, full upright original camera/gallery image,
+  stored in the app's private file library. Reopening Adjust Corners uses
+  this image and can recover a clipped page header or ID photograph.
+
+The optional `rawSourcePath` field is backward-compatible: old documents
+without it still use their current image. Gallery import and normal CameraX
+capture now pass original files into `DocumentStore.createFromPaths`.
+The separate ID-card A4 composite flow has its own source-side editor;
+a saved composite is not yet a lossless two-source ID project.
+
 ## Hard invariants
 
 - **Never cut away uncertain content**. If valid four outside corners are
