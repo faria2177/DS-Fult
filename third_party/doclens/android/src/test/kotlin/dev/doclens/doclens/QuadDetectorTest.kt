@@ -327,6 +327,57 @@ class QuadDetectorTest {
         assertTrue(abs(detected.bottomRight.y - 357f / height) < .055f)
     }
 
+    @Test
+    fun video382753WhiteCardOnGoldPatternedNavyClothCropsOnlyCard() {
+        // Synthetic *colours and geometry* from the supplied camera video,
+        // never the user's identifiable bank-card image or personal text.
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFF14243A.toInt() }
+        for (y in 10 until height step 18) {
+            // Thin, bright woven lines across a navy/purple background.
+            fillRgb(pixels, width, 0, y, width, y + 2, 0xFFB8A060.toInt())
+        }
+        // The actual captured STILL holds a small horizontal white card.
+        fillRgb(pixels, width, 68, 157, 260, 269, 0xFFEEEEEB.toInt())
+        for (y in 182 until 240 step 14) {
+            // Dense printed text is *inside* the card: do not crop to it.
+            fillRgb(pixels, width, 97, y, 224, y + 2, 0xFF414B52.toInt())
+        }
+        // The LIVE green quad framed this card vertically, before the
+        // CameraX screenshot/photo orientation and sensor crop changed.
+        val green = Quad(
+            PointF(.32f, .32f), PointF(.61f, .32f),
+            PointF(.61f, .67f), PointF(.32f, .67f),
+        )
+        val card = assertNotNull(QuadDetector.detectSmallNeutralCardAtShutter(
+            pixels, width, height, green, width, height))
+        assertTrue(abs(card.topLeft.x - 68f / width) < .045f)
+        assertTrue(abs(card.topLeft.y - 157f / height) < .045f)
+        assertTrue(abs(card.bottomRight.x - 259f / width) < .045f)
+        assertTrue(abs(card.bottomRight.y - 268f / height) < .045f)
+    }
+
+    @Test
+    fun shutterWhiteCardFallbackRejectsFabricOnlyAndTitleStrips() {
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFF172945.toInt() }
+        for (y in 10 until height step 18) {
+            fillRgb(pixels, width, 0, y, width, y + 2, 0xFFB8A060.toInt())
+        }
+        val green = Quad(
+            PointF(.32f, .32f), PointF(.61f, .32f),
+            PointF(.61f, .67f), PointF(.32f, .67f),
+        )
+        assertNull(QuadDetector.detectSmallNeutralCardAtShutter(
+            pixels, width, height, green, width, height))
+        // A printed banner is much thinner than an actual 1.6-1.9:1 card.
+        fillRgb(pixels, width, 80, 196, 260, 230, 0xFFEEEEEB.toInt())
+        assertNull(QuadDetector.detectSmallNeutralCardAtShutter(
+            pixels, width, height, green, width, height))
+    }
+
     private fun fillRgb(
         image: IntArray, width: Int, left: Int, top: Int,
         right: Int, bottom: Int, color: Int,
