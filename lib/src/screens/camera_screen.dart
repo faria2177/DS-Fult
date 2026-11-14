@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:doclens/doclens.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ import '../services/online_auto_crop_service.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
 import 'gallery_import_review_screen.dart';
+import 'batch_crop_screen.dart';
 import 'manual_camera_screen.dart';
 import 'id_card_templates.dart';
 import 'id_card_template_screen.dart';
@@ -277,9 +279,13 @@ class _CameraScreenState extends State<CameraScreen> {
   /// used by gallery import. Never re-crop a successful native perspective
   /// result, and never force an uncertain crop of the original image.
   Future<void> _finishCapturedResults(List<ScanResult> results) async {
-    if (!mounted || _finished || results.isEmpty) return;
+    if (!mounted || _finished || _processingGallery || results.isEmpty) return;
+    setState(() => _processingGallery = true);
+    try {
     final outputs = <String>[];
     final confirmedCrops = <String>{};
+    final unresolvedSourcePaths = <String>[];
+    final unresolvedOutputIndexes = <int>[];
     for (final result in results) {
       final nativeCrop = result.croppedImagePath;
       final raw = result.rawImagePath;
@@ -309,13 +315,51 @@ class _CameraScreenState extends State<CameraScreen> {
         outputs.add(path);
         if (recovered.croppedCount > 0) {
           confirmedCrops.add(path);
+        } else {
+          // Never apply a guessed quad from a stale preview. Present the
+          // actual upright still in the manual four-corner editor.
+          unresolvedSourcePaths.add(raw);
+          unresolvedOutputIndexes.add(outputs.length - 1);
         }
       } else {
         outputs.add(raw);
       }
     }
+    if (unresolvedSourcePaths.isNotEmpty && mounted) {
+      // Release the CameraX owner before opening another full-screen editor.
+      await _suspendCamera();
+      if (!mounted) return;
+      final edits = await Navigator.of(context).push<Map<int, Uint8List>>(
+        MaterialPageRoute(builder: (_) => BatchCropScreen(
+          imagePaths: unresolvedSourcePaths,
+          preferIdCardBounds: _detectCardBounds,
+        )),
+      );
+      if (!mounted) return;
+      if (edits != null && edits.isNotEmpty) {
+        final directory = await getTemporaryDirectory();
+        for (final entry in edits.entries) {
+          if (entry.key < 0 || entry.key >= unresolvedOutputIndexes.length) {
+            continue;
+          }
+          final outputIndex = unresolvedOutputIndexes[entry.key];
+          final file = File(p.join(directory.path,
+              'ds_capture_adjust_${DateTime.now().microsecondsSinceEpoch}_'
+              '${outputIndex}.jpg'));
+          await file.writeAsBytes(entry.value, flush: true);
+          outputs[outputIndex] = file.path;
+          confirmedCrops.add(file.path);
+        }
+      }
+    }
+    // Explicitly canceling corner review preserves the raw still.
     if (outputs.isNotEmpty) {
       await _finishProcessed(outputs, confirmedCrops: confirmedCrops);
+    }
+    } finally {
+      if (mounted && !_finished) {
+        setState(() => _processingGallery = false);
+      }
     }
   }
 
