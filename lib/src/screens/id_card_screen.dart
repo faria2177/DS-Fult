@@ -366,6 +366,25 @@ class _IdCardScreenState extends State<IdCardScreen> {
     if (value != null && mounted) setState(() => _watermark = value);
   }
 
+  /// The physical Front/Back may be scanned in either order. Give users a
+  /// lossless way to match the reference A4 layout before saving, without
+  /// re-capturing or losing each side's raw image / filter baseline.
+  void _swapSides() {
+    if (!_twoSided || _selected.length != 2 ||
+        _originals.length != 2 || _sourcePaths.length != 2 ||
+        _saving || _importing) return;
+    setState(() {
+      for (final images in <List<String>>[
+        _selected, _originals, _sourcePaths,
+      ]) {
+        final first = images[0];
+        images[0] = images[1];
+        images[1] = first;
+      }
+      _activeIndex = 1 - _activeIndex;
+    });
+  }
+
   Future<void> _finish() async {
     if (!_canSave || _saving) return;
     setState(() => _saving = true);
@@ -452,6 +471,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
               _action(Icons.compare_outlined, 'Compare', _compare),
               if (_twoSided) _action(Icons.dashboard_customize_outlined,
                   'Templates', _templates),
+              if (_twoSided && _selected.length == 2)
+                _action(Icons.swap_vert, 'Swap', _swapSides),
               _action(Icons.crop_rotate_outlined, 'Crop',
                   () => _adjustSide(_activeIndex)),
               _action(Icons.rotate_right_outlined, 'Rotate',
