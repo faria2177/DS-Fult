@@ -378,6 +378,38 @@ class DocumentEdges {
     return frameSides >= 3;
   }
 
+  /// Convert the quad associated with a captured CameraX still into the
+  /// *same upright raw-image pixel space* that the manual editor displays.
+  /// Unlike a stale preview box, ScanResult stores the raw output dimensions
+  /// together with these corners. This hint may seed the editor, but must not
+  /// silently force a crop of an unverified page.
+  static CropQuad? captureQuadHint(ScanResult capture,
+      {bool preferIdCardBounds = false}) {
+    final size = capture.rawImageSize;
+    if (!size.width.isFinite || !size.height.isFinite ||
+        size.width < 16 || size.height < 16) return null;
+    final points = capture.detectedQuad.points.map(
+      (p) => Offset(p.dx / size.width, p.dy / size.height),
+    ).toList(growable: false);
+    final candidate = CropQuad(points);
+    if (!candidate.isValid) return null;
+    final quad = Quad(
+      topLeft: points[0], topRight: points[1],
+      bottomRight: points[2], bottomLeft: points[3],
+    );
+    // A full-frame rectangle is the native payload's sentinel for "nothing
+    // found", not a real contour. Do not recreate the false border.
+    if (quad.area > .94 || quad.area < .06) return null;
+    final detection = ImageDetection(quad: quad, imageSize: size);
+    if (preferIdCardBounds) {
+      // A small photo of a card may still use these corners for *manual*
+      // alignment, but do not treat them as verified for auto-cropping.
+      return candidate;
+    }
+    // Ordinary Scan never inherits a narrow inner text/table candidate.
+    return isReliableGalleryCrop(detection) ? candidate : null;
+  }
+
   /// A pixel edge-snapping pass is a refinement, not a new detector.
   /// Never let it replace a validated outer document with a clipped inner
   /// printed border, a near-frame rectangle or invalid corner geometry.
