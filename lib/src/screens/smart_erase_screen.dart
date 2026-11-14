@@ -8,7 +8,7 @@ import '../services/image_text_processor.dart';
 import '../storage/document_store.dart';
 import 'video_tool_style.dart';
 
-enum SmartEraseMode { magic, handwriting, text }
+enum SmartEraseMode { pen, rectangle, magic, handwriting, text }
 
 /// Reference-video editor with a real offline brush/rectangle processor.
 /// It does not claim automatic AI handwriting segmentation.
@@ -31,7 +31,7 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
   Uint8List? _original;
   double _aspect = .72;
   double _strokeRadius = .012;
-  SmartEraseMode _mode = SmartEraseMode.magic;
+  SmartEraseMode _mode = SmartEraseMode.pen;
   List<Offset> _stroke = [];
   final List<Uint8List> _undo = [];
   final List<Uint8List> _redo = [];
@@ -83,7 +83,8 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
     setState(() { _busy = true; _stroke = []; });
     try {
       Uint8List next;
-      if (_mode == SmartEraseMode.text && points.length > 1) {
+      if ((_mode == SmartEraseMode.rectangle ||
+              _mode == SmartEraseMode.text) && points.length > 1) {
         final rect = Rect.fromPoints(points.first, points.last);
         if (rect.width.abs() < .005 || rect.height.abs() < .005) return;
         next = await ImageTextProcessor.replace(current,
@@ -94,10 +95,19 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
             rect.bottom.clamp(0.0, 1.0).toDouble()),
           replacement: '',
         );
+      } else if (_mode == SmartEraseMode.rectangle ||
+          _mode == SmartEraseMode.text) {
+        // A rectangle needs two distinct endpoints; do not accidentally
+        // erase with a brush after an incomplete drag.
+        return;
       } else {
         next = await ImageTextProcessor.eraseBrush(current,
           normalizedPoints: points,
-          normalizedRadius: _strokeRadius,
+          normalizedRadius: _mode == SmartEraseMode.magic
+              ? _strokeRadius * 1.35
+              : _mode == SmartEraseMode.handwriting
+                  ? _strokeRadius * .72
+                  : _strokeRadius,
         );
       }
       if (mounted) {
@@ -197,7 +207,8 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
                 onPanUpdate: _busy || _compare ? null : (details) {
                   final point = _normalise(details.localPosition, size);
                   if (_stroke.isEmpty) return;
-                  if (_mode == SmartEraseMode.text) {
+                  if (_mode == SmartEraseMode.text ||
+                      _mode == SmartEraseMode.rectangle) {
                     setState(() => _stroke = [_stroke.first, point]);
                   } else if ((point - _stroke.last).distance > .002) {
                     setState(() => _stroke.add(point));
@@ -280,7 +291,8 @@ class _EraseStrokePainter extends CustomPainter {
       ..strokeWidth = radius * size.shortestSide * 2;
     Offset fromNormal(Offset p) => Offset(p.dx * size.width,
         p.dy * size.height);
-    if (mode == SmartEraseMode.text && points.length > 1) {
+    if ((mode == SmartEraseMode.text ||
+         mode == SmartEraseMode.rectangle) && points.length > 1) {
       canvas.drawRect(Rect.fromPoints(fromNormal(points.first),
           fromNormal(points.last)), paint..style = PaintingStyle.fill);
     } else {
