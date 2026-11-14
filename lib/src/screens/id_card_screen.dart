@@ -579,6 +579,35 @@ class _IdCardScreenState extends State<IdCardScreen> {
       foregroundColor: Colors.white,
       title: Text(widget.template?.label ?? widget.kind.label),
       actions: [
+        if (_twoSided)
+          PopupMenuButton<String>(
+            tooltip: 'More ID Card actions',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (action) {
+              switch (action) {
+                case 'compare':
+                  unawaited(_compare());
+                case 'templates':
+                  unawaited(_templates());
+                case 'swap':
+                  _swapSides();
+                case 'rotate':
+                  unawaited(_transform(rotation: 90));
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'compare', child: Text('Compare')),
+              const PopupMenuItem(
+                value: 'templates', child: Text('A4 Templates')),
+              PopupMenuItem(
+                value: 'swap', enabled: _selected.length == 2,
+                child: const Text('Swap Front and Back')),
+              PopupMenuItem(
+                value: 'rotate', enabled: _selected.isNotEmpty,
+                child: const Text('Rotate selected side')),
+            ],
+          ),
         TextButton(onPressed: _canSave && !_saving && !_importing
             ? _finish : null,
           child: Text('Done', style: TextStyle(
@@ -613,17 +642,12 @@ class _IdCardScreenState extends State<IdCardScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _action(Icons.compare_outlined, 'Compare', _compare),
-              if (_twoSided) _action(Icons.dashboard_customize_outlined,
-                  'Templates', _templates),
-              if (_twoSided && _selected.length == 2)
-                _action(Icons.swap_vert, 'Swap', _swapSides),
+              if (!_twoSided)
+                _action(Icons.compare_outlined, 'Compare', _compare),
               _action(Icons.crop_rotate_outlined, 'Crop',
                   () => _adjustSide(_activeIndex)),
-              _action(Icons.rotate_right_outlined, 'Rotate',
-                  () => _transform(rotation: 90)),
               _action(Icons.filter_alt_outlined, 'Filter', _chooseFilter),
-              _action(Icons.water_drop_outlined, 'Watermark', _addWatermark),
+              _action(Icons.water_drop_outlined, 'Add Watermark', _addWatermark),
             ],
           ),
         ),
