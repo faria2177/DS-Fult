@@ -146,7 +146,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       final result = await DocumentEdges.detectSafeStillOutline(
           widget.imagePaths[index],
           preferIdCardBounds: widget.preferIdCardBounds);
-      if (!mounted) return;
+      if (!mounted) return false;
       final points = result?.quad?.points;
       if (points == null) {
         if (index == _index) {
