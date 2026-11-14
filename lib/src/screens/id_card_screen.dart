@@ -301,6 +301,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
             ('crop', Icons.crop_rotate, 'Adjust four corners'),
             ('left', Icons.rotate_left, 'Rotate left'),
             ('right', Icons.rotate_right, 'Rotate right'),
+            ('half', Icons.sync, 'Rotate upside-down (180°)'),
             ('retake', Icons.camera_alt_outlined, 'Retake with camera'),
             ('gallery', Icons.photo_library_outlined, 'Replace from gallery'),
             ('compare', Icons.compare_outlined, 'Compare original'),
@@ -324,6 +325,9 @@ class _IdCardScreenState extends State<IdCardScreen> {
         break;
       case 'right':
         await _transform(rotation: 90);
+        break;
+      case 'half':
+        await _transform(rotation: 180);
         break;
       case 'retake':
         await _retakeActive();
@@ -593,6 +597,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
                   _swapSides();
                 case 'rotate':
                   unawaited(_transform(rotation: 90));
+                case 'half':
+                  unawaited(_transform(rotation: 180));
               }
             },
             itemBuilder: (_) => [
@@ -606,6 +612,9 @@ class _IdCardScreenState extends State<IdCardScreen> {
               PopupMenuItem(
                 value: 'rotate', enabled: _selected.isNotEmpty,
                 child: const Text('Rotate selected side')),
+              PopupMenuItem(
+                value: 'half', enabled: _selected.isNotEmpty,
+                child: const Text('Rotate selected side 180°')),
             ],
           ),
         TextButton(onPressed: _canSave && !_saving && !_importing
