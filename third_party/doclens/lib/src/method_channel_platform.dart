@@ -77,9 +77,17 @@ class MethodChannelDoclens extends DoclensPlatform {
   }
 
   @override
-  Future<ScanResult> capture() async {
+  Future<ScanResult> capture() => captureWithDisplayedQuad(null);
+
+  /// Pass the actual stabilized four-corner overlay shown by Flutter at the
+  /// shutter moment. Native still validates it against the captured JPEG:
+  /// these coordinates are never blindly trusted for perspective warping.
+  Future<ScanResult> captureWithDisplayedQuad(Quad? displayedQuad) async {
     try {
-      final raw = await _method.invokeMethod<Map<dynamic, dynamic>>('capture');
+      final raw = await _method.invokeMethod<Map<dynamic, dynamic>>(
+        'capture',
+        displayedQuad == null ? null : {'displayedQuad': displayedQuad.toMap()},
+      );
       if (raw == null) {
         throw const ScannerCaptureException('Native returned null capture');
       }
