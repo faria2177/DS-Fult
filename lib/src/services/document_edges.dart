@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' show Offset;
 
 import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
@@ -467,7 +468,7 @@ class DocumentEdges {
             isCredibleStandaloneCard(online.detection);
         if (page || card) {
           _log(imagePath, 'accepted validated online boundary');
-          return _refineSafely(imagePath, online.detection,
+          return await _refineSafely(imagePath, online.detection,
               preferIdCardBounds: card || preferIdCardBounds);
         }
         _log(imagePath, 'online candidate rejected by local geometry gates');
