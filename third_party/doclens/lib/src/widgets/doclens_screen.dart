@@ -1251,7 +1251,12 @@ class _DoclensScreenState extends State<DoclensScreen> {
           onImportImages: widget.onImportImages,
           onMoreSettings: widget.onReferenceMoreSettings,
           pagesCaptured: _pages.length,
-          onFinishBatch: _pages.isEmpty ? null : _finishMultiPage,
+          waitingForBack: widget.quickCardCapture &&
+              widget.maxPages == 2 && _pages.length == 1,
+          onFinishBatch: _pages.isEmpty ||
+                  (widget.quickCardCapture && widget.maxPages == 2 &&
+                   _pages.length < 2)
+              ? null : _finishMultiPage,
         ),
       );
 
