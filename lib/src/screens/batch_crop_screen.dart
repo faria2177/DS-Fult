@@ -44,6 +44,10 @@ class BatchCropPageState {
   /// Copy the *confirmed* crop geometry to another page. This is only for
   /// pages intentionally scanned with the same framing; it never runs auto
   /// detection or changes untouched pages without an explicit All action.
+  static bool matchingPageAspect(double source, double target) =>
+      source.isFinite && target.isFinite &&
+      source > 0 && target > 0 && (source - target).abs() <= .12;
+
   bool copyCornersFrom(BatchCropPageState other) {
     if (!other.confirmed || !CropQuad(other.corners).isValid) return false;
     corners..clear()..addAll(other.corners);
@@ -227,20 +231,55 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       await _autoCrop(all: true);
     } else if (mode == 'copy') {
       final source = _edits[_index];
+      if (!source.confirmed) return;
+      setState(() => _working = true);
       var updated = 0;
-      setState(() {
+      var skipped = 0;
+      try {
+        final sourceRatio = _ratios[_index] ??
+            await _readAspect(widget.imagePaths[_index]);
         for (var i = 0; i < _edits.length; i++) {
           if (i == _index) continue;
-          final sourceRatio = _ratios[_index];
-          final targetRatio = _ratios[i];
-          // Known incompatible page shapes are not safe to copy to.
-          if (sourceRatio != null && targetRatio != null &&
-              (sourceRatio - targetRatio).abs() > .12) continue;
-          if (_edits[i].copyCornersFrom(source)) updated++;
+          try {
+            final ratio = _ratios[i] ??
+                await _readAspect(widget.imagePaths[i]);
+            // The layout of pages with different aspect ratios is not
+            // compatible with a copied quad. Never cut their content.
+            if (!BatchCropPageState.matchingPageAspect(sourceRatio, ratio)) {
+              skipped++;
+              continue;
+            }
+            if (_edits[i].copyCornersFrom(source)) updated++;
+          } catch (_) {
+            skipped++;
+          }
         }
-        _hint = 'Applied current corners to $updated other pages. '
-            'Review each page before Done.';
-      });
+        if (mounted) {
+          setState(() {
+            source.touched = true;
+            _hint = 'Applied corners to $updated other page(s). '
+                '$skipped mismatched/unreadable page(s) left unchanged. '
+                'Review pages before Done.';
+          });
+        }
+      } finally {
+        if (mounted) setState(() => _working = false);
+      }
+    }
+  }
+
+  Future<double> _readAspect(String path) async {
+    final data = await File(path).readAsBytes();
+    final codec = await ui.instantiateImageCodec(data);
+    try {
+      final frame = await codec.getNextFrame();
+      try {
+        return frame.image.width / frame.image.height;
+      } finally {
+        frame.image.dispose();
+      }
+    } finally {
+      codec.dispose();
     }
   }
 
