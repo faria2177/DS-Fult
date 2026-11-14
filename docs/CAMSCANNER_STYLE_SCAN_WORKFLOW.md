@@ -31,6 +31,90 @@ flowchart TD
     P --> Q[Local PDF / JPG / PNG / Word / Excel / print / share]
 ```
 
+## Canonical user-facing workflow (screen-by-screen)
+
+This is the **DocScanner product contract**, inspired by the observed
+CamScanner user journey. It is not a claim about CamScanner's private
+implementation. Use the same order for camera, gallery and imported images:
+
+| Step | User sees | Engine does | Back / failure behaviour |
+| --- | --- | --- | --- |
+| 1. Acquire | Scan camera / Gallery / Device / ID Cards | Capture full-resolution JPEG, preserve EXIF orientation and source path | Cancel without saving |
+| 2. Live outline | Four-corner mint overlay; manual shutter | CameraX preview detection with stable tracking; no forced shutter | No outline must not block manual shutter |
+| 3. Still detection | Processing indicator only when needed | Re-detect from upright full-resolution still; opt-in online detector first when configured, otherwise independent native/OpenCV and local fallback | Network timeout or missing model immediately falls back locally |
+| 4. Verify boundary | Whole document, never internal title/table | Validate convex quad, all four visible corners, coverage, geometry and boundary evidence; reject false outer holder/desk | If uncertain, open four-corner adjustment with source intact |
+| 5. Adjust corners | Full original with four corner handles, four side handles, Rotate, Auto Crop retry and Done | Refine using pixel evidence, reject large corner drift, warp only confirmed corners | Back preserves original; invalid quad cannot be applied |
+| 6. Enhance | Original, Enhance, Magic Pro, B&W and other existing presets | Crop and perspective-warp **before** enhancement; avoid aggressive paper whitening on uncropped images | Original remains available; filter changes are reversible |
+| 7. Review | Single: exactly one page; Batch: ordered page grid | Retain raw source, unfiltered crop and filtered working copy separately | Retake, add, rotate, reorder and re-crop from original |
+| 8. Save | Named local document in Home/Files | Copy accepted pages into app-private storage and persist metadata | Never duplicate, drop or reorder a page silently |
+| 9. Convert | PDF, JPG/PNG, Extract Text, To Word, To Excel, print/share | Local PDF/image export; OCR/AI conversion follows its separate explicit consent policy | Failed conversion must not corrupt the saved scan |
+
+### Single Scan navigation
+
+`Home → Scan → Camera preview → Shutter → (Adjust Corners if needed)
+→ Enhance/Preview → Done → One-page document detail`.
+
+The shutter remains manual by default. A successful native perspective crop
+must not be cropped again from a stale preview quad. The document detail
+screen must show **only the captured page**, not an empty multi-page loader.
+
+### Batch Scan navigation
+
+`Home → Scan → Batch → Capture N pages → Finish → Review unresolved
+corners → Apply filter per accepted page → Ordered N-page grid → Save`.
+
+Keep the original capture order. For every page store its own four-corner
+state, rotation, effect, raw source and output path. Review is limited to
+uncertain pages, not a mandatory repeated prompt for every confident page.
+
+### Gallery / Device import navigation
+
+`Home/Tools → Import Images or Import File → Select and order → Auto Crop
+toggle + effect → Detect → Review uncertain pages → Preview → Save`.
+
+Imported images use the same *still-image* detector and safety policy as
+camera captures. PDF input is rasterized per selected page before entering
+this sequence. Auto Crop OFF must not silently crop or display an
+unrequested corner editor.
+
+### ID Card navigation
+
+`Tools → ID Card → Choose template → Front source → Four-corner adjust
+→ Confirm → Back source → Four-corner adjust → Confirm → Two-sided A4
+layout preview → Save/Export`.
+
+Use card-shaped geometry, not A4 detection. Keep front/back independently
+editable during capture. Never crop only a face, name or printed border.
+A single A4 export must contain both accepted sides in their selected
+positions. Preserving both raw sides after saving the composite remains a
+separate tracked limitation.
+
+### Required engineering state transitions
+
+```mermaid
+stateDiagram-v2
+    [*] --> Acquiring
+    Acquiring --> Detecting: shutter or import
+    Detecting --> Cropped: validated outside quad
+    Detecting --> NeedsReview: no safe outside quad
+    NeedsReview --> Cropped: user confirms valid corners
+    NeedsReview --> Original: cancel / keep source
+    Acquiring --> Original: Auto Crop disabled
+    Cropped --> Enhancing
+    Original --> Enhancing
+    Enhancing --> Preview
+    Preview --> Acquiring: add page / retake
+    Preview --> Saved: explicit Done
+    Saved --> Exported: explicit export
+```
+
+**Acceptance gates:** never discard the raw image; do not accept a quad
+that cuts a header or table; do not auto-accept an interior text rectangle;
+do not make a network request without opt-in; do not trigger a save
+notification on intermediate edits; do not let bottom actions overlap
+Android navigation bars. Real-camera A4/NID/glare/low-light tests are
+mandatory before claiming comparable quality.
+
 ## Entry modes
 
 ### Single scan
