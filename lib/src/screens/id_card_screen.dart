@@ -10,9 +10,11 @@ import '../models.dart';
 import '../services/document_edges.dart';
 import '../services/id_card_page_composer.dart';
 import '../services/image_processor.dart';
+import '../services/scan_workflow.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
 import 'camera_screen.dart';
+import 'batch_crop_screen.dart';
 import 'crop_screen.dart';
 import 'document_detail_screen.dart';
 import 'id_card_templates.dart';
@@ -67,6 +69,37 @@ class _IdCardScreenState extends State<IdCardScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Both imported ID sides and replacement cards follow the same
+  /// CamScanner-style review policy. A missing outer border must not be
+  /// automatically replaced with an inner portrait/name rectangle.
+  Future<ScanWorkflowBatch> _reviewCardCorners(
+    List<String> rawPaths,
+    AutoCropBatch cropped,
+  ) async {
+    var workflow = ScanWorkflowBatch.fromCropResult(
+      rawPaths, cropped, autoCropEnabled: true,
+    );
+    if (!workflow.needsReview || !mounted) return workflow;
+    final pending = workflow.reviewIndexes;
+    final edits = await Navigator.of(context).push<Map<int, Uint8List>>(
+      MaterialPageRoute(builder: (_) => BatchCropScreen(
+        imagePaths: [for (final index in pending) rawPaths[index]],
+        preferIdCardBounds: _twoSided,
+      )),
+    );
+    if (!mounted || edits == null) return workflow;
+    final dir = await getTemporaryDirectory();
+    for (final entry in edits.entries) {
+      if (entry.key < 0 || entry.key >= pending.length) continue;
+      final sourceIndex = pending[entry.key];
+      final file = File('${dir.path}/ds_card_review_'
+          '${DateTime.now().microsecondsSinceEpoch}_${sourceIndex}.jpg');
+      await file.writeAsBytes(entry.value, flush: true);
+      workflow = workflow.withManualCrop(sourceIndex, file.path);
+    }
+    return workflow;
+  }
+
   Future<void> _import() async {
     if (_importing) return;
     final remaining = _maxImages == null ? null : _maxImages! - _selected.length;
@@ -95,12 +128,14 @@ class _IdCardScreenState extends State<IdCardScreen> {
       final cropped = await DocumentEdges.autoCropFiles(paths,
           preferIdCardBounds: _twoSided);
       if (!mounted) return;
-      if (cropped.needsReview > 0) {
-        _warn('Please check corners for ${cropped.needsReview} card image(s).');
+      final workflow = await _reviewCardCorners(paths, cropped);
+      if (!mounted) return;
+      if (workflow.needsReview) {
+        _warn('Check the original corners for ${workflow.reviewIndexes.length} card image(s).');
       }
       setState(() {
-        _selected.addAll(cropped.paths);
-        _originals.addAll(cropped.paths);
+        _selected.addAll(workflow.outputPaths);
+        _originals.addAll(workflow.outputPaths);
         _sourcePaths.addAll(paths);
         _activeIndex = _selected.length - 1;
       });
@@ -183,9 +218,11 @@ class _IdCardScreenState extends State<IdCardScreen> {
       final cropped = await DocumentEdges.autoCropFiles([photo.path],
           preferIdCardBounds: _twoSided);
       if (!mounted) return;
+      final workflow = await _reviewCardCorners([photo.path], cropped);
+      if (!mounted) return;
       setState(() {
-        _selected[_activeIndex] = cropped.paths.first;
-        _originals[_activeIndex] = cropped.paths.first;
+        _selected[_activeIndex] = workflow.outputPaths.first;
+        _originals[_activeIndex] = workflow.outputPaths.first;
         _sourcePaths[_activeIndex] = photo.path;
       });
     } catch (error) {
