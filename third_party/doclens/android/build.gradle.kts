@@ -106,11 +106,12 @@ dependencies {
     // Dependency reference: https://developers.google.com/ml-kit/vision/doc-scanner/android
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 
-    // ML Kit Latin text recognition (Play Services-delivered, downloaded on
-    // demand) — used only by `AutoOrientation.auto` to find a captured page's
-    // upright direction. No model is bundled in the host APK.
-    // Reference: https://developers.google.com/ml-kit/vision/text-recognition/v2/android
-    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+    // Bundle the Latin recognition model inside the APK. The earlier
+    // Play-services-delivered model could be unavailable on fresh installs,
+    // leaving Edit Text with a null-object error before recognition began.
+    // Bundling also enables offline native orientation recognition.
+    // https://developers.google.com/ml-kit/vision/text-recognition/v2/android
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
