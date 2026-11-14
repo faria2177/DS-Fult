@@ -16,12 +16,12 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'batch_crop_screen.dart';
 import 'crop_screen.dart';
-import 'edit_text_screen.dart';
 import 'gallery_import_review_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'mosaic_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'signature_screen.dart';
+import 'smart_erase_screen.dart';
 import 'watermark_screen.dart';
 
 class DocumentScreen extends StatefulWidget {
@@ -129,8 +129,24 @@ class _DocumentScreenState extends State<DocumentScreen> {
   Future<void> _ocr() async {
     final doc = _document;
     if (doc == null || doc.pages.isEmpty) return;
+    // Edit Text is a visual document-editing action, not a blocking OCR
+    // transcript screen. OCR regions are loaded inside the image editor;
+    // absence of an OCR model must not prevent manual editing.
     await Navigator.push<void>(context, MaterialPageRoute(
-      builder: (_) => EditTextScreen(
+      builder: (_) => ImageTextEditorScreen(
+        store: widget.store,
+        documentId: doc.id,
+        pageId: doc.pages[_index].id,
+        regions: const [],
+      ),
+    ));
+  }
+
+  Future<void> _smartErase() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => SmartEraseScreen(
         store: widget.store,
         documentId: doc.id,
         pageId: doc.pages[_index].id,
@@ -429,7 +445,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
         _editorTool(Icons.crop_rotate, 'Crop', _crop),
         _editorTool(Icons.tune, 'Filter', () => setState(() => _editTab = 3)),
         _editorTool(Icons.text_fields, 'Edit Text', _ocr),
-        _editorTool(Icons.auto_fix_high, 'Smart Erase', () => _editOnImage(erase: true)),
+        _editorTool(Icons.auto_fix_high, 'Smart Erase', _smartErase),
         _editorTool(Icons.camera_alt_outlined, 'Retake', _retake),
         _editorTool(Icons.draw_outlined, 'Sign', _sign),
         _editorTool(Icons.title, 'Add Text', _editOnImage),
