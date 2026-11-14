@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import '../services/image_text_processor.dart';
 import '../storage/document_store.dart';
@@ -50,6 +51,12 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
   Rect? _drag;
   Offset? _dragStart;
   final List<Uint8List> _undo = [];
+  late List<DetectedTextRegion> _regions = List.of(widget.regions);
+  bool _findingText = false;
+  bool _didAttemptOcr = false;
+  String? _ocrMessage;
+  double _pixelWidth = 1;
+  double _pixelHeight = 1;
 
   @override
   void initState() {
@@ -66,13 +73,70 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     final aspect = frame.image.width / frame.image.height;
+    final pixelWidth = frame.image.width.toDouble();
+    final pixelHeight = frame.image.height.toDouble();
     frame.image.dispose();
     codec.dispose();
     if (!mounted) return;
     setState(() {
       _path = page.path;
       _aspect = aspect;
+      _pixelWidth = pixelWidth;
+      _pixelHeight = pixelHeight;
     });
+    if (!_didAttemptOcr && widget.regions.isEmpty &&
+        !widget.startInEraseMode) {
+      _didAttemptOcr = true;
+      await _discoverText();
+    }
+  }
+
+  Future<void> _discoverText() async {
+    final path = _path;
+    if (path == null || _findingText) return;
+    setState(() {
+      _findingText = true;
+      _ocrMessage = null;
+    });
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final recognized = await recognizer.processImage(
+          InputImage.fromFilePath(path));
+      if (!mounted) return;
+      setState(() {
+        _regions = [
+          for (final block in recognized.blocks)
+            for (final line in block.lines)
+              DetectedTextRegion(
+                Rect.fromLTRB(
+                  (line.boundingBox.left / _pixelWidth).clamp(0.0, 1.0),
+                  (line.boundingBox.top / _pixelHeight).clamp(0.0, 1.0),
+                  (line.boundingBox.right / _pixelWidth).clamp(0.0, 1.0),
+                  (line.boundingBox.bottom / _pixelHeight).clamp(0.0, 1.0),
+                ),
+                line.text,
+              ),
+        ];
+        _ocrMessage = _regions.isEmpty
+            ? 'No text lines found. Use Add to insert text manually.'
+            : '${_regions.length} text lines found. Tap a box to edit.';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _regions = [];
+          _ocrMessage = 'Text detection unavailable. '
+              'Add and Erase still work offline.';
+        });
+      }
+    } finally {
+      try {
+        await recognizer.close();
+      } catch (_) {
+        // An unavailable ML Kit service must not close the editor.
+      }
+      if (mounted) setState(() => _findingText = false);
+    }
   }
 
   void _tap(TapDownDetails details, Size size) {
@@ -82,7 +146,7 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
       (details.localPosition.dy / size.height).clamp(0.0, 1.0),
     );
     if (_mode == _EditMode.erase) return;
-    final matching = widget.regions.where((r) => r.bounds.inflate(.012).contains(point));
+    final matching = _regions.where((r) => r.bounds.inflate(.012).contains(point));
     final region = _mode == _EditMode.select && matching.isNotEmpty
         ? matching.first
         : DetectedTextRegion(
@@ -139,6 +203,7 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
       );
       _undo.add(previous);
       if (_undo.length > 3) _undo.removeAt(0);
+      if (mounted) setState(() => _regions = []);
       await _loadPage();
     } catch (error) {
       if (mounted) {
@@ -169,19 +234,25 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Edit on Image'), actions: [
+    appBar: AppBar(title: const Text('Edit Text on Image'), actions: [
+      IconButton(
+        tooltip: 'Detect text regions',
+        onPressed: _findingText || _busy ? null : _discoverText,
+        icon: const Icon(Icons.document_scanner_outlined),
+      ),
       IconButton(tooltip: 'Undo', onPressed: _undo.isEmpty ? null : _restore,
           icon: const Icon(Icons.undo)),
       TextButton(onPressed: () => Navigator.pop(context),
           child: const Text('Done', style: TextStyle(color: dsTeal))),
     ]),
     body: SafeArea(child: Column(children: [
-      if (_busy) const LinearProgressIndicator(),
+      if (_busy || _findingText) const LinearProgressIndicator(),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Text(
           switch (_mode) {
-            _EditMode.select => 'Tap an outlined OCR line to replace it',
+            _EditMode.select => _ocrMessage ??
+                'Tap a detected text box to replace it',
             _EditMode.add => 'Tap any location to add English or বাংলা text',
             _EditMode.erase => 'Drag a rectangle to erase marks or text',
           },
@@ -230,7 +301,7 @@ class _ImageTextEditorScreenState extends State<ImageTextEditorScreen> {
                     Image.file(File(_path!), key: ValueKey(_path),
                         fit: BoxFit.fill),
                     CustomPaint(painter: _TextRegionsPainter(
-                        _mode == _EditMode.select ? widget.regions : const [],
+                        _mode == _EditMode.select ? _regions : const [],
                         _drag)),
                   ]),
                 ),
