@@ -93,7 +93,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
       if (entry.key < 0 || entry.key >= pending.length) continue;
       final sourceIndex = pending[entry.key];
       final file = File('${dir.path}/ds_card_review_'
-          '${DateTime.now().microsecondsSinceEpoch}_${sourceIndex}.jpg');
+          '${DateTime.now().microsecondsSinceEpoch}_$sourceIndex.jpg');
       await file.writeAsBytes(entry.value, flush: true);
       workflow = workflow.withManualCrop(sourceIndex, file.path);
     }
