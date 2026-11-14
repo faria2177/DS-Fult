@@ -140,18 +140,22 @@ class _DocumentScreenState extends State<DocumentScreen> {
         regions: const [],
       ),
     ));
+    // ImageTextEditor updates the stored page file, not the transcript.
+    // Rebuild the underlying preview as soon as editing closes.
+    if (mounted) setState(() {});
   }
 
   Future<void> _smartErase() async {
     final doc = _document;
     if (doc == null || doc.pages.isEmpty) return;
-    await Navigator.push<bool>(context, MaterialPageRoute(
+    final changed = await Navigator.push<bool>(context, MaterialPageRoute(
       builder: (_) => SmartEraseScreen(
         store: widget.store,
         documentId: doc.id,
         pageId: doc.pages[_index].id,
       ),
     ));
+    if (changed == true && mounted) setState(() {});
   }
 
   Future<void> _editOnImage({bool erase = false}) async {
