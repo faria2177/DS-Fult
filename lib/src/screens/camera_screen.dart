@@ -301,6 +301,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final confirmedCrops = <String>{};
     final unresolvedSourcePaths = <String>[];
     final unresolvedOutputIndexes = <int>[];
+    final capturedCornerHints = <int, List<Offset>>{};
     for (final result in results) {
       final nativeCrop = result.croppedImagePath;
       final raw = result.rawImagePath;
@@ -336,6 +337,11 @@ class _CameraScreenState extends State<CameraScreen> {
         } else {
           // Never apply a guessed quad from a stale preview. Present the
           // actual upright still in the manual four-corner editor.
+          final hint = DocumentEdges.captureQuadHint(result,
+              preferIdCardBounds: _detectCardBounds);
+          if (hint != null) {
+            capturedCornerHints[unresolvedSourcePaths.length] = hint.corners;
+          }
           unresolvedSourcePaths.add(raw);
           unresolvedOutputIndexes.add(outputs.length - 1);
         }
@@ -352,6 +358,7 @@ class _CameraScreenState extends State<CameraScreen> {
         MaterialPageRoute(builder: (_) => BatchCropScreen(
           imagePaths: unresolvedSourcePaths,
           preferIdCardBounds: _detectCardBounds,
+          capturedCornerHints: capturedCornerHints,
         )),
       );
       if (!mounted) return;
