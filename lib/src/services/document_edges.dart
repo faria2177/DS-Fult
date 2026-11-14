@@ -664,6 +664,10 @@ class DocumentEdges {
                 quad: detection.quadIn,
                 jpegQuality: 95,
                 enhancement: ImageEnhancement.none,
+                // Only the ID/Bank card crop needs text-direction correction.
+                // Rotate on-device if ML Kit is confident, never force 180.
+                autoOrientation: preferIdCardBounds
+                    ? AutoOrientation.auto : AutoOrientation.none,
               );
             } catch (error) {
               _log(image, 'native warp failed, trying Dart: $error');
