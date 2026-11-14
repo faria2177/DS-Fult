@@ -50,9 +50,10 @@ class QuadOverlay extends StatelessWidget {
     required this.status,
     this.accent = const Color(0xFFD4FF4D),
     this.warning = const Color(0xFFFFB454),
-    // A clear CamScanner-style frame against textured/dark backgrounds,
-    // without obscuring the accepted page beneath the faint mint tint.
-    this.strokeWidth = 4.5,
+    // Readable, slightly thicker green document border (logical pixels).
+    // Only the live filled style changes; manual crop handles, bracket
+    // overlays, and faint document tint retain their previous appearance.
+    this.strokeWidth = 5.0,
   })  : _style = _QuadStyle.filled,
         bracketLength = 0,
         dotRadius = 0;
