@@ -60,7 +60,8 @@ class ScanWorkflowBatch {
       for (var i = 0; i < sourcePaths.length; i++)
         ScanWorkflowPage(
           sourcePath: sourcePaths[i],
-          outputPath: autoCropEnabled ? crop.paths[i] : sourcePaths[i],
+          outputPath: autoCropEnabled && !failed.contains(i)
+              ? crop.paths[i] : sourcePaths[i],
           boundary: !autoCropEnabled
               ? ScanBoundaryState.original
               : failed.contains(i) || crop.paths[i] == sourcePaths[i]
