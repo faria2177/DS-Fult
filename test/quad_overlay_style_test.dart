@@ -8,7 +8,7 @@ void main() {
       quad: null,
       status: DetectionStatus.searching,
     );
-    expect(filled.strokeWidth, 3.5);
+    expect(filled.strokeWidth, 4.5);
 
     // Other overlay modes retain their original stroke proportions.
     final outline = quadOverlayFor(
