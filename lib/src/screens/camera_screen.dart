@@ -660,7 +660,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   // The marked Retake/Adjust-corners/Next screen is removed
                   // for Scan. Valid cropped stills go straight to preview;
                   // unsafe stills use the existing manual crop editor.
-                  skipCaptureReview: !widget.cardMode,
+                  skipCaptureReview: true,
                   referenceCardLabel: widget.cardTemplate?.label ?? 'ID Card',
                   referenceCardSide: widget.side ?? 'Front',
                   referenceCardPortraitGuide:
