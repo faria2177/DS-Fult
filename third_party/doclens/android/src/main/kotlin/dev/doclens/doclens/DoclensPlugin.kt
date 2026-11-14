@@ -121,7 +121,11 @@ class DoclensPlugin :
             "capture" -> {
                 val s = session
                 if (s == null) { result.error("init_failed", "Not initialized", null); return }
-                s.capture(result)
+                // Optional normalized Flutter overlay, frozen exactly at the
+                // shutter. Legacy callers and iOS do not need this argument.
+                val displayed = call.argument<Map<String, Any?>>("displayedQuad")
+                    ?.let { Quad.fromMap(it) }
+                s.capture(result, displayed)
             }
             "warpImage" -> handleWarp(call, result)
             "rotateImage" -> handleRotate(call, result)
