@@ -203,6 +203,43 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * A green contour at shutter time belongs to the *analysis* stream, not
+     * the still JPEG. Trust its exact four corners only when the captured
+     * image independently confirms the same document outside boundary and
+     * both images have compatible upright aspect ratios.
+     *
+     * A dense printed table can form another valid rectangle: never let that
+     * unrelated still quad replace the green preview outline. In that case
+     * return false and require manual adjustment from the raw still.
+     */
+    fun sameDocumentAsLivePreview(
+        live: Quad, still: Quad?, previewWidth: Int, previewHeight: Int,
+        stillWidth: Int, stillHeight: Int,
+    ): Boolean {
+        if (still == null ||
+            !compatibleView(previewWidth, previewHeight, stillWidth, stillHeight) ||
+            !isCrediblePage(live, previewWidth, previewHeight) ||
+            !isCrediblePage(still, stillWidth, stillHeight) ||
+            isSuspiciousInteriorStrip(still, stillWidth, stillHeight)) {
+            return false
+        }
+        val liveArea = area(live)
+        val areaRatio = area(still) / liveArea.coerceAtLeast(.001)
+        if (areaRatio !in .84..1.18) return false
+        val a = listOf(live.topLeft, live.topRight,
+            live.bottomRight, live.bottomLeft)
+        val b = listOf(still.topLeft, still.topRight,
+            still.bottomRight, still.bottomLeft)
+        // Allow a few camera-analysis pixels of jitter/edge-threshold drift,
+        // not a different crop or an inner box. Normalized coordinates are
+        // valid only after aspect/rotation compatibility was checked above.
+        return a.indices.all { i ->
+            hypot((a[i].x - b[i].x).toDouble(),
+                (a[i].y - b[i].y).toDouble()) <= .060
+        }
+    }
+
+    /**
      * A few Android CameraX devices write landscape JPEG pixels without the
      * 90/270-degree EXIF flag while the live analysis surface is portrait.
      * Only correct a proven transposed aspect ratio, using CameraX's recent
