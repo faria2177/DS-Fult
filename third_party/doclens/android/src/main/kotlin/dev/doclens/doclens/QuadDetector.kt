@@ -141,6 +141,116 @@ object QuadDetector {
     }
 
     /**
+     * Capture-only recovery for a SMALL white ID/business card that the user
+     * visibly enclosed in the green box (video 382753.mp4). The normal A4
+     * detector rejects such cards because they occupy less than 30% of frame.
+     *
+     * This method is never used by gallery/image imports, and NEVER crops on
+     * preview geometry alone: the still must independently contain a strongly
+     * bounded neutral-paper connected component on coloured fabric.
+     */
+    internal fun detectSmallNeutralCardAtShutter(
+        pixels: IntArray, width: Int, height: Int,
+        liveQuad: Quad, liveWidth: Int, liveHeight: Int,
+    ): Quad? {
+        if (!StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+                liveQuad, liveWidth, liveHeight)) return null
+        val candidate = detectNeutralPaper(pixels, width, height) ?: return null
+        if (!StillCaptureCropSafety.sameSmallPaperCardAsLive(
+                liveQuad, candidate, liveWidth, liveHeight,
+                width, height)) return null
+        return candidate.takeIf {
+            hasStrongNeutralOutsideEdge(pixels, width, height, it)
+        }
+    }
+
+    /**
+     * Reject a text/table rectangle accidentally segmented as a neutral card.
+     * Require white paper on the inside and substantially darker background
+     * just outside at >= 3 of 4 actual STILL IMAGE edges. This remains
+     * independent of the shape that appeared on the live camera.
+     */
+    private fun hasStrongNeutralOutsideEdge(
+        pixels: IntArray, width: Int, height: Int, q: Quad,
+    ): Boolean {
+        if (width < 64 || height < 64 || pixels.size != width * height) {
+            return false
+        }
+        val points = listOf(q.topLeft, q.topRight,
+            q.bottomRight, q.bottomLeft)
+        val centerX = points.sumOf { it.x.toDouble() } * width / 4.0
+        val centerY = points.sumOf { it.y.toDouble() } * height / 4.0
+        val step = (min(width, height) * .014).coerceIn(2.0, 6.0)
+        fun luminance(x: Double, y: Double): Double? {
+            val ix = x.toInt()
+            val iy = y.toInt()
+            if (ix < 2 || iy < 2 || ix >= width - 2 || iy >= height - 2) {
+                return null
+            }
+            // A 3x3 average resists the high-frequency woven cloth pattern.
+            var sum = 0.0
+            for (dy in -1..1) for (dx in -1..1) {
+                val color = pixels[(iy + dy) * width + ix + dx]
+                val r = (color shr 16) and 0xFF
+                val g = (color shr 8) and 0xFF
+                val b = color and 0xFF
+                sum += (r * 77 + g * 150 + b * 29) / 256.0
+            }
+            return sum / 9.0
+        }
+        var goodSides = 0
+        for (i in points.indices) {
+            val a = points[i]
+            val b = points[(i + 1) % points.size]
+            var hits = 0
+            for (t in listOf(.22, .5, .78)) {
+                val x = (a.x + (b.x - a.x) * t) * width
+                val y = (a.y + (b.y - a.y) * t) * height
+                val vx = centerX - x
+                val vy = centerY - y
+                val length = kotlin.math.hypot(vx, vy)
+                if (length < 1.0) continue
+                val ux = vx / length
+                val uy = vy / length
+                val inside = luminance(x + ux * step, y + uy * step)
+                val outside = luminance(x - ux * step, y - uy * step)
+                if (inside != null && outside != null &&
+                    inside >= 135.0 && inside - outside >= 58.0) {
+                    hits++
+                }
+            }
+            if (hits >= 2) goodSides++
+        }
+        return goodSides >= 3
+    }
+
+    /** Find the independent neutral card border in the actual shutter pixels.
+     * No global photo rotation is inferred here; the bitmap is already baked
+     * into its upright CameraX / EXIF image coordinate system.
+     */
+    fun detectSmallNeutralCardInBitmap(
+        bitmap: Bitmap, liveQuad: Quad,
+        liveWidth: Int, liveHeight: Int,
+    ): Quad? {
+        if (!StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+                liveQuad, liveWidth, liveHeight)) return null
+        val longest = max(bitmap.width, bitmap.height)
+        val scale = min(1.0, 512.0 / longest)
+        val w = max(16, (bitmap.width * scale).toInt())
+        val h = max(16, (bitmap.height * scale).toInt())
+        val small = if (w == bitmap.width && h == bitmap.height) bitmap
+            else Bitmap.createScaledBitmap(bitmap, w, h, true)
+        val pixels = IntArray(w * h)
+        try {
+            small.getPixels(pixels, 0, w, 0, 0, w, h)
+        } finally {
+            if (small !== bitmap) small.recycle()
+        }
+        return detectSmallNeutralCardAtShutter(
+            pixels, w, h, liveQuad, liveWidth, liveHeight)
+    }
+
+    /**
      * Still-only page segmentation for neutral desks, wood and dark backgrounds.
      *
      * A dense printed letter has much stronger lines *inside* its page than at
