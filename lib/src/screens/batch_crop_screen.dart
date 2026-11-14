@@ -52,7 +52,8 @@ class BatchCropScreen extends StatefulWidget {
   const BatchCropScreen({super.key, required this.imagePaths,
       this.initialIndex = 0, this.preferIdCardBounds = false,
       this.onlyEdited = false, this.sideLabels = const <String>[],
-      this.comparisonPaths = const <String>[]});
+      this.comparisonPaths = const <String>[],
+      this.capturedCornerHints = const <int, List<Offset>>{} });
 
   final List<String> imagePaths;
   final int initialIndex;
@@ -62,6 +63,10 @@ class BatchCropScreen extends StatefulWidget {
   final bool onlyEdited;
   final List<String> sideLabels;
   final List<String> comparisonPaths;
+  /// Raw captured-camera corners, normalized to each upright source image.
+  /// Hints are preview-only until a still detector validates them or the user
+  /// explicitly accepts/adjusts the corners.
+  final Map<int, List<Offset>> capturedCornerHints;
 
   @override
   State<BatchCropScreen> createState() => _BatchCropScreenState();
@@ -96,7 +101,18 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       frame.image.dispose();
       codec.dispose();
       if (!mounted) return;
-      setState(() { _bytes[index] = bytes; _ratios[index] = ratio; });
+      setState(() {
+        _bytes[index] = bytes;
+        _ratios[index] = ratio;
+        final hint = widget.capturedCornerHints[index];
+        if (hint != null && hint.length == 4 && CropQuad(hint).isValid) {
+          _edits[index].corners..clear()..addAll(hint);
+          if (index == _index) {
+            _hint = 'Captured four corners restored. Adjust a handle or '
+                'confirm this outline to crop.';
+          }
+        }
+      });
       await _detect(index);
     } catch (_) {
       if (mounted) {
@@ -118,7 +134,10 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       if (points == null) {
         if (index == _index) {
           setState(() => _hint =
-              'No reliable outside border. Adjust manually or keep the original.');
+              widget.capturedCornerHints.containsKey(index)
+                  ? 'Captured outline shown. Adjust a handle or accept it '
+                    'before Done; otherwise the original is preserved.'
+                  : 'No reliable outside border. Adjust manually or keep the original.');
         }
       } else {
         setState(() {
@@ -149,6 +168,17 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     } finally {
       if (mounted) setState(() => _working = false);
     }
+  }
+
+  void _acceptCapturedOutline() {
+    if (_working || !widget.capturedCornerHints.containsKey(_index)) return;
+    final selected = _edits[_index];
+    if (!CropQuad(selected.corners).isValid) return;
+    setState(() {
+      selected.confirmed = true;
+      selected.touched = true;
+      _hint = 'Captured four corners accepted. Tap Done to apply crop.';
+    });
   }
 
   Future<void> _changePage(int index) async {
@@ -297,6 +327,14 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         ))),
         Text(_hint, textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        if (widget.capturedCornerHints.containsKey(_index) &&
+            !edit.confirmed)
+          TextButton.icon(
+            onPressed: _working ? null : _acceptCapturedOutline,
+            icon: const Icon(Icons.check_circle_outline, color: dsTeal),
+            label: const Text('Use captured outline',
+                style: TextStyle(color: dsTeal)),
+          ),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           IconButton(onPressed: _working || _index == 0 ? null :
               () => _changePage(_index - 1),
