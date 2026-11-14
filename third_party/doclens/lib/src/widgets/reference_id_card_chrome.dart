@@ -22,6 +22,7 @@ class ReferenceIdCardChrome extends StatelessWidget {
     this.onImportImages,
     this.onMoreSettings,
     this.pagesCaptured = 0,
+    this.waitingForBack = false,
     this.onFinishBatch,
     this.cameraModes = const [],
   });
@@ -41,6 +42,8 @@ class ReferenceIdCardChrome extends StatelessWidget {
   final VoidCallback? onImportImages;
   final VoidCallback? onMoreSettings;
   final int pagesCaptured;
+  /// A two-sided card requires the next Back shot before it can finish.
+  final bool waitingForBack;
   final VoidCallback? onFinishBatch;
 
   IconData get _flashIcon => switch (flashMode) {
@@ -147,14 +150,18 @@ class ReferenceIdCardChrome extends StatelessWidget {
                     ),
                     Expanded(child: InkWell(
                       key: const Key('card-right-action'),
-                      onTap: onFinishBatch ?? onImportImages,
+                      onTap: waitingForBack ? null
+                          : (onFinishBatch ?? onImportImages),
                       child: Column(mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(pagesCaptured > 0 ? Icons.photo_library_outlined
+                          Icon(waitingForBack ? Icons.check_circle_outline
+                              : pagesCaptured > 0 ? Icons.photo_library_outlined
                               : Icons.add_photo_alternate_outlined,
-                            size: 27, color: Colors.white),
+                            size: 27,
+                            color: waitingForBack ? accent : Colors.white),
                           const SizedBox(height: 4),
-                          Text(pagesCaptured > 0 ? '$pagesCaptured  Done'
+                          Text(waitingForBack ? '$pagesCaptured/2 captured'
+                              : pagesCaptured > 0 ? '$pagesCaptured  Done'
                               : 'Import Images',
                             style: const TextStyle(
                               color: Colors.white, fontSize: 11.5)),
