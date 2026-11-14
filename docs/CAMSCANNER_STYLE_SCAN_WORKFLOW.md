@@ -77,17 +77,39 @@ camera captures. PDF input is rasterized per selected page before entering
 this sequence. Auto Crop OFF must not silently crop or display an
 unrequested corner editor.
 
-### ID Card navigation
+### ID Card navigation — based on supplied video 382731.mp4 (26.7 s)
 
-`Tools → ID Card → Choose template → Front source → Four-corner adjust
-→ Confirm → Back source → Four-corner adjust → Confirm → Two-sided A4
-layout preview → Save/Export`.
+This is the visible reference sequence, not knowledge of CamScanner's
+private algorithm.
 
-Use card-shaped geometry, not A4 detection. Keep front/back independently
-editable during capture. Never crop only a face, name or printed border.
-A single A4 export must contain both accepted sides in their selected
-positions. Preserving both raw sides after saving the composite remains a
-separate tracked limitation.
+1. **0–8 s / Camera:** frame the Front inside white guides, capture it,
+   remain in the same camera with the guide relabelled Back, then capture
+   the Back. No additional review/accept page between the two shutters.
+2. **8–10 s / A4 preview:** show both landscape ID sides centered and
+   vertically arranged on one white portrait A4 page. The editor and the
+   saved PDF/JPG use identical page geometry.
+3. **10–16 s / Crop:** select either card; one combined 1/2 and 2/2
+   editor shows four corner handles, four side-midpoint handles, Auto
+   Crop, Rotate Left/Right, Compare and Done. Crop from original stills.
+4. **16–18 s / Apply:** return to the one-page A4 review. Never rewrite
+   a correctly saved side merely because the crop editor was opened
+   for the other side.
+5. **18–23 s / Save and export:** saving creates one composite A4 page
+   in the document grid, then PDF/image/share export retains that same
+   arrangement.
+
+**DocScanner routing:** CameraScreen enables quick consecutive shots
+for two-sided templates only. DoclensScreen collects Front then Back and
+auto-finishes at two captures; ReferenceIdCardChrome displays Back and
+1/2 captured progress. IdCardScreen offers tap-to-crop, rotate, compare,
+retake by camera and replace from gallery. BatchCropScreen provides the
+paired eight-handle editor with independently tracked edits. Explicit
+Swap corrects reversed Front/Back order without another capture.
+
+**Not yet proven:** camera/UI similarity on the physical Android device
+and real-scene crop accuracy. DocScanner does not have CamScanner's
+proprietary models, and the saved A4 composite is not yet a fully
+lossless two-source editable project.
 
 ### Required engineering state transitions
 
