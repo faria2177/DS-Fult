@@ -250,13 +250,16 @@ class ScannerSession(
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
-            if (!config.preferIdCardBounds && rotated != null) {
-                val uprightW = if (rotation % 180 == 0) width else height
-                val uprightH = if (rotation % 180 == 0) height else width
-                if (StillCaptureCropSafety.isCrediblePage(rotated, uprightW, uprightH)) {
-                    latestPagePreviewHint = PagePreviewHint(rotated, now, uprightW, uprightH)
-                }
-            }
+            // This is the *same* detected outline emitted to Flutter for
+            // the green overlay. Clear an obsolete outline when the detector
+            // loses the page, so a shutter press never inherits a vanished box.
+            val uprightW = if (rotation % 180 == 0) width else height
+            val uprightH = if (rotation % 180 == 0) height else width
+            latestPagePreviewHint = if (!config.preferIdCardBounds &&
+                rotated != null &&
+                StillCaptureCropSafety.isCrediblePage(rotated, uprightW, uprightH)) {
+                PagePreviewHint(rotated, now, uprightW, uprightH)
+            } else null
 
             val lowLight = config.enableLowLightDetection && LumaEstimator.isLowLight(luma)
 
@@ -435,22 +438,40 @@ class ScannerSession(
                             rawSize.width, rawSize.height)
                     val stillQuad = if (verifiedColourCard) colourCard
                         else ordinaryStillQuad
-                    // CameraX still capture is re-detected on upright pixels,
-                    // but a dense letter may yield only the inner text band.
-                    // In that case NEVER warp away the header and signature.
-                    // The recent live quad can seed manual review only when
-                    // preview/still field-of-view ratios are compatible.
-                    val reviewHint = previewHintAtShutter?.takeIf { hint ->
-                        !config.preferIdCardBounds &&
-                        StillCaptureCropSafety.compatibleView(hint.width, hint.height,
+                    // CameraX can have a different sensor crop or EXIF rotation
+                    // from the low-resolution preview. Lock the *actual green*
+                    // four-corner quad from the shutter frame only when still
+                    // detection independently corroborates the very same page.
+                    // Do not silently replace it with a different inner table.
+                    val liveHint = previewHintAtShutter?.takeIf {
+                        !config.preferIdCardBounds
+                    }
+                    val compatibleLiveHint = liveHint?.takeIf {
+                        StillCaptureCropSafety.compatibleView(it.width, it.height,
                             rawSize.width, rawSize.height)
-                    }?.quad
-                    val uncertainStill = !config.preferIdCardBounds &&
-                        !verifiedColourCard &&
-                        StillCaptureCropSafety.requiresManualReview(
-                            stillQuad, rawSize.width, rawSize.height, reviewHint)
-                    val q = if (uncertainStill && reviewHint != null) reviewHint
-                        else if (uncertainStill) null else stillQuad
+                    }
+                    val matchedLiveOutline = compatibleLiveHint != null &&
+                        StillCaptureCropSafety.sameDocumentAsLivePreview(
+                            compatibleLiveHint.quad, stillQuad,
+                            compatibleLiveHint.width, compatibleLiveHint.height,
+                            rawSize.width, rawSize.height)
+                    val reviewHint = compatibleLiveHint?.quad
+                    val uncertainStill = if (liveHint != null) {
+                        // The user saw this green quad. If it is unverified,
+                        // present the raw still with handles for correction;
+                        // never crop using a different rectangle.
+                        !matchedLiveOutline
+                    } else {
+                        !config.preferIdCardBounds && !verifiedColourCard &&
+                            StillCaptureCropSafety.requiresManualReview(
+                                stillQuad, rawSize.width, rawSize.height, null)
+                    }
+                    val q = when {
+                        matchedLiveOutline -> reviewHint
+                        liveHint != null -> reviewHint // manual editor only
+                        uncertainStill -> null
+                        else -> stillQuad
+                    }
                     val pixelQuad = q?.let {
                         Quad(
                             PointF(it.topLeft.x * rawSize.width, it.topLeft.y * rawSize.height),
@@ -494,6 +515,10 @@ class ScannerSession(
                         "croppedImagePath" to croppedPath,
                         "rawImagePath" to rawPathToReturn,
                         "warpError" to warpError,
+                        // Camera-only metadata: gallery/import does not
+                        // receive or depend on either of these fields.
+                        "liveOutlineAtShutter" to (liveHint != null),
+                        "liveOutlineMatched" to matchedLiveOutline,
                         "quad" to (pixelQuad ?: Quad(
                             PointF(0f, 0f),
                             PointF(rawSize.width.toFloat(), 0f),
