@@ -205,17 +205,65 @@ class _IdCardScreenState extends State<IdCardScreen> {
   }
 
   Future<void> _adjustSide(int index) async {
-    if (_saving || _importing || index >= _selected.length) return;
+    if (_saving || _importing || index < 0 || index >= _selected.length) {
+      return;
+    }
+    if (_twoSided) {
+      // One shared 1/2 → 2/2 editor, as in the reference video.
+      // Always edit from the saved full-resolution sources, not a filtered
+      // or already warped bitmap. An untouched side keeps its working image.
+      final sourcePaths = List<String>.of(_sourcePaths);
+      final currentPaths = List<String>.of(_selected);
+      final edits = await Navigator.push<Map<int, Uint8List>>(
+        context, MaterialPageRoute(builder: (_) => BatchCropScreen(
+          imagePaths: sourcePaths,
+          initialIndex: index,
+          preferIdCardBounds: true,
+          onlyEdited: true,
+          sideLabels: const ['Front', 'Back'],
+          comparisonPaths: currentPaths,
+        )),
+      );
+      if (!mounted || edits == null || edits.isEmpty) return;
+      setState(() => _importing = true);
+      try {
+        final dir = await getTemporaryDirectory();
+        final updated = <int, String>{};
+        for (final entry in edits.entries) {
+          if (entry.key < 0 || entry.key >= _selected.length) continue;
+          final file = File('${dir.path}/ds_id_side_'
+              '${DateTime.now().microsecondsSinceEpoch}_${entry.key}.jpg');
+          await file.writeAsBytes(entry.value, flush: true);
+          updated[entry.key] = file.path;
+        }
+        if (mounted) {
+          setState(() {
+            for (final entry in updated.entries) {
+              _selected[entry.key] = entry.value;
+              _originals[entry.key] = entry.value;
+            }
+            _activeIndex = index;
+          });
+        }
+      } catch (error) {
+        _warn('Could not apply card corners: $error');
+      } finally {
+        if (mounted) setState(() => _importing = false);
+      }
+      return;
+    }
+
+    // Non-two-sided templates continue to use the single-page crop editor.
     final result = await Navigator.push<Uint8List>(context, MaterialPageRoute(
       builder: (_) => CropScreen(
         imagePath: _sourcePaths[index],
-        preferIdCardBounds: _twoSided,
+        preferIdCardBounds: false,
       ),
     ));
     if (!mounted || result == null) return;
     try {
-      final temporaryDirectory = await getTemporaryDirectory();
-      final file = File('${temporaryDirectory.path}/ds_card_'
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/ds_card_'
           '${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
       await file.writeAsBytes(result, flush: true);
       if (mounted) {
