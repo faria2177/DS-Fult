@@ -270,9 +270,21 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
             return SizedBox(width: width, height: height,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                // A single tap is a valid Pen/Magic/Handwriting erasure.
+                // Rectangles and text boxes still require a drag gesture.
+                onTapUp: _busy || _compare ? null : (details) async {
+                  if (_mode == SmartEraseMode.rectangle ||
+                      _mode == SmartEraseMode.text) return;
+                  setState(() {
+                    _stroke = [_normalise(details.localPosition, size)];
+                  });
+                  await _applyStroke();
+                },
                 onPanStart: _busy || _compare ? null : (details) => setState(() {
                   _stroke = [_normalise(details.localPosition, size)];
                 }),
+                onPanCancel: _busy || _compare ? null :
+                    () => setState(() => _stroke = []),
                 onPanUpdate: _busy || _compare ? null : (details) {
                   final point = _normalise(details.localPosition, size);
                   if (_stroke.isEmpty) return;
