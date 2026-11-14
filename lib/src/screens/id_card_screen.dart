@@ -318,16 +318,22 @@ class _IdCardScreenState extends State<IdCardScreen> {
     switch (action) {
       case 'crop':
         await _adjustSide(index);
+        break;
       case 'left':
         await _transform(rotation: 270);
+        break;
       case 'right':
         await _transform(rotation: 90);
+        break;
       case 'retake':
         await _retakeActive();
+        break;
       case 'gallery':
         await _replaceActive();
+        break;
       case 'compare':
         await _compare();
+        break;
       default:
         break;
     }
