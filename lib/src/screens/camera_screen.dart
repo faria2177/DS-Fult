@@ -646,6 +646,10 @@ class _CameraScreenState extends State<CameraScreen> {
                             busy: _cameraSuspended,
                           ) : null,
                   referenceIdCardChrome: widget.cardMode,
+                  // Video 382731.mp4: Front -> Back in the same live camera,
+                  // then the A4 pair editor; no intermediate accept page.
+                  quickCardCapture: widget.cardMode &&
+                      widget.cardTemplate?.sideCount == 2,
                   referenceCardLabel: widget.cardTemplate?.label ?? 'ID Card',
                   referenceCardSide: widget.side ?? 'Front',
                   referenceCardPortraitGuide:
