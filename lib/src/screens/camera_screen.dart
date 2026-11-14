@@ -345,7 +345,7 @@ class _CameraScreenState extends State<CameraScreen> {
           final outputIndex = unresolvedOutputIndexes[entry.key];
           final file = File(p.join(directory.path,
               'ds_capture_adjust_${DateTime.now().microsecondsSinceEpoch}_'
-              '${outputIndex}.jpg'));
+              '$outputIndex.jpg'));
           await file.writeAsBytes(entry.value, flush: true);
           outputs[outputIndex] = file.path;
           confirmedCrops.add(file.path);
