@@ -58,6 +58,34 @@ void main() {
     expect(DocumentEdges.captureQuadHint(outside), isNull);
   });
 
+  test('native camera flags distinguish verified green crop from review', () {
+    final result = ScanResult.fromMap({
+      'rawImagePath': 'raw.jpg',
+      'croppedImagePath': 'green_crop.jpg',
+      'quad': quadInPixels(.10, .11, .90, .89).toMap(),
+      'rawImageSize': [1200, 900],
+      'liveOutlineAtShutter': true,
+      'liveOutlineMatched': true,
+    });
+    expect(result.liveOutlineAtShutter, isTrue);
+    expect(result.liveOutlineMatched, isTrue);
+    expect(result.croppedImagePath, 'green_crop.jpg');
+    final pending = result.copyWith(liveOutlineMatched: false);
+    expect(pending.liveOutlineAtShutter, isTrue);
+    expect(pending.liveOutlineMatched, isFalse);
+  });
+
+  test('legacy captures and gallery results have no green-quad lock', () {
+    final result = ScanResult.fromMap({
+      'rawImagePath': 'gallery.jpg',
+      'croppedImagePath': null,
+      'quad': quadInPixels(.10, .11, .90, .89).toMap(),
+      'rawImageSize': [1200, 900],
+    });
+    expect(result.liveOutlineAtShutter, isFalse);
+    expect(result.liveOutlineMatched, isFalse);
+  });
+
   test('preview screen is optional but still available for other users', () {
     const scanner = DoclensScreen(skipCaptureReview: true);
     const reusable = DoclensScreen();
