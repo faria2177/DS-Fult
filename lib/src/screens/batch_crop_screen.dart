@@ -41,6 +41,17 @@ class BatchCropPageState {
     return true;
   }
 
+  /// Copy the *confirmed* crop geometry to another page. This is only for
+  /// pages intentionally scanned with the same framing; it never runs auto
+  /// detection or changes untouched pages without an explicit All action.
+  bool copyCornersFrom(BatchCropPageState other) {
+    if (!other.confirmed || !CropQuad(other.corners).isValid) return false;
+    corners..clear()..addAll(other.corners);
+    confirmed = true;
+    touched = true;
+    return true;
+  }
+
   List<Offset> get handles => [
     ...corners,
     for (var edge = 0; edge < 4; edge++)
@@ -124,12 +135,12 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     }
   }
 
-  Future<void> _detect(int index, {bool requested = false}) async {
+  Future<bool> _detect(int index, {bool requested = false}) async {
     // The captured green box is the user's intended boundary. Re-running the
     // still detector on editor open must not replace it with an inner printed
     // rectangle. The user can explicitly tap Auto Crop to request a new quad.
     if (!requested && widget.capturedCornerHints.containsKey(index)) {
-      return;
+      return false;
     }
     try {
       final result = await DocumentEdges.detectSafeStillOutline(
@@ -145,6 +156,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
                     'before Done; otherwise the original is preserved.'
                   : 'No reliable outside border. Adjust manually or keep the original.');
         }
+        return false;
       } else {
         setState(() {
           _edits[index].corners..clear()..addAll(points);
@@ -152,11 +164,13 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
           if (requested) _edits[index].touched = true;
           if (index == _index) _hint = 'Outside corners found. Review before Done.';
         });
+        return true;
       }
     } catch (_) {
       if (mounted && index == _index) {
         setState(() => _hint = 'Auto Crop unavailable; drag the corners manually.');
       }
+      return false;
     }
   }
 
@@ -164,15 +178,69 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     if (_working) return;
     setState(() => _working = true);
     try {
+      var detected = 0;
+      final total = all ? widget.imagePaths.length : 1;
       if (all) {
         for (var i = 0; i < widget.imagePaths.length; i++) {
-          await _detect(i, requested: true);
+          if (await _detect(i, requested: true)) detected++;
         }
       } else {
-        await _detect(_index, requested: true);
+        if (await _detect(_index, requested: true)) detected++;
+      }
+      if (mounted) {
+        setState(() => _hint = detected == total
+            ? 'Auto Crop found $detected of $total page(s). Review corners before Done.'
+            : 'Auto Crop detected $detected of $total. For the remaining pages, adjust the four corners manually.');
       }
     } finally {
       if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _applyToAll() async {
+    if (_working) return;
+    if (widget.imagePaths.length == 1) {
+      await _autoCrop();
+      return;
+    }
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheet) => SafeArea(child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(title: Text('Apply to all pages'),
+            subtitle: Text('Choose how the page corners should be updated.')),
+          ListTile(leading: const Icon(Icons.auto_fix_high),
+            title: const Text('Auto Detect All'),
+            subtitle: const Text('Detect each page independently'),
+            onTap: () => Navigator.pop(sheet, 'detect')),
+          ListTile(leading: const Icon(Icons.copy_all_outlined),
+            enabled: _edits[_index].confirmed,
+            title: const Text('Use Current Corners on All'),
+            subtitle: const Text('Use only for pages of the same size and framing'),
+            onTap: () => Navigator.pop(sheet, 'copy')),
+        ],
+      )),
+    );
+    if (!mounted) return;
+    if (mode == 'detect') {
+      await _autoCrop(all: true);
+    } else if (mode == 'copy') {
+      final source = _edits[_index];
+      var updated = 0;
+      setState(() {
+        for (var i = 0; i < _edits.length; i++) {
+          if (i == _index) continue;
+          final sourceRatio = _ratios[_index];
+          final targetRatio = _ratios[i];
+          // Known incompatible page shapes are not safe to copy to.
+          if (sourceRatio != null && targetRatio != null &&
+              (sourceRatio - targetRatio).abs() > .12) continue;
+          if (_edits[i].copyCornersFrom(source)) updated++;
+        }
+        _hint = 'Applied current corners to $updated other pages. '
+            'Review each page before Done.';
+      });
     }
   }
 
@@ -358,7 +426,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
             _tool(Icons.rotate_left, 'Left', () => _rotate(3)),
             _tool(Icons.rotate_right, 'Right', () => _rotate(1)),
             _tool(Icons.crop_free, 'Auto Crop', () => _autoCrop()),
-            _tool(Icons.select_all, 'All', () => _autoCrop(all: true)),
+            _tool(Icons.select_all, 'All', _applyToAll),
           ])),
         Container(height: 48, color: const Color(0xFF27292C),
           child: Row(children: [
