@@ -377,6 +377,73 @@ class DocumentEdges {
     return frameSides >= 3;
   }
 
+  /// A pixel edge-snapping pass is a refinement, not a new detector.
+  /// Never let it replace a validated outer document with a clipped inner
+  /// printed border, a near-frame rectangle or invalid corner geometry.
+  ///
+  /// This is deliberately independent of the image decoder, so the exact
+  /// constraints can be regression-tested with synthetic corners.
+  @visibleForTesting
+  static bool isSafeRefinement(
+    ImageDetection original,
+    ImageDetection refined, {
+    bool preferIdCardBounds = false,
+  }) {
+    final before = original.quad;
+    final after = refined.quad;
+    if (before == null || after == null ||
+        original.imageSize.width <= 0 || original.imageSize.height <= 0 ||
+        (original.imageSize.width - refined.imageSize.width).abs() > 1 ||
+        (original.imageSize.height - refined.imageSize.height).abs() > 1 ||
+        !CropQuad(after.points).isValid) {
+      return false;
+    }
+    final previousArea = before.area;
+    final nextArea = after.area;
+    if (!previousArea.isFinite || !nextArea.isFinite ||
+        previousArea <= 0 ||
+        nextArea < previousArea * .92 ||
+        nextArea > previousArea * 1.24) {
+      return false;
+    }
+
+    // A line fit is permitted to adjust a boundary by a few image
+    // percentage points. Big corner jumps are almost always a different
+    // rectangle (table, border, plastic sleeve) rather than the paper edge.
+    for (var i = 0; i < 4; i++) {
+      if ((before.points[i] - after.points[i]).distance > .075) return false;
+    }
+    final beforeCentre = Offset(
+      before.points.map((p) => p.dx).reduce((a, b) => a + b) / 4,
+      before.points.map((p) => p.dy).reduce((a, b) => a + b) / 4,
+    );
+    final afterCentre = Offset(
+      after.points.map((p) => p.dx).reduce((a, b) => a + b) / 4,
+      after.points.map((p) => p.dy).reduce((a, b) => a + b) / 4,
+    );
+    if ((beforeCentre - afterCentre).distance > .035) return false;
+
+    if (preferIdCardBounds || (
+        original.quad!.area < .30 && isCredibleStandaloneCard(original))) {
+      return isCredibleStandaloneCard(refined);
+    }
+    return isReliableGalleryCrop(refined);
+  }
+
+  static Future<ImageDetection> _refineSafely(
+    String imagePath,
+    ImageDetection detection, {
+    bool preferIdCardBounds = false,
+  }) async {
+    final proposed = await QuadEdgeRefiner.refine(imagePath, detection);
+    if (isSafeRefinement(detection, proposed,
+        preferIdCardBounds: preferIdCardBounds)) {
+      return proposed;
+    }
+    _log(imagePath, 'pixel edge refinement rejected; kept original four corners');
+    return detection;
+  }
+
   /// Used by *both* automatic gallery import and Adjust corners → Auto
   /// Detect. Neither route may promote an interior table/name block to a
   /// complete document. Try the independent card outline even when the
@@ -400,7 +467,8 @@ class DocumentEdges {
             isCredibleStandaloneCard(online.detection);
         if (page || card) {
           _log(imagePath, 'accepted validated online boundary');
-          return await QuadEdgeRefiner.refine(imagePath, online.detection);
+          return _refineSafely(imagePath, online.detection,
+              preferIdCardBounds: card || preferIdCardBounds);
         }
         _log(imagePath, 'online candidate rejected by local geometry gates');
       }
@@ -414,7 +482,8 @@ class DocumentEdges {
     // tends to land a few percent inside the real paper edge. Snap the
     // accepted outline onto the actual edge pixels; on any doubt this returns
     // the unchanged detection.
-    return QuadEdgeRefiner.refine(imagePath, found);
+    return _refineSafely(imagePath, found,
+        preferIdCardBounds: preferIdCardBounds);
   }
 
   static Future<ImageDetection?> _detectSafeStillOutlineCoarse(
