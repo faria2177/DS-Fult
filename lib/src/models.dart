@@ -19,6 +19,7 @@ class ScanPage {
     required this.id,
     required this.path,
     required this.originalPath,
+    this.rawSourcePath,
     this.filter = 'Original',
     this.recognizedText = '',
     this.title = '',
@@ -27,7 +28,11 @@ class ScanPage {
 
   final String id;
   final String path;
+  /// Unfiltered editing base (usually already perspective-corrected).
   final String originalPath;
+  /// Full upright capture/photo for non-destructive corner correction.
+  /// Null for old documents and pages that have no distinct raw source.
+  final String? rawSourcePath;
   final String filter;
   final String recognizedText;
   final String title;
@@ -36,11 +41,12 @@ class ScanPage {
   final String? watermarkBackupPath;
 
   ScanPage copyWith({String? path, String? originalPath,
-      String? filter, String? recognizedText, String? title,
+      String? rawSourcePath, String? filter, String? recognizedText, String? title,
       String? watermarkBackupPath, bool clearWatermark = false}) => ScanPage(
         id: id,
         path: path ?? this.path,
         originalPath: originalPath ?? this.originalPath,
+        rawSourcePath: rawSourcePath ?? this.rawSourcePath,
         filter: filter ?? this.filter,
         recognizedText: recognizedText ?? this.recognizedText,
         title: title ?? this.title,
@@ -52,6 +58,7 @@ class ScanPage {
         id: json['id'] as String,
         path: json['path'] as String,
         originalPath: json['originalPath'] as String? ?? json['path'] as String,
+        rawSourcePath: json['rawSourcePath'] as String?,
         filter: json['filter'] as String? ?? 'Original',
         recognizedText: json['recognizedText'] as String? ?? '',
         title: json['title'] as String? ?? '',
@@ -62,6 +69,7 @@ class ScanPage {
         'id': id,
         'path': path,
         'originalPath': originalPath,
+        'rawSourcePath': rawSourcePath,
         'filter': filter,
         'recognizedText': recognizedText,
         'title': title,
