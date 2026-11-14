@@ -86,6 +86,33 @@ void main() {
     expect(result.liveOutlineMatched, isFalse);
   });
 
+  test('small visible green card seeds manual editor, not gallery auto crop', () {
+    // Video 382753: a 10%-area vertical card is real despite the normal
+    // A4 reliability gate rejecting its small coverage.
+    const size = Size(900, 1200);
+    const live = Quad(
+      topLeft: Offset(288, 384),
+      topRight: Offset(549, 384),
+      bottomRight: Offset(549, 804),
+      bottomLeft: Offset(288, 804),
+    );
+    final greenCamera = ScanResult(
+      croppedImagePath: null,
+      rawImagePath: 'still.jpg',
+      rawImageSize: size,
+      detectedQuad: live,
+      liveOutlineAtShutter: true,
+      liveOutlineMatched: false,
+    );
+    final hint = DocumentEdges.captureQuadHint(greenCamera);
+    expect(hint, isNotNull);
+    expect(hint!.corners.first.dx, closeTo(.32, .0001));
+    // No green camera metadata => imported images must retain their strict
+    // normal outline checks and never inherit this relaxed manual hint.
+    expect(DocumentEdges.captureQuadHint(
+      greenCamera.copyWith(liveOutlineAtShutter: false)), isNull);
+  });
+
   test('preview screen is optional but still available for other users', () {
     const scanner = DoclensScreen(skipCaptureReview: true);
     const reusable = DoclensScreen();
