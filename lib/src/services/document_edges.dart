@@ -409,20 +409,28 @@ class DocumentEdges {
       return candidate;
     }
     // Ordinary Scan auto-crop retains the strict whole-page checks.
-    if (isReliableGalleryCrop(detection)) return candidate;
+    if (isReliableGalleryCrop(detection)) {
+      return candidate;
+    }
     // In the CAMERA ONLY, a genuinely visible green box can also surround
     // a small white business card (~10% of the screen in 382753.mp4).
     // Show its native captured corners as MANUAL handles when independent
     // captured-still segmentation could not verify the actual paper border.
     // Do not inherit this relaxed gate for gallery/image imports, and never
     // auto-warp this unverified hint.
-    if (!capture.liveOutlineAtShutter) return null;
+    if (!capture.liveOutlineAtShutter) {
+      return null;
+    }
     final area = quad.area;
-    if (area < .045 || area > .36) return null;
+    if (area < .045 || area > .36) {
+      return null;
+    }
     final px = quad.scaleToSize(size).points;
     final width = ((px[1] - px[0]).distance + (px[2] - px[3]).distance) / 2;
     final height = ((px[3] - px[0]).distance + (px[2] - px[1]).distance) / 2;
-    if (width <= 0 || height <= 0) return null;
+    if (width <= 0 || height <= 0) {
+      return null;
+    }
     final ratio = math.max(width, height) / math.min(width, height);
     final center = Offset(
       points.map((p) => p.dx).reduce((a, b) => a + b) / 4,
@@ -430,7 +438,9 @@ class DocumentEdges {
     );
     if (ratio < 1.24 || ratio > 2.55 ||
         (center.dx - .5).abs() > .28 ||
-        (center.dy - .5).abs() > .28) return null;
+        (center.dy - .5).abs() > .28) {
+      return null;
+    }
     return candidate;
   }
 
