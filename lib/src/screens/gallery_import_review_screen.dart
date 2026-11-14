@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -6,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/document_edges.dart';
 import '../services/image_processor.dart';
+import '../services/scan_workflow.dart';
+import 'batch_crop_screen.dart';
 import '../theme.dart';
 
 /// The user confirms their gallery selection, effect and auto-crop policy
@@ -112,11 +115,41 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
                     'Detecting document edges $processed / $total…');
               })
           : AutoCropBatch(sourcePaths, 0);
-      // Keep automatic four-corner detection but never interrupt imports with
-      // an edge-detection failure dialog. Uncertain pages retain their
-      // original images and remain adjustable through the document editor.
-      final adjustedPaths = crop.paths;
-      final needsManualReview = crop.failedIndexes;
+      // CamScanner-style sequence: acquire -> detect -> adjust uncertain
+      // corners -> perspective correction -> enhance -> document preview.
+      // Confident crops continue without interruption. A missed outer
+      // boundary opens the existing interactive four-handle editor, rather
+      // than silently accepting the background as a finished scan.
+      var workflow = ScanWorkflowBatch.fromCropResult(
+        sourcePaths, crop, autoCropEnabled: _autoCrop,
+      );
+      if (workflow.needsReview && mounted) {
+        final unresolved = workflow.reviewIndexes;
+        setState(() => _progress = 'Review missing document corners…');
+        final edits = await Navigator.of(context).push<Map<int, Uint8List>>(
+          MaterialPageRoute(builder: (_) => BatchCropScreen(
+            imagePaths: [for (final index in unresolved) sourcePaths[index]],
+            preferIdCardBounds: widget.preferIdCardBounds,
+          )),
+        );
+        if (!mounted) return;
+        if (edits != null && edits.isNotEmpty) {
+          final dir = await getTemporaryDirectory();
+          for (final entry in edits.entries) {
+            if (entry.key < 0 || entry.key >= unresolved.length) continue;
+            final sourceIndex = unresolved[entry.key];
+            final file = File(p.join(dir.path,
+                'ds_review_${DateTime.now().microsecondsSinceEpoch}_'
+                '${sourceIndex}.jpg'));
+            await file.writeAsBytes(entry.value, flush: true);
+            workflow = workflow.withManualCrop(sourceIndex, file.path);
+          }
+        }
+      }
+      // "Cancel" or a page without a valid adjustment leaves the untouched
+      // original, never a fabricated 5%-inset crop.
+      final adjustedPaths = workflow.outputPaths;
+      final needsManualReview = workflow.reviewIndexes;
       final paths = <String>[];
       final folder = _filter == ScanFilter.original
           ? null : await getTemporaryDirectory();
