@@ -77,6 +77,44 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun shutterUsesExactlyGreenQuadWhenStillCorroboratesSamePaper() {
+        val green = rect(.10f, .08f, .90f, .92f)
+        val slightlyShiftedStill = rect(.115f, .095f, .885f, .905f)
+        // Still-only detector may be 1–2% inside the true outside border.
+        // Its corroboration licenses the *green* corners, not its own ones.
+        assertTrue(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, slightlyShiftedStill, 900, 1200, 1800, 2400))
+    }
+
+    @Test
+    fun shutterCannotReplaceGreenDocumentWithAnInnerPrintedTable() {
+        val green = rect(.08f, .07f, .92f, .93f)
+        val printedTable = rect(.19f, .25f, .81f, .76f)
+        assertFalse(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, printedTable, 900, 1200, 1800, 2400))
+    }
+
+    @Test
+    fun shutterNeverTrustsUnmatchedStillGeometryOrOrientation() {
+        val green = rect(.10f, .08f, .90f, .92f)
+        val shifted = rect(.21f, .08f, .99f, .92f)
+        assertFalse(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, shifted, 900, 1200, 1800, 2400))
+        assertFalse(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, green, 900, 1200, 2400, 1800))
+        assertFalse(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, null, 900, 1200, 1800, 2400))
+    }
+
+    @Test
+    fun greenOutsideEdgeCannotAuthorizeCropOfUnrelatedStill() {
+        val green = rect(.10f, .08f, .90f, .92f)
+        val almostFullFrame = rect(.01f, .01f, .99f, .99f)
+        assertFalse(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, almostFullFrame, 900, 1200, 1800, 2400))
+    }
+
+    @Test
     fun previewReviewHintRequiresCompatibleImageOrientation() {
         assertTrue(StillCaptureCropSafety.compatibleView(300, 400, 900, 1200))
         assertFalse(StillCaptureCropSafety.compatibleView(300, 400, 1920, 1080))
