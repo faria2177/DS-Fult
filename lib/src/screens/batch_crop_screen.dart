@@ -125,6 +125,12 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
   }
 
   Future<void> _detect(int index, {bool requested = false}) async {
+    // The captured green box is the user's intended boundary. Re-running the
+    // still detector on editor open must not replace it with an inner printed
+    // rectangle. The user can explicitly tap Auto Crop to request a new quad.
+    if (!requested && widget.capturedCornerHints.containsKey(index)) {
+      return;
+    }
     try {
       final result = await DocumentEdges.detectSafeStillOutline(
           widget.imagePaths[index],
