@@ -126,6 +126,8 @@ class ScanResult {
     required this.detectedQuad,
     required this.rawImageSize,
     this.warpError,
+    this.liveOutlineAtShutter = false,
+    this.liveOutlineMatched = false,
   });
 
   /// Perspective-warped, cropped document. `null` when
@@ -149,6 +151,15 @@ class ScanResult {
   /// to retake or to nudge corners via `EditCornersScreen`.
   final String? warpError;
 
+  /// Capture-only: the camera showed a credible green document quad at
+  /// shutter time. This metadata is absent/false for imported images.
+  final bool liveOutlineAtShutter;
+
+  /// The native still detector independently verified that green quad,
+  /// allowing the exact captured corners to be used for perspective warp.
+  /// A false result must not be auto-cropped using another rectangle.
+  final bool liveOutlineMatched;
+
   /// Returns a copy with the given fields replaced. Useful after a manual
   /// rotate or re-warp, to persist the new [croppedImagePath] back into a
   /// result the caller is holding.
@@ -158,6 +169,8 @@ class ScanResult {
     Quad? detectedQuad,
     Size? rawImageSize,
     String? warpError,
+    bool? liveOutlineAtShutter,
+    bool? liveOutlineMatched,
   }) {
     return ScanResult(
       croppedImagePath: croppedImagePath ?? this.croppedImagePath,
@@ -165,6 +178,9 @@ class ScanResult {
       detectedQuad: detectedQuad ?? this.detectedQuad,
       rawImageSize: rawImageSize ?? this.rawImageSize,
       warpError: warpError ?? this.warpError,
+      liveOutlineAtShutter:
+          liveOutlineAtShutter ?? this.liveOutlineAtShutter,
+      liveOutlineMatched: liveOutlineMatched ?? this.liveOutlineMatched,
     );
   }
 
@@ -185,6 +201,8 @@ class ScanResult {
         (sizeRaw[1] as num).toDouble(),
       ),
       warpError: m['warpError'] as String?,
+      liveOutlineAtShutter: m['liveOutlineAtShutter'] == true,
+      liveOutlineMatched: m['liveOutlineMatched'] == true,
     );
   }
 }
