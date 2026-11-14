@@ -107,8 +107,11 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _capture() async {
+    List<String>? rawSourcePaths;
     final paths = await Navigator.push<List<String>>(context,
         MaterialPageRoute(builder: (_) => CameraScreen(
+          onOutputSourcePaths: (sources) =>
+              rawSourcePaths = List<String>.of(sources),
           onOpenIdCards: (scannerContext, template) =>
               Navigator.of(scannerContext).push<void>(
             MaterialPageRoute(builder: (_) => IdCardScreen(
@@ -120,7 +123,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         )));
     if (paths == null || paths.isEmpty || !mounted) return;
-    await _create(paths);
+    await _create(paths, originalPaths: rawSourcePaths);
   }
 
   Future<void> _import() async {
@@ -135,7 +138,7 @@ class _HomeShellState extends State<HomeShell> {
       if (reviewed == null || !mounted) return;
       // Uncertain photos were already offered interactive corner review on
       // the import route, so no bottom snackbar should obscure the editor.
-      await _create(reviewed.paths);
+      await _create(reviewed.paths, originalPaths: reviewed.sourcePaths);
     } catch (error) {
       _message('Could not import photos: $error');
     }
@@ -160,9 +163,11 @@ class _HomeShellState extends State<HomeShell> {
     if (document != null) await _open(document.id);
   }
 
-  Future<void> _create(List<String> paths) async {
+  Future<void> _create(List<String> paths, {List<String>? originalPaths}) async {
     try {
-      final doc = await widget.store.createFromPaths(paths);
+      final doc = await widget.store.createFromPaths(
+        paths, originalPaths: originalPaths,
+      );
       if (!mounted) return;
       // The supplied CamScanner sequence shows a 01/02 document grid after
       // multi-import. Retain direct edit preview for a single captured page.
