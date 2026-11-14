@@ -277,6 +277,89 @@ class _IdCardScreenState extends State<IdCardScreen> {
     }
   }
 
+  /// The A4 preview is the navigation point for a particular side.
+  /// Mirroring the reference: tap the upper/lower card to crop, rotate,
+  /// compare, retake by camera, or replace only that side from gallery.
+  Future<void> _openSideActions(int index) async {
+    if (_saving || _importing || index < 0 || index >= _selected.length) return;
+    setState(() => _activeIndex = index);
+    if (!_twoSided) {
+      await _adjustSide(index);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF242426),
+      builder: (sheet) => SafeArea(child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(padding: const EdgeInsets.all(15),
+            child: Text('${_sideLabel(index)} side',
+              style: const TextStyle(color: Colors.white, fontSize: 18,
+                  fontWeight: FontWeight.w600))),
+          for (final entry in const <(String, IconData, String)>[
+            ('crop', Icons.crop_rotate, 'Adjust four corners'),
+            ('left', Icons.rotate_left, 'Rotate left'),
+            ('right', Icons.rotate_right, 'Rotate right'),
+            ('retake', Icons.camera_alt_outlined, 'Retake with camera'),
+            ('gallery', Icons.photo_library_outlined, 'Replace from gallery'),
+            ('compare', Icons.compare_outlined, 'Compare original'),
+          ])
+            ListTile(
+              leading: Icon(entry.$2, color: dsTeal),
+              title: Text(entry.$3,
+                  style: const TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(sheet, entry.$1),
+            ),
+        ],
+      )),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case 'crop':
+        await _adjustSide(index);
+      case 'left':
+        await _transform(rotation: 270);
+      case 'right':
+        await _transform(rotation: 90);
+      case 'retake':
+        await _retakeActive();
+      case 'gallery':
+        await _replaceActive();
+      case 'compare':
+        await _compare();
+      default:
+        break;
+    }
+  }
+
+  Future<void> _retakeActive() async {
+    if (!_twoSided || _selected.isEmpty || _saving || _importing) return;
+    final index = _activeIndex;
+    var capturedRaw = <String>[];
+    final captured = await Navigator.push<List<String>>(context,
+      MaterialPageRoute(builder: (_) => CameraScreen(
+        cardMode: true,
+        cardTemplate: widget.template,
+        side: _sideLabel(index),
+        cardCaptureLimit: 1,
+        onCardSourcePaths: (paths) =>
+            capturedRaw = List<String>.from(paths),
+      )),
+    );
+    if (!mounted || captured == null || captured.isEmpty) return;
+    if (captured.length != 1) {
+      _warn('Please capture exactly one card side.');
+      return;
+    }
+    setState(() {
+      _selected[index] = captured.single;
+      _originals[index] = captured.single;
+      _sourcePaths[index] = capturedRaw.isEmpty
+          ? captured.single : capturedRaw.first;
+    });
+  }
+
   Future<void> _replaceActive() async {
     if (_selected.isEmpty || _saving || _importing) return;
     final photo = await _picker.pickImage(source: ImageSource.gallery);
@@ -512,6 +595,12 @@ class _IdCardScreenState extends State<IdCardScreen> {
               style: TextStyle(color: Colors.white54, fontSize: 12)),
         ]),
       ),
+      if (_twoSided && _selected.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text('Tap a card to crop, rotate, compare or retake',
+            style: TextStyle(color: Colors.white60, fontSize: 12)),
+        ),
       Expanded(child: _twoSided ? _a4Page() : _generalPages()),
       if (_selected.isNotEmpty)
         Container(color: const Color(0xFF242427),
@@ -619,9 +708,13 @@ class _IdCardScreenState extends State<IdCardScreen> {
                   width: cardWidth, height: cardHeight,
                   child: InkWell(
                     key: Key('id-card-side-$i'),
-                    onTap: () => i < _selected.length
-                        ? setState(() => _activeIndex = i)
-                        : _capture(),
+                    onTap: () {
+                      if (i < _selected.length) {
+                        unawaited(_openSideActions(i));
+                      } else {
+                        unawaited(_capture());
+                      }
+                    },
                     child: Container(
                       decoration: BoxDecoration(
                         border: Border.all(color: i == _activeIndex
