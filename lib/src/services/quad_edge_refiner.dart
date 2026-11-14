@@ -56,7 +56,10 @@ class QuadEdgeRefiner {
   /// TL, TR, BR, BL as x,y in 0..1. Returns the refined eight values, or null
   /// when the refinement is not trustworthy.
   static List<double>? refineBytes(Uint8List bytes, List<double> normalized) {
-    if (normalized.length != 8) return null;
+    if (normalized.length != 8 ||
+        normalized.any((v) => !v.isFinite || v < 0 || v > 1)) {
+      return null;
+    }
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
     final source = img.bakeOrientation(decoded);
@@ -80,6 +83,7 @@ class QuadEdgeRefiner {
       for (var i = 0; i < 4; i++)
         _P(normalized[i * 2] * width, normalized[i * 2 + 1] * height),
     ];
+    if (!_isConvex(corners)) return null;
     final centre = _P(
       (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
       (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4,
@@ -116,8 +120,16 @@ class QuadEdgeRefiner {
       final outside = <List<double>>[];
       for (var i = 0; i < 15; i++) {
         final t = .15 + .70 * i / 14;
-        outside.add(sampler.at(a.x + dx * t + nx * (reach + 5),
-            a.y + dy * t + ny * (reach + 5)));
+        final ox = a.x + dx * t + nx * (reach + 5);
+        final oy = a.y + dy * t + ny * (reach + 5);
+        if (sampler.inside(ox, oy)) outside.add(sampler.at(ox, oy));
+      }
+      // Do not invent an exterior colour by clamping off-frame samples to
+      // the border pixel. A page filling the frame cannot be edge-snapped
+      // reliably; use the coarse verified quad and manual adjustment.
+      if (outside.length < 10) {
+        lines.add(_Line(a.x, a.y, ux, uy));
+        continue;
       }
       final background = <double>[
         for (var c = 0; c < 3; c++) _median([for (final s in outside) s[c]]),
@@ -130,6 +142,12 @@ class QuadEdgeRefiner {
         final t = .08 + .84 * i / 26;
         final px = a.x + dx * t;
         final py = a.y + dy * t;
+        if (!sampler.inside(px + nx * (reach + 5),
+                py + ny * (reach + 5)) ||
+            !sampler.inside(px - nx * (reach + 5),
+                py - ny * (reach + 5))) {
+          continue;
+        }
         // distance[k]: colour distance from the background at offset
         // (k - reach) along the outward normal. Inward is the lower index.
         final distance = List<double>.filled(steps, 0);
@@ -162,7 +180,9 @@ class QuadEdgeRefiner {
         }
       }
 
-      final fitted = found.length >= 8 ? _robustLine(found) : null;
+      // Eight coincidental hits are common along printed text or table
+      // ruling. Require evidence at more than half the sampled side.
+      final fitted = found.length >= 16 ? _robustLine(found) : null;
       lines.add(fitted ?? _Line(a.x, a.y, ux, uy));
     }
 
@@ -184,7 +204,7 @@ class QuadEdgeRefiner {
     }
     final before = _area(corners);
     final after = _area(result);
-    if (before <= 0 || after < before * .75 || after > before * 1.35) {
+    if (before <= 0 || after < before * .92 || after > before * 1.24) {
       return null;
     }
     if (!_isConvex(result)) return null;
@@ -340,6 +360,10 @@ class _Sampler {
   final Float32List pixels;
   final int width;
   final int height;
+
+  bool inside(double x, double y) =>
+      x.isFinite && y.isFinite &&
+      x >= 1 && y >= 1 && x < width - 2 && y < height - 2;
 
   List<double> at(double x, double y) {
     final cx = x.clamp(0.0, width - 1.001).toDouble();
