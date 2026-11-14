@@ -46,10 +46,11 @@ class BatchCropPageState {
 
 class BatchCropScreen extends StatefulWidget {
   const BatchCropScreen({super.key, required this.imagePaths,
-      this.initialIndex = 0});
+      this.initialIndex = 0, this.preferIdCardBounds = false});
 
   final List<String> imagePaths;
   final int initialIndex;
+  final bool preferIdCardBounds;
 
   @override
   State<BatchCropScreen> createState() => _BatchCropScreenState();
@@ -99,7 +100,8 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
   Future<void> _detect(int index) async {
     try {
       final result = await DocumentEdges.detectSafeStillOutline(
-          widget.imagePaths[index]);
+          widget.imagePaths[index],
+          preferIdCardBounds: widget.preferIdCardBounds);
       if (!mounted) return;
       final points = result?.quad?.points;
       if (points == null) {
@@ -196,7 +198,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF141517),
         foregroundColor: Colors.white,
-        title: const Text('Batch Rotate', style: TextStyle(fontSize: 17)),
+        title: const Text('Adjust Corners', style: TextStyle(fontSize: 17)),
       ),
       body: SafeArea(child: Column(children: [
         if (_working) const LinearProgressIndicator(color: dsTeal),
