@@ -18,6 +18,9 @@ class BatchCropPageState {
   final List<Offset> corners;
   int turns = 0;
   bool confirmed = false;
+  // Initial machine detection is only a suggestion. Re-editing a previously
+  // saved ID must never overwrite a side the user did not touch.
+  bool touched = false;
 
   bool updateHandle(int handle, Offset delta) {
     final proposal = [...corners];
@@ -34,6 +37,7 @@ class BatchCropPageState {
     if (!CropQuad(proposal).isValid) return false;
     corners..clear()..addAll(proposal);
     confirmed = true;
+    touched = true;
     return true;
   }
 
@@ -46,11 +50,18 @@ class BatchCropPageState {
 
 class BatchCropScreen extends StatefulWidget {
   const BatchCropScreen({super.key, required this.imagePaths,
-      this.initialIndex = 0, this.preferIdCardBounds = false});
+      this.initialIndex = 0, this.preferIdCardBounds = false,
+      this.onlyEdited = false, this.sideLabels = const <String>[],
+      this.comparisonPaths = const <String>[]});
 
   final List<String> imagePaths;
   final int initialIndex;
   final bool preferIdCardBounds;
+  /// Preserve every existing saved/filtered side unless the user actually
+  /// dragged a handle, rotated it, or explicitly requested Auto Crop.
+  final bool onlyEdited;
+  final List<String> sideLabels;
+  final List<String> comparisonPaths;
 
   @override
   State<BatchCropScreen> createState() => _BatchCropScreenState();
@@ -97,7 +108,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     }
   }
 
-  Future<void> _detect(int index) async {
+  Future<void> _detect(int index, {bool requested = false}) async {
     try {
       final result = await DocumentEdges.detectSafeStillOutline(
           widget.imagePaths[index],
@@ -113,6 +124,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         setState(() {
           _edits[index].corners..clear()..addAll(points);
           _edits[index].confirmed = true;
+          if (requested) _edits[index].touched = true;
           if (index == _index) _hint = 'Outside corners found. Review before Done.';
         });
       }
@@ -129,10 +141,10 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     try {
       if (all) {
         for (var i = 0; i < widget.imagePaths.length; i++) {
-          await _detect(i);
+          await _detect(i, requested: true);
         }
       } else {
-        await _detect(_index);
+        await _detect(_index, requested: true);
       }
     } finally {
       if (mounted) setState(() => _working = false);
@@ -147,8 +159,10 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
 
   void _rotate(int delta) {
     if (_working) return;
-    setState(() => _edits[_index].turns =
-        (_edits[_index].turns + delta + 4) % 4);
+    setState(() {
+      _edits[_index].turns = (_edits[_index].turns + delta + 4) % 4;
+      _edits[_index].touched = true;
+    });
   }
 
   Future<void> _done() async {
@@ -158,6 +172,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       final output = <int, Uint8List>{};
       for (var i = 0; i < widget.imagePaths.length; i++) {
         final edit = _edits[i];
+        if (widget.onlyEdited && !edit.touched) continue;
         if (!edit.confirmed && edit.turns == 0) continue;
         if (edit.confirmed && !CropQuad(edit.corners).isValid) {
           throw const FormatException('Invalid document corners.');
@@ -198,7 +213,8 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF141517),
         foregroundColor: Colors.white,
-        title: const Text('Adjust Corners', style: TextStyle(fontSize: 17)),
+        title: Text(widget.sideLabels.isEmpty ? 'Adjust Corners' : 'Crop',
+            style: const TextStyle(fontSize: 17)),
       ),
       body: SafeArea(child: Column(children: [
         if (_working) const LinearProgressIndicator(color: dsTeal),
@@ -250,7 +266,9 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
           IconButton(onPressed: _working || _index == 0 ? null :
               () => _changePage(_index - 1),
               icon: const Icon(Icons.chevron_left), color: Colors.white),
-          Text('${_index + 1}/${widget.imagePaths.length}',
+          Text(widget.sideLabels.length == widget.imagePaths.length
+                ? '${widget.sideLabels[_index]} · ${_index + 1}/${widget.imagePaths.length}'
+                : '${_index + 1}/${widget.imagePaths.length}',
             style: const TextStyle(color: Colors.white70)),
           IconButton(onPressed: _working || _index + 1 >= widget.imagePaths.length
               ? null : () => _changePage(_index + 1),
