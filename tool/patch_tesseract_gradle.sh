@@ -1,17 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# flutter_tesseract_ocr 0.4.31 still publishes an old Gradle buildscript
-# containing jcenter(), which Gradle 9 does not support. The host app already
-# configures the Android Gradle Plugin, so the redundant plugin buildscript can
-# be removed without changing or redistributing the package's native binaries.
-task_pub_cache="${PUB_CACHE:-${HOME}/.pub-cache}"
-plugin_gradle="$task_pub_cache/hosted/pub.dev/flutter_tesseract_ocr-0.4.31/android/build.gradle"
-if [ ! -f "$plugin_gradle" ]; then
-  printf 'Missing expected plugin Gradle file: %s\n' "$plugin_gradle" >&2
-  exit 1
+# New Flutter/pub versions may put a hosted plugin under a different cache
+# layout. Resolve the actual installed package via package_config.json rather
+# than assuming ~/.pub-cache/hosted/pub.dev/<name>-<version>/.
+plugin_root="$(python3 - <<'PY'
+import json
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+config = Path('.dart_tool/package_config.json').resolve()
+if not config.is_file():
+    print('')
+    raise SystemExit(0)
+packages = json.loads(config.read_text()).get('packages', [])
+plugin = next((p for p in packages
+               if p.get('name') == 'flutter_tesseract_ocr'), None)
+if not plugin:
+    print('')
+else:
+    root = plugin.get('rootUri', '')
+    parsed = urlparse(root)
+    if parsed.scheme == 'file':
+        print(unquote(parsed.path))
+    elif not parsed.scheme:
+        print((config.parent / unquote(root)).resolve())
+    else:
+        print('')
+PY
+)"
+
+if [[ -z "$plugin_root" ]]; then
+  echo 'Tesseract package not resolved; no legacy Gradle patch required.'
+  exit 0
 fi
 
+plugin_gradle="$plugin_root/android/build.gradle"
+if [[ ! -f "$plugin_gradle" ]]; then
+  # Some package releases no longer ship a Groovy Android Gradle script.
+  # In that case there is nothing from the legacy buildscript to repair.
+  echo "No legacy Tesseract build.gradle at $plugin_gradle; skipping patch."
+  exit 0
+fi
+
+# The Android host already supplies the supported AGP. Remove the obsolete
+# Groovy buildscript/jcenter declaration without touching package sources
+# committed to the repository or breaking repeat CI invocations.
 sed -i '/^buildscript {/,/^}/d' "$plugin_gradle"
 sed -i 's/jcenter()/mavenCentral()/g' "$plugin_gradle"
-printf 'Patched legacy Tesseract Gradle repositories.\n'
+echo 'Patched resolved Tesseract Gradle repositories.'
