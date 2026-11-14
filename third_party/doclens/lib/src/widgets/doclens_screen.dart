@@ -159,6 +159,7 @@ class DoclensScreen extends StatefulWidget {
     this.referencePickerBuilder,
     this.referenceIdCardChrome = false,
     this.quickCardCapture = false,
+    this.skipCaptureReview = false,
     this.referenceCardLabel = 'ID Card',
     this.referenceCardSide = 'Front',
     this.referenceCardPortraitGuide = false,
@@ -415,6 +416,11 @@ class DoclensScreen extends StatefulWidget {
   /// full original JPEGs remain available for four/edge-handle adjustments
   /// on the combined A4 preview. Standard Single/Batch keeps its review UI.
   final bool quickCardCapture;
+  /// Bypass the intermediate Retake / Adjust corners / Next screen.
+  /// The host CameraScreen still uses validated native/still four-corner
+  /// crops and opens its manual corner editor when detection is uncertain.
+  /// Capture review stays available to embedders by default.
+  final bool skipCaptureReview;
   final String referenceCardLabel;
   final String referenceCardSide;
   final bool referenceCardPortraitGuide;
@@ -984,6 +990,25 @@ class _DoclensScreenState extends State<DoclensScreen> {
   }
 
   Future<void> _handleCapture(ScanResult result) async {
+    // The deleted intermediate review screen is unnecessary in the app's
+    // Scan mode: the host receives native cropped and raw original paths,
+    // re-detects still edges and provides a manual fallback if needed.
+    // Keep the batch state in capture order without another route.
+    if (widget.skipCaptureReview && !widget.quickCardCapture) {
+      if (!mounted || _atPageLimit) return;
+      if (widget.multiPage) {
+        setState(() => _pages.add(result));
+        _notifyPagesChanged();
+        if (_atPageLimit && widget.autoFinishAtPageLimit) {
+          _finishMultiPage();
+        }
+      } else if (widget.onCapture != null) {
+        widget.onCapture!(result);
+      } else {
+        Navigator.of(context).pop(result);
+      }
+      return;
+    }
     // Two-sided ID/Bank/License video workflow: Front shutter immediately
     // returns to the preview labelled Back; the second shutter proceeds to
     // the single A4 review. Deferred corner editing still uses original
