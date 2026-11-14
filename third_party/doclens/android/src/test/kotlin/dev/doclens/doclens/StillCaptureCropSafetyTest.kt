@@ -115,6 +115,34 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun video382753SmallGreenCardIsNotDiscardedByA4PageThreshold() {
+        // Live frame: small, 90°-rotated landscape business card on patterned
+        // fabric. Its four real corners cover only ~10% of the preview.
+        val green = rect(.32f, .32f, .61f, .67f)
+        assertFalse(StillCaptureCropSafety.isCrediblePage(green, 320, 420))
+        assertTrue(StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+            green, 320, 420))
+        // The still's different CameraX content orientation makes the SAME
+        // card landscape and visually larger; do not compare raw x/y corners.
+        val still = rect(.21f, .37f, .81f, .61f)
+        assertTrue(StillCaptureCropSafety.sameSmallPaperCardAsLive(
+            green, still, 320, 420, 320, 420))
+        assertFalse(StillCaptureCropSafety.sameDocumentAsLivePreview(
+            green, still, 320, 420, 320, 420))
+    }
+
+    @Test
+    fun tinyNameBoxAndMismatchedCardCannotBorrowGreenCapture() {
+        val green = rect(.32f, .32f, .61f, .67f)
+        val tinyNameBox = rect(.41f, .47f, .58f, .54f)
+        val otherCard = rect(.01f, .12f, .50f, .41f)
+        assertFalse(StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+            tinyNameBox, 320, 420))
+        assertFalse(StillCaptureCropSafety.sameSmallPaperCardAsLive(
+            green, otherCard, 320, 420, 320, 420))
+    }
+
+    @Test
     fun previewReviewHintRequiresCompatibleImageOrientation() {
         assertTrue(StillCaptureCropSafety.compatibleView(300, 400, 900, 1200))
         assertFalse(StillCaptureCropSafety.compatibleView(300, 400, 1920, 1080))
