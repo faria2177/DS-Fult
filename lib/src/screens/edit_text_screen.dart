@@ -120,7 +120,35 @@ class _EditTextScreenState extends State<EditTextScreen>
         }
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      // The release ML Kit engine may still be missing or fail to initialise
+      // on a particular device. English and Bengali Tesseract models are
+      // bundled during the Android build; use them as an offline fallback.
+      // Never display raw obfuscated Java stack traces to users.
+      try {
+        final fallback = await FlutterTesseractOcr.extractText(
+          page.path,
+          language: _bengali ? 'ben' : 'eng',
+          args: const {'psm': '3', 'preserve_interword_spaces': '1'},
+        );
+        if (!mounted) return;
+        setState(() {
+          if (fallback.trim().isNotEmpty) {
+            _text.text = fallback.trim();
+          }
+          _blocks = fallback.trim().isEmpty ? 0 : fallback.split('\n').length;
+          _regions = [];
+          _error = fallback.trim().isEmpty
+              ? 'No readable text found. You can still edit directly on the image.'
+              : null;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _regions = [];
+          _error = 'Text recognition is temporarily unavailable. '
+              'Use On Image to edit or add text manually, or tap Re-scan.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _processing = false);
     }
@@ -208,7 +236,7 @@ class _EditTextScreenState extends State<EditTextScreen>
                 color: dsTeal.withValues(alpha: .08),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Text(
-                  _error != null ? 'Recognition unavailable: $_error'
+                  _error != null ? _error!
                       : _bengali
                           ? 'বাংলা OCR: $_blocks lines • Add text on image manually'
                           : '$_blocks text blocks detected • Tap On Image to edit on the page',
