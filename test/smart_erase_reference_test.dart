@@ -49,10 +49,10 @@ void main() {
         findsOneWidget);
 
     await tester.tap(find.text('Pen'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('Pen · Fine'), findsOneWidget);
     await tester.tap(find.text('Pen · Fine'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('Draw a brush stroke to erase the selected mark'),
         findsOneWidget);
   });
