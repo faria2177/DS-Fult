@@ -87,7 +87,9 @@ class _DocumentScreenState extends State<DocumentScreen> {
     if (doc.pages.length > 1) {
       final edits = await Navigator.push<Map<int, Uint8List>>(context,
         MaterialPageRoute(builder: (_) => BatchCropScreen(
-          imagePaths: doc.pages.map((page) => page.path).toList(),
+          // Re-crop from the full original, never an already cut-off page.
+          imagePaths: doc.pages.map((page) =>
+              page.rawSourcePath ?? page.path).toList(),
           initialIndex: _index,
         )),
       );
@@ -98,7 +100,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
           if (entry.key < 0 || entry.key >= doc.pages.length) continue;
           final page = doc.pages[entry.key];
           await widget.store.replacePageBytes(doc.id, page.id, entry.value,
-              filter: page.filter);
+              filter: page.filter, replaceOriginal: true);
         }
       } catch (error) {
         _message('Batch crop failed: $error');
@@ -109,11 +111,14 @@ class _DocumentScreenState extends State<DocumentScreen> {
     }
     final page = doc.pages[_index];
     final result = await Navigator.push<Uint8List>(context,
-      MaterialPageRoute(builder: (_) => CropScreen(imagePath: page.path)));
+      MaterialPageRoute(builder: (_) => CropScreen(
+        imagePath: page.rawSourcePath ?? page.path,
+      )));
     if (result == null) return;
     setState(() => _busy = true);
     try {
-      await widget.store.replacePageBytes(doc.id, page.id, result, filter: page.filter);
+      await widget.store.replacePageBytes(doc.id, page.id, result,
+          filter: page.filter, replaceOriginal: true);
     } catch (error) {
       _message(error);
     } finally {
