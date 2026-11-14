@@ -45,6 +45,26 @@ class _IdCardScreenState extends State<IdCardScreen> {
   int _activeIndex = 0;
   String _watermark = '';
 
+  // Match the on-screen A4 preview to the *same* composed JPEG that will
+  // be saved/exported, including portrait-source orientation correction.
+  // Cache by source paths and template so build() never re-decodes images.
+  String? _compositePreviewKey;
+  Future<Uint8List>? _compositePreviewFuture;
+
+  Future<Uint8List> _compositePreview() {
+    final key = '${_compact ? 1 : 0}:${_selected.take(2).join('|')}';
+    if (_compositePreviewFuture == null || _compositePreviewKey != key) {
+      _compositePreviewKey = key;
+      _compositePreviewFuture = () async {
+        final sides = await Future.wait(
+          _selected.take(2).map((path) => File(path).readAsBytes()),
+        );
+        return IdCardPageComposer.compose(sides, compact: _compact);
+      }();
+    }
+    return _compositePreviewFuture!;
+  }
+
   int get _sideCount => widget.template?.sideCount ?? 2;
   bool get _twoSided => widget.kind.twoSided;
   int? get _maxImages => widget.template == IdCardTemplate.general
@@ -502,13 +522,26 @@ class _IdCardScreenState extends State<IdCardScreen> {
         child: LayoutBuilder(builder: (context, constraints) {
           final width = constraints.maxWidth;
           final height = constraints.maxHeight;
-          // Real ID-1 cards are about 86 mm wide on a 210 mm A4 sheet.
-          // The former 85%-wide slot made both sides look oversized.
-          final cardWidth = width * (_compact ? .456 : .484);
-          final cardHeight = height * (_compact ? .202 : .217);
-          final centers = _compact ? const [.388, .616] : const [.322, .679];
-          return Container(color: Colors.white,
-            child: Stack(children: [
+          // Exactly the same layout measurements as the saved A4 JPEG.
+          final cardWidth = width *
+              IdCardPageComposer.cardWidthFraction(compact: _compact);
+          final cardHeight = height *
+              IdCardPageComposer.cardHeightFraction(compact: _compact);
+          final centers =
+              IdCardPageComposer.cardCenterFractions(compact: _compact);
+          return FutureBuilder<Uint8List>(
+            future: _selected.length == 2 ? _compositePreview() : null,
+            builder: (context, snapshot) {
+              final composed = snapshot.data;
+              return Container(color: Colors.white,
+                child: Stack(children: [
+                  // Once both sides are present, show the *actual* oriented,
+                  // positioned A4 output. The overlay below remains tappable
+                  // for front/back selection and manual crop/rotate.
+                  if (composed != null)
+                    Positioned.fill(child: Image.memory(
+                      composed, fit: BoxFit.fill, gaplessPlayback: true)),
+
               for (var i = 0; i < 2; i++)
                 Positioned(left: (width - cardWidth) / 2,
                   top: height * centers[i] - cardHeight / 2,
@@ -524,9 +557,11 @@ class _IdCardScreenState extends State<IdCardScreen> {
                             ? dsTeal : const Color(0xFFDDDDDD),
                           width: i == _activeIndex ? 2 : 1)),
                       child: i < _selected.length
-                          ? Image.file(File(_selected[i]),
-                              fit: BoxFit.contain,
-                              key: ValueKey(_selected[i]))
+                          ? composed == null
+                              ? Image.file(File(_selected[i]),
+                                  fit: BoxFit.contain,
+                                  key: ValueKey(_selected[i]))
+                              : const SizedBox.expand()
                           : Center(child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -543,7 +578,9 @@ class _IdCardScreenState extends State<IdCardScreen> {
                 Positioned(bottom: 10, left: 8, right: 8,
                   child: Text(_watermark, textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.grey))),
-            ]),
+                ]),
+              );
+            },
           );
         }),
       ),
