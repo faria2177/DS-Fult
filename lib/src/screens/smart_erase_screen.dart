@@ -166,19 +166,88 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
     }
   }
 
+  Future<void> _cancel() async {
+    if (_busy) return;
+    if (!_changed) {
+      Navigator.pop(context);
+      return;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Discard your edits?'),
+        content: const Text(
+          'Changes are not saved until you tap the check mark.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Keep editing')),
+          FilledButton(onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Discard')),
+        ],
+      ),
+    );
+    if (mounted && discard == true) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) => VideoToolStyle.wrapDark(Scaffold(
-    backgroundColor: const Color(0xFF38383B),
-    appBar: AppBar(title: const Text('Smart Erase'), actions: [
-      Padding(padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
-        child: FilledButton(
-          onPressed: _busy || _current == null ? null : _save,
-          style: VideoToolStyle.tealButton,
-          child: const Text('Save'),
+    backgroundColor: const Color(0xFF29292C),
+    body: SafeArea(child: Column(children: [
+      // Reference-style tool selector. Every mode is wired to a real local
+      // image-editing operation. Magic is an offline brush approximation,
+      // not a proprietary content-aware AI inpainting model.
+      Container(
+        color: const Color(0xFF2C2C30),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            PopupMenuButton<double>(
+              tooltip: 'Pen and brush size',
+              enabled: !_busy,
+              onSelected: (radius) => setState(() {
+                _mode = SmartEraseMode.pen;
+                _strokeRadius = radius;
+              }),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: .006, child: Text('Pen · Fine')),
+                PopupMenuItem(value: .012, child: Text('Pen · Medium')),
+                PopupMenuItem(value: .022, child: Text('Pen · Large')),
+                PopupMenuItem(value: .033, child: Text('Pen · Extra large')),
+              ],
+              child: _toolFace(Icons.edit_outlined, 'Pen',
+                selected: _mode == SmartEraseMode.pen, dropdown: true),
+            ),
+            _modeButton(SmartEraseMode.rectangle,
+                Icons.crop_square_outlined, 'Rectangle'),
+            _modeButton(SmartEraseMode.magic,
+                Icons.auto_fix_high_outlined, 'Magic'),
+            _modeButton(SmartEraseMode.handwriting,
+                Icons.draw_outlined, 'Handwriting'),
+            _modeButton(SmartEraseMode.text,
+                Icons.text_fields_outlined, 'Erase Text'),
+          ]),
         ),
       ),
-    ]),
-    body: SafeArea(child: Column(children: [
+      Container(
+        height: 60,
+        color: const Color(0xFF2C2C30),
+        child: Row(children: [
+          IconButton(
+            tooltip: 'Cancel Smart Erase',
+            onPressed: _busy ? null : _cancel,
+            icon: const Icon(Icons.close, color: Colors.white, size: 30),
+          ),
+          const Expanded(child: Text('Smart Erase',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontSize: 20))),
+          IconButton(
+            tooltip: 'Apply Smart Erase',
+            onPressed: _busy || _current == null ? null : _save,
+            icon: const Icon(Icons.check, color: Colors.white, size: 30),
+          ),
+        ]),
+      ),
       if (_busy) const LinearProgressIndicator(),
       if (_undo.isNotEmpty || _redo.isNotEmpty)
         Row(children: [
@@ -241,16 +310,16 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
               activeColor: VideoToolStyle.teal,
               onChanged: (value) => setState(() => _strokeRadius = value))),
           ]),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _modeButton(SmartEraseMode.magic, Icons.auto_fix_high, 'Magic'),
-              _modeButton(SmartEraseMode.handwriting, Icons.draw, 'Handwriting'),
-              _modeButton(SmartEraseMode.text, Icons.text_fields, 'Text'),
-            ]),
-          const SizedBox(height: 9),
+          const SizedBox(height: 5),
           Text(_mode == SmartEraseMode.text
-              ? 'Drag a box around text to remove it locally'
-              : 'Brush over the unwanted area to remove it locally',
+              ? 'Drag a rectangle over printed text'
+              : _mode == SmartEraseMode.rectangle
+                  ? 'Drag a rectangle to remove the selected area'
+                  : _mode == SmartEraseMode.handwriting
+                      ? 'Brush over handwriting for local removal'
+                      : _mode == SmartEraseMode.magic
+                          ? 'Brush over a mark: locally match its background'
+                          : 'Draw a brush stroke to erase the selected mark',
               style: const TextStyle(color: VideoToolStyle.muted,
                 fontSize: 11)),
         ]),
@@ -258,19 +327,42 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
     ])),
   ));
 
+  Widget _toolFace(IconData icon, String label, {
+    required bool selected, bool dropdown = false,
+  }) => Container(
+    width: 111,
+    height: 70,
+    margin: const EdgeInsets.symmetric(horizontal: 3),
+    decoration: BoxDecoration(
+      color: selected ? const Color(0xFF49494C) : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, color: Colors.white, size: 29),
+        if (dropdown) const Padding(
+          padding: EdgeInsets.only(left: 5),
+          child: Icon(Icons.arrow_drop_down, color: Colors.white, size: 19),
+        ),
+      ]),
+      const SizedBox(height: 5),
+      Text(label, style: const TextStyle(
+        fontSize: 12, color: Colors.white)),
+    ]),
+  );
+
   Widget _modeButton(SmartEraseMode mode, IconData icon, String label) {
     final selected = _mode == mode;
-    return InkWell(onTap: _busy ? null : () => setState(() => _mode = mode),
-      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 6,
-        vertical: 4), child: Column(children: [
-          Icon(icon, color: selected ? VideoToolStyle.teal : Colors.white,
-            size: 25),
-          const SizedBox(height: 5),
-          Text(label, style: TextStyle(fontSize: 12,
-            color: selected ? VideoToolStyle.teal : Colors.white)),
-        ])),
+    return InkWell(
+      key: Key('smart-erase-${mode.name}'),
+      onTap: _busy ? null : () => setState(() {
+        _mode = mode;
+        _stroke = [];
+      }),
+      child: _toolFace(icon, label, selected: selected),
     );
   }
+
 }
 
 class _EraseStrokePainter extends CustomPainter {
