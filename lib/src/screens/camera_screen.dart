@@ -306,6 +306,32 @@ class _CameraScreenState extends State<CameraScreen> {
       final nativeCrop = result.croppedImagePath;
       final raw = result.rawImagePath;
       if (raw.isEmpty && (nativeCrop == null || nativeCrop.isEmpty)) continue;
+      // Camera shutter contract: the visible green four-corner outline is the
+      // crop target. A second still detector may *verify* the same paper, but
+      // it must never silently replace those corners with a different quad.
+      // This branch is camera-only; Gallery/Import keep their existing Online
+      // First + still-image detector workflow completely unchanged.
+      if (!widget.cardMode && result.liveOutlineAtShutter) {
+        if (result.liveOutlineMatched &&
+            nativeCrop != null && nativeCrop.isNotEmpty) {
+          outputs.add(nativeCrop);
+          rawPathsForOutputs.add(raw.isEmpty ? nativeCrop : raw);
+          confirmedCrops.add(nativeCrop);
+        } else if (raw.isNotEmpty) {
+          // An incompatible still crop/rotation or different detected border
+          // cannot be assumed to be the green outline. Preserve the original
+          // and open corner adjustment with the captured hint when usable.
+          outputs.add(raw);
+          rawPathsForOutputs.add(raw);
+          final hint = DocumentEdges.captureQuadHint(result);
+          if (hint != null) {
+            capturedCornerHints[unresolvedSourcePaths.length] = hint.corners;
+          }
+          unresolvedSourcePaths.add(raw);
+          unresolvedOutputIndexes.add(outputs.length - 1);
+        }
+        continue;
+      }
       // A ready, consented Online First detector gets the raw still before
       // accepting a native-cropped candidate. A failed online/offline attempt
       // must not discard a usable native crop.
