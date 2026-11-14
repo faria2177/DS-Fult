@@ -372,7 +372,9 @@ class _IdCardScreenState extends State<IdCardScreen> {
   void _swapSides() {
     if (!_twoSided || _selected.length != 2 ||
         _originals.length != 2 || _sourcePaths.length != 2 ||
-        _saving || _importing) return;
+        _saving || _importing) {
+      return;
+    }
     setState(() {
       for (final images in <List<String>>[
         _selected, _originals, _sourcePaths,
