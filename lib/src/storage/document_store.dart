@@ -56,15 +56,25 @@ class DocumentStore extends ChangeNotifier {
     String? folderId,
     DocumentKind kind = DocumentKind.document,
     bool compositeCardPages = false,
+    /// Optional original upright images aligned with the processed pages.
+    /// These become durable editable sources rather than temporary cache files.
+    List<String>? originalPaths,
   }) async {
     if (paths.isEmpty ||
-        (kind.twoSided && !compositeCardPages && paths.length > 2)) {
-      throw ArgumentError('Invalid image count for ${kind.label}');
+        (kind.twoSided && !compositeCardPages && paths.length > 2) ||
+        (originalPaths != null && originalPaths.length != paths.length)) {
+      throw ArgumentError('Invalid image/original count for ${kind.label}');
     }
     final pages = <ScanPage>[];
-    for (final path in paths) {
-      final copied = await _copyInput(path);
-      pages.add(ScanPage(id: _uuid.v4(), path: copied, originalPath: copied));
+    for (var i = 0; i < paths.length; i++) {
+      final copied = await _copyInput(paths[i]);
+      final original = originalPaths == null ||
+              originalPaths[i] == paths[i]
+          ? copied
+          : await _copyInput(originalPaths[i]);
+      pages.add(ScanPage(
+        id: _uuid.v4(), path: copied, originalPath: original,
+      ));
     }
     final now = DateTime.now();
     final document = ScanDocument(
