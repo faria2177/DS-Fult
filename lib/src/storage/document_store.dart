@@ -68,12 +68,15 @@ class DocumentStore extends ChangeNotifier {
     final pages = <ScanPage>[];
     for (var i = 0; i < paths.length; i++) {
       final copied = await _copyInput(paths[i]);
-      final original = originalPaths == null ||
+      final rawOriginal = originalPaths == null ||
               originalPaths[i] == paths[i]
-          ? copied
+          ? null
           : await _copyInput(originalPaths[i]);
       pages.add(ScanPage(
-        id: _uuid.v4(), path: copied, originalPath: original,
+        id: _uuid.v4(),
+        path: copied,
+        originalPath: copied, // Filter baseline remains the corrected scan.
+        rawSourcePath: rawOriginal, // Separate full still for re-crop.
       ));
     }
     final now = DateTime.now();
