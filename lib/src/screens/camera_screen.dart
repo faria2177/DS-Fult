@@ -33,6 +33,7 @@ class CameraScreen extends StatefulWidget {
     this.cardCaptureLimit,
     this.onOpenIdCards,
     this.onCardSourcePaths,
+    this.onOutputSourcePaths,
   });
 
   final bool cardMode;
@@ -42,6 +43,9 @@ class CameraScreen extends StatefulWidget {
   final int? cardCaptureLimit;
   /// Raw upright stills are retained for lossless four-corner correction.
   final ValueChanged<List<String>>? onCardSourcePaths;
+  /// Processed pages and full upright originals are aligned by index.
+  /// HomeShell can persist originals separately for later re-crop.
+  final ValueChanged<List<String>>? onOutputSourcePaths;
   final Future<void> Function(BuildContext context,
       IdCardTemplate template)? onOpenIdCards;
 
@@ -234,8 +238,13 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _finishProcessed(List<String> paths,
       {bool applySelectedEffect = true,
-       Set<String> confirmedCrops = const <String>{}}) async {
+       Set<String> confirmedCrops = const <String>{},
+       List<String>? originalSourcePaths}) async {
     if (!mounted || _finished || paths.isEmpty) return;
+    // Fall back to current output only for legacy manual-camera callers.
+    final sources = originalSourcePaths != null &&
+            originalSourcePaths.length == paths.length
+        ? List<String>.of(originalSourcePaths) : List<String>.of(paths);
     setState(() => _processingGallery = true);
     try {
       final processed = <String>[];
@@ -264,9 +273,15 @@ class _CameraScreenState extends State<CameraScreen> {
           await ScanSettingsStore.saveImageToGallery(result);
         }
       }
-      if (mounted) _finish(processed);
+      if (mounted) {
+        widget.onOutputSourcePaths?.call(sources);
+        _finish(processed);
+      }
     } catch (_) {
-      if (mounted) _finish(paths);
+      if (mounted) {
+        widget.onOutputSourcePaths?.call(sources);
+        _finish(paths);
+      }
     } finally {
       if (mounted && !_finished) {
         setState(() => _processingGallery = false);
@@ -283,6 +298,7 @@ class _CameraScreenState extends State<CameraScreen> {
     setState(() => _processingGallery = true);
     try {
     final outputs = <String>[];
+    final rawPathsForOutputs = <String>[];
     final confirmedCrops = <String>{};
     final unresolvedSourcePaths = <String>[];
     final unresolvedOutputIndexes = <int>[];
@@ -298,12 +314,14 @@ class _CameraScreenState extends State<CameraScreen> {
             preferIdCardBounds: _detectCardBounds);
         if (first.croppedCount > 0) {
           outputs.add(first.paths.single);
+          rawPathsForOutputs.add(raw);
           confirmedCrops.add(first.paths.single);
           continue;
         }
       }
       if (nativeCrop != null && nativeCrop.isNotEmpty) {
         outputs.add(nativeCrop);
+        rawPathsForOutputs.add(raw.isEmpty ? nativeCrop : raw);
         confirmedCrops.add(nativeCrop);
         continue;
       }
@@ -313,6 +331,7 @@ class _CameraScreenState extends State<CameraScreen> {
             preferIdCardBounds: _detectCardBounds);
         final path = recovered.paths.single;
         outputs.add(path);
+        rawPathsForOutputs.add(raw);
         if (recovered.croppedCount > 0) {
           confirmedCrops.add(path);
         } else {
@@ -323,6 +342,7 @@ class _CameraScreenState extends State<CameraScreen> {
         }
       } else {
         outputs.add(raw);
+        rawPathsForOutputs.add(raw);
       }
     }
     if (unresolvedSourcePaths.isNotEmpty && mounted) {
@@ -354,7 +374,9 @@ class _CameraScreenState extends State<CameraScreen> {
     }
     // Explicitly canceling corner review preserves the raw still.
     if (outputs.isNotEmpty) {
-      await _finishProcessed(outputs, confirmedCrops: confirmedCrops);
+      await _finishProcessed(outputs,
+          confirmedCrops: confirmedCrops,
+          originalSourcePaths: rawPathsForOutputs);
     }
     } finally {
       if (mounted && !_finished) {
@@ -395,7 +417,8 @@ class _CameraScreenState extends State<CameraScreen> {
       // The import screen already offers an actionable four-corner review.
       // This route immediately pops after _finishProcessed; showing a snackbar
       // here would linger over the document editor's bottom toolbar.
-      await _finishProcessed(reviewed.paths, applySelectedEffect: false);
+      await _finishProcessed(reviewed.paths, applySelectedEffect: false,
+          originalSourcePaths: reviewed.sourcePaths);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -426,7 +449,8 @@ class _CameraScreenState extends State<CameraScreen> {
       final outputs = List<String>.of(cropped.paths);
       final confirmed = cropped.croppedCount == 0
           ? <String>{} : outputs.toSet();
-      await _finishProcessed(outputs, confirmedCrops: confirmed);
+      await _finishProcessed(outputs, confirmedCrops: confirmed,
+          originalSourcePaths: [image.path]);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
