@@ -149,13 +149,70 @@ object QuadDetector {
      * preview geometry alone: the still must independently contain a strongly
      * bounded neutral-paper connected component on coloured fabric.
      */
+    /** Remove 1–2 pixel bright threads from dark woven fabric before
+     * estimating the card perimeter. Without this 3x3 morphological opening,
+     * thin neutral-colour strands can attach to the real paper component and
+     * expand its bounds (as in the captured screenshot at 11.7 seconds).
+     * Operates solely on this camera-only candidate, not the import masks.
+     */
+    private fun detectOpenedNeutralPaper(
+        pixels: IntArray, width: Int, height: Int,
+    ): Quad? {
+        if (width < 64 || height < 64 || pixels.size != width * height) {
+            return null
+        }
+        val mask = BooleanArray(pixels.size)
+        var saturated = 0
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            val r = (color shr 16) and 0xFF
+            val g = (color shr 8) and 0xFF
+            val b = color and 0xFF
+            val hi = max(r, max(g, b))
+            val lo = min(r, min(g, b))
+            val spread = hi - lo
+            if (hi >= 60 && spread * 100 >= hi * 37) saturated++
+            mask[i] = hi >= 106 && spread * 100 <= hi * 27
+        }
+        if (saturated < pixels.size * .07) return null
+        val eroded = BooleanArray(mask.size)
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                val p = y * width + x
+                if (!mask[p]) continue
+                var solid = true
+                loop@ for (dy in -1..1) {
+                    for (dx in -1..1) {
+                        if (!mask[p + dy * width + dx]) {
+                            solid = false
+                            break@loop
+                        }
+                    }
+                }
+                eroded[p] = solid
+            }
+        }
+        val opened = BooleanArray(mask.size)
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                val p = y * width + x
+                if (!eroded[p]) continue
+                for (dy in -1..1) for (dx in -1..1) {
+                    opened[p + dy * width + dx] = true
+                }
+            }
+        }
+        return analyzeMask(opened, width, height)?.quad
+    }
+
     internal fun detectSmallNeutralCardAtShutter(
         pixels: IntArray, width: Int, height: Int,
         liveQuad: Quad, liveWidth: Int, liveHeight: Int,
     ): Quad? {
         if (!StillCaptureCropSafety.isCredibleSmallDisplayedCard(
                 liveQuad, liveWidth, liveHeight)) return null
-        val candidate = detectNeutralPaper(pixels, width, height) ?: return null
+        val candidate = detectOpenedNeutralPaper(pixels, width, height)
+            ?: return null
         if (!StillCaptureCropSafety.sameSmallPaperCardAsLive(
                 liveQuad, candidate, liveWidth, liveHeight,
                 width, height)) return null
