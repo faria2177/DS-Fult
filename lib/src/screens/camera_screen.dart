@@ -650,6 +650,10 @@ class _CameraScreenState extends State<CameraScreen> {
                   // then the A4 pair editor; no intermediate accept page.
                   quickCardCapture: widget.cardMode &&
                       widget.cardTemplate?.sideCount == 2,
+                  // The marked Retake/Adjust-corners/Next screen is removed
+                  // for Scan. Valid cropped stills go straight to preview;
+                  // unsafe stills use the existing manual crop editor.
+                  skipCaptureReview: !widget.cardMode,
                   referenceCardLabel: widget.cardTemplate?.label ?? 'ID Card',
                   referenceCardSide: widget.side ?? 'Front',
                   referenceCardPortraitGuide:
@@ -694,6 +698,10 @@ class _CameraScreenState extends State<CameraScreen> {
                       ? null : _settings.resolution,
                   enableEditCorners: true,
                   imageEnhancement: ImageEnhancement.none,
+                  // Do not force 180 degrees: apply only the on-device OCR
+                  // hypothesis when it confidently reads the card upright.
+                  autoOrientation: widget.cardMode && _detectCardBounds
+                      ? AutoOrientation.auto : AutoOrientation.none,
                   jpegQuality: 95,
                   config: _detectCardBounds
                       ? DocumentEdges.idCardScannerConfig
