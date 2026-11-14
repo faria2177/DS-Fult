@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Only the latest push to a branch needs a full Android build.
+concurrency:
+  group: docscanner-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android:
     name: Analyze, test and build APK
