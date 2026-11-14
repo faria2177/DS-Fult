@@ -389,8 +389,10 @@ class ScannerSession(
         // shape before any automatic perspective warp is allowed.
         val displayedHint = displayedQuad?.let { visible ->
             frameOrientationAtShutter?.takeIf {
-                StillCaptureCropSafety.isCrediblePage(
-                    visible, it.width, it.height)
+                (StillCaptureCropSafety.isCrediblePage(
+                    visible, it.width, it.height) ||
+                 StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+                    visible, it.width, it.height))
             }?.let { frame ->
                 PagePreviewHint(visible, shutterTime, frame.width, frame.height)
             }
@@ -470,18 +472,37 @@ class ScannerSession(
                             compatibleLiveHint.quad, stillQuad,
                             compatibleLiveHint.width, compatibleLiveHint.height,
                             rawSize.width, rawSize.height)
+                    // A *small* paper card may cover only ~10% of the live
+                    // view (video 382753.mp4). A4-only gates discard its
+                    // otherwise correct green box and the still detector
+                    // may prefer the patterned cloth. Segment the actual
+                    // neutral WHITE card on the shutter bitmap instead.
+                    // It must pass independent outside-edge contrast and
+                    // live-document aspect/position checks. This is NOT the
+                    // gallery/import detector and never changes that flow.
+                    //
+                    // A CameraX/EXIF 90-degree content rotation may change
+                    // normalized coordinates: use verified STILL corners
+                    // rather than blindly scaling the green coordinates in
+                    // that case. They represent the same physical 4 edges.
+                    val recoveredSmallCard = if (!config.preferIdCardBounds &&
+                        liveHint != null &&
+                        StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+                            liveHint.quad, liveHint.width, liveHint.height)) {
+                        QuadDetector.detectSmallNeutralCardInBitmap(
+                            rotated, liveHint.quad,
+                            liveHint.width, liveHint.height)
+                    } else null
                     val reviewHint = compatibleLiveHint?.quad
-                    val uncertainStill = if (liveHint != null) {
-                        // The user saw this green quad. If it is unverified,
-                        // present the raw still with handles for correction;
-                        // never crop using a different rectangle.
-                        !matchedLiveOutline
-                    } else {
-                        !config.preferIdCardBounds && !verifiedColourCard &&
+                    val uncertainStill = when {
+                        recoveredSmallCard != null -> false
+                        liveHint != null -> !matchedLiveOutline
+                        else -> !config.preferIdCardBounds && !verifiedColourCard &&
                             StillCaptureCropSafety.requiresManualReview(
                                 stillQuad, rawSize.width, rawSize.height, null)
                     }
                     val q = when {
+                        recoveredSmallCard != null -> recoveredSmallCard
                         matchedLiveOutline -> reviewHint
                         liveHint != null -> reviewHint // manual editor only
                         uncertainStill -> null
@@ -533,7 +554,8 @@ class ScannerSession(
                         // Camera-only metadata: gallery/import does not
                         // receive or depend on either of these fields.
                         "liveOutlineAtShutter" to (liveHint != null),
-                        "liveOutlineMatched" to matchedLiveOutline,
+                        "liveOutlineMatched" to
+                            (matchedLiveOutline || recoveredSmallCard != null),
                         "quad" to (pixelQuad ?: Quad(
                             PointF(0f, 0f),
                             PointF(rawSize.width.toFloat(), 0f),
