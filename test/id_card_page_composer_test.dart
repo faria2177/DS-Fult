@@ -57,4 +57,38 @@ void main() {
       sides: [_solid(200, 20, 20)], compact: false,
     )), throwsArgumentError);
   });
+  test('Reference layout places equal-size Front above Back on portrait A4', () {
+    expect(IdCardPageComposer.pageWidth, lessThan(IdCardPageComposer.pageHeight));
+    final centers = IdCardPageComposer.cardCenterFractions();
+    expect(centers[0], closeTo(.322, .002));
+    expect(centers[1], closeTo(.679, .002));
+    expect(IdCardPageComposer.cardWidthFraction(), closeTo(.484, .002));
+    expect(IdCardPageComposer.cardHeightFraction(), closeTo(.217, .002));
+    final compact = IdCardPageComposer.cardCenterFractions(compact: true);
+    expect(compact[0], lessThan(compact[1]));
+  });
+
+  test('Portrait camera capture is oriented horizontally on A4', () {
+    // The source may be an otherwise correct card captured sideways by
+    // CameraX, or an old gallery JPG whose EXIF orientation is already baked.
+    final sideways = img.Image(width: 200, height: 320);
+    img.fill(sideways, color: img.ColorRgb8(230, 40, 35));
+    final source = Uint8List.fromList(img.encodePng(sideways));
+    final output = IdCardPageComposer.composeSync((
+      sides: [source, _solid(30, 40, 230)],
+      compact: false,
+    ));
+    final page = img.decodeImage(output)!;
+    // With a landscape placement the card reaches well beyond x=425.
+    // Before the fix a portrait card was only about 237 pixels wide.
+    expect(page.getPixel(425, 565).r, greaterThan(180));
+    expect(page.getPixel(820, 565).r, greaterThan(180));
+    expect(page.getPixel(300, 565).r, greaterThan(245));
+    expect(page.getPixel(620, 1190).b, greaterThan(180));
+    // Original bytes remain unchanged; only the A4 print copy rotates.
+    final original = img.decodeImage(source)!;
+    expect(original.width, 200);
+    expect(original.height, 320);
+  });
+
 }
