@@ -262,6 +262,11 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
                 'Review pages before Done.';
           });
         }
+      } catch (error) {
+        if (mounted) {
+          setState(() => _hint =
+              'Could not apply corners to all pages: $error');
+        }
       } finally {
         if (mounted) setState(() => _working = false);
       }
