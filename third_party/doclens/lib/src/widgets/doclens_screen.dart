@@ -158,6 +158,7 @@ class DoclensScreen extends StatefulWidget {
     this.referenceScanChrome = false,
     this.referencePickerBuilder,
     this.referenceIdCardChrome = false,
+    this.quickCardCapture = false,
     this.referenceCardLabel = 'ID Card',
     this.referenceCardSide = 'Front',
     this.referenceCardPortraitGuide = false,
@@ -409,6 +410,11 @@ class DoclensScreen extends StatefulWidget {
       VoidCallback cycleFlash)? referencePickerBuilder;
   /// A dedicated capture frame only for ID Card template flows.
   final bool referenceIdCardChrome;
+  /// For confirmed two-sided ID templates only, take Front then Back in the
+  /// same live camera session without an intermediate review screen. The
+  /// full original JPEGs remain available for four/edge-handle adjustments
+  /// on the combined A4 preview. Standard Single/Batch keeps its review UI.
+  final bool quickCardCapture;
   final String referenceCardLabel;
   final String referenceCardSide;
   final bool referenceCardPortraitGuide;
@@ -978,6 +984,20 @@ class _DoclensScreenState extends State<DoclensScreen> {
   }
 
   Future<void> _handleCapture(ScanResult result) async {
+    // Two-sided ID/Bank/License video workflow: Front shutter immediately
+    // returns to the preview labelled Back; the second shutter proceeds to
+    // the single A4 review. Deferred corner editing still uses original
+    // full-resolution sources, so a weak detector never loses content.
+    if (widget.quickCardCapture && widget.referenceIdCardChrome &&
+        widget.multiPage) {
+      if (!mounted || _atPageLimit) return;
+      setState(() => _pages.add(result));
+      _notifyPagesChanged();
+      if (_atPageLimit && widget.autoFinishAtPageLimit) {
+        _finishMultiPage();
+      }
+      return;
+    }
     // Pause the live session while the user reviews — saves CPU + battery.
     await _controller.pause().catchError((_) {});
     if (!mounted) return;
