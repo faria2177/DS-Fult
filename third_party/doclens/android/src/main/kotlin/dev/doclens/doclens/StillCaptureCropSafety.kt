@@ -390,6 +390,72 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * Independently corroborate the DISPLAYED green quad against the actual
+     * full-resolution shutter pixels. A busy notebook can make the still
+     * contour detector choose a printed label or diagonal colour boundary
+     * instead of the page's four outside edges. Rather than replacing the
+     * user's green corners with that unrelated suggestion, test the colour
+     * discontinuity immediately INSIDE vs OUTSIDE each green edge.
+     *
+     * - An accepted result preserves EXACTLY the projected green coordinates.
+     * - Require 3 of 4 independently supported outside sides. Printed lines
+     *   or one bright diagonal inside a page cannot authorize a warp.
+     * - If camera FOV/rotation drift or weak contrast makes the evidence
+     *   ambiguous, return false and offer manual Adjust Corners.
+     * - Only the live CAMERA capture path calls this; imported still photos
+     *   keep their existing detector and review pipeline.
+     */
+    internal fun hasCapturedGreenBorderEvidence(
+        green: Quad, width: Int, height: Int,
+        pixelAt: (Int, Int) -> Int,
+    ): Boolean {
+        if (!isSafeDisplayedGreenForReview(green, width, height) ||
+            width < 64 || height < 64) return false
+        val points = listOf(
+            green.topLeft, green.topRight, green.bottomRight, green.bottomLeft)
+        val offset = (min(width, height) * .0125).coerceIn(3.0, 25.0)
+        var supportedSides = 0
+        for (index in 0..3) {
+            val start = points[index]
+            val end = points[(index + 1) % 4]
+            val dx = (end.x - start.x).toDouble() * width
+            val dy = (end.y - start.y).toDouble() * height
+            val edgeLength = hypot(dx, dy)
+            if (edgeLength < offset * 5) continue
+            // Ordered TL→TR→BR→BL is clockwise in bitmap coordinates.
+            // The left-hand normal points INSIDE the document on each side.
+            val nx = -dy / edgeLength
+            val ny = dx / edgeLength
+            var sampled = 0
+            var strong = 0
+            for (sample in 1..9) {
+                val fraction = sample.toDouble() / 10.0
+                val x = start.x.toDouble() * width + dx * fraction
+                val y = start.y.toDouble() * height + dy * fraction
+                val insideX = (x + nx * offset).toInt()
+                val insideY = (y + ny * offset).toInt()
+                val outsideX = (x - nx * offset).toInt()
+                val outsideY = (y - ny * offset).toInt()
+                if (insideX !in 0 until width || insideY !in 0 until height ||
+                    outsideX !in 0 until width || outsideY !in 0 until height) {
+                    continue
+                }
+                val inside = pixelAt(insideX, insideY)
+                val outside = pixelAt(outsideX, outsideY)
+                val colourDifference = (
+                    abs(((inside shr 16) and 255) - ((outside shr 16) and 255)) +
+                    abs(((inside shr 8) and 255) - ((outside shr 8) and 255)) +
+                    abs((inside and 255) - (outside and 255))
+                ) / 3.0
+                sampled++
+                if (colourDifference >= 19.0) strong++
+            }
+            if (sampled >= 6 && strong * 2 >= sampled) supportedSides++
+        }
+        return supportedSides >= 3
+    }
+
+    /**
      * Camera-only captured-still boundary preference. A live preview quad is
      * valid in the STILL image only after the rotation/FOV verifier mapped it.
      * When that mapping fails but an independently verified white card exists
