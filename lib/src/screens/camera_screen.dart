@@ -330,6 +330,9 @@ class _CameraScreenState extends State<CameraScreen> {
     final unresolvedSourcePaths = <String>[];
     final unresolvedOutputIndexes = <int>[];
     final capturedCornerHints = <int, List<Offset>>{};
+    // If visible green corners could not be mapped to the JPEG, never seed
+    // this review with a second, unrelated still-detector rectangle.
+    final manualOnlyCameraPages = <int>{};
     for (final result in results) {
       final nativeCrop = result.croppedImagePath;
       final raw = result.rawImagePath;
@@ -352,8 +355,11 @@ class _CameraScreenState extends State<CameraScreen> {
           outputs.add(raw);
           rawPathsForOutputs.add(raw);
           final hint = DocumentEdges.captureQuadHint(result);
+          final reviewIndex = unresolvedSourcePaths.length;
           if (hint != null) {
-            capturedCornerHints[unresolvedSourcePaths.length] = hint.corners;
+            capturedCornerHints[reviewIndex] = hint.corners;
+          } else {
+            manualOnlyCameraPages.add(reviewIndex);
           }
           unresolvedSourcePaths.add(raw);
           unresolvedOutputIndexes.add(outputs.length - 1);
@@ -423,6 +429,7 @@ class _CameraScreenState extends State<CameraScreen> {
           imagePaths: unresolvedSourcePaths,
           preferIdCardBounds: _detectCardBounds,
           capturedCornerHints: capturedCornerHints,
+          manualOnlyCameraPages: manualOnlyCameraPages,
         )),
       );
       if (!mounted) return;
