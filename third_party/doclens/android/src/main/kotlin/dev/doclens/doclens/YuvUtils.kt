@@ -1,34 +1,48 @@
 package dev.doclens.doclens
 
 import android.media.Image
+import android.graphics.Rect
 import java.nio.ByteBuffer
 
 /** Helpers for pulling the luma (Y) plane out of a YUV image and downscaling. */
 object YuvUtils {
     data class Luma(val data: ByteArray, val width: Int, val height: Int)
 
-    /** Extracts the Y plane, downscales by nearest neighbor so the max dimension
-     *  is ~downscaleTo. Returns the bytes + new size. */
-    fun extractLuma(image: Image, downscaleTo: Int): Luma {
+    /** CameraX ViewPort crops ImageAnalysis through ImageProxy.cropRect.
+     * The detector must operate on this SAME sensor field as the on-disk JPEG.
+     * Cropping both luma and chroma *before* detection prevents a border
+     * outside the visible ViewPort from being reported as a green quad.
+     */
+    internal fun checkedCrop(w: Int, h: Int, cropRect: Rect?): Rect {
+        val crop = cropRect ?: Rect(0, 0, w, h)
+        require(crop.left >= 0 && crop.top >= 0 &&
+            crop.right <= w && crop.bottom <= h &&
+            crop.width() > 0 && crop.height() > 0)
+        return crop
+    }
+
+    /** Downsample the cropRect only. Coordinates returned by the detector
+     * are now already normalized inside the shared CameraX ViewPort. */
+    fun extractLuma(image: Image, downscaleTo: Int, cropRect: Rect? = null): Luma {
         val plane = image.planes[0]
         val rowStride = plane.rowStride
         val pixelStride = plane.pixelStride
-        val w = image.width
-        val h = image.height
-        val buffer = plane.buffer
-        val src = ByteArray(buffer.remaining())
-        buffer.get(src)
-
-        val scale = (downscaleTo.toFloat() / maxOf(w, h)).coerceAtMost(1f)
-        val outW = (w * scale).toInt().coerceAtLeast(1)
-        val outH = (h * scale).toInt().coerceAtLeast(1)
+        val crop = checkedCrop(image.width, image.height, cropRect)
+        val buffer = plane.buffer.duplicate()
+        val origin = buffer.position()
+        val scale = (downscaleTo.toFloat() /
+            maxOf(crop.width(), crop.height())).coerceAtMost(1f)
+        val outW = (crop.width() * scale).toInt().coerceAtLeast(1)
+        val outH = (crop.height() * scale).toInt().coerceAtLeast(1)
         val out = ByteArray(outW * outH)
         for (y in 0 until outH) {
-            val srcY = (y / scale).toInt().coerceIn(0, h - 1)
-            val rowStart = srcY * rowStride
+            val srcY = crop.top +
+                (y / scale).toInt().coerceIn(0, crop.height() - 1)
             for (x in 0 until outW) {
-                val srcX = (x / scale).toInt().coerceIn(0, w - 1)
-                out[y * outW + x] = src[rowStart + srcX * pixelStride]
+                val srcX = crop.left +
+                    (x / scale).toInt().coerceIn(0, crop.width() - 1)
+                out[y * outW + x] = buffer.get(
+                    origin + srcY * rowStride + srcX * pixelStride)
             }
         }
         return Luma(out, outW, outH)
@@ -43,7 +57,8 @@ object YuvUtils {
      *
      * An unsupported/truncated plane falls back to the original luma path.
      */
-    fun extractRgba(image: Image, luma: Luma, downscaleTo: Int): ByteArray? {
+    fun extractRgba(image: Image, luma: Luma, downscaleTo: Int,
+                    cropRect: Rect? = null): ByteArray? {
         if (image.planes.size < 3) return null
         val u = image.planes[1]
         val v = image.planes[2]
@@ -53,6 +68,7 @@ object YuvUtils {
                 sourceWidth = image.width,
                 sourceHeight = image.height,
                 downscaleTo = downscaleTo,
+                cropRect = checkedCrop(image.width, image.height, cropRect),
                 uPlane = u.buffer.duplicate(),
                 uRowStride = u.rowStride,
                 uPixelStride = u.pixelStride,
@@ -71,6 +87,7 @@ object YuvUtils {
         sourceWidth: Int,
         sourceHeight: Int,
         downscaleTo: Int,
+        cropRect: Rect = Rect(0, 0, sourceWidth, sourceHeight),
         uPlane: ByteBuffer,
         uRowStride: Int,
         uPixelStride: Int,
@@ -83,19 +100,22 @@ object YuvUtils {
                 uPixelStride > 0 && vPixelStride > 0)
         require(luma.data.size == luma.width * luma.height)
 
-        val scale = (downscaleTo.toFloat() / maxOf(sourceWidth, sourceHeight))
-            .coerceAtMost(1f)
-        require(luma.width == (sourceWidth * scale).toInt().coerceAtLeast(1))
-        require(luma.height == (sourceHeight * scale).toInt().coerceAtLeast(1))
+        val crop = checkedCrop(sourceWidth, sourceHeight, cropRect)
+        val scale = (downscaleTo.toFloat() /
+            maxOf(crop.width(), crop.height())).coerceAtMost(1f)
+        require(luma.width == (crop.width() * scale).toInt().coerceAtLeast(1))
+        require(luma.height == (crop.height() * scale).toInt().coerceAtLeast(1))
 
         val uBase = uPlane.position()
         val vBase = vPlane.position()
         val rgba = ByteArray(luma.width * luma.height * 4)
         for (y in 0 until luma.height) {
-            val srcY = (y / scale).toInt().coerceIn(0, sourceHeight - 1)
+            val srcY = crop.top +
+                (y / scale).toInt().coerceIn(0, crop.height() - 1)
             val chromaY = srcY / 2
             for (x in 0 until luma.width) {
-                val srcX = (x / scale).toInt().coerceIn(0, sourceWidth - 1)
+                val srcX = crop.left +
+                    (x / scale).toInt().coerceIn(0, crop.width() - 1)
                 val chromaX = srcX / 2
                 val u = uPlane.get(uBase + chromaY * uRowStride +
                     chromaX * uPixelStride).toInt() and 0xFF
