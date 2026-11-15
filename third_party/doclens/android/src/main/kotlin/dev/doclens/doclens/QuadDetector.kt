@@ -162,7 +162,14 @@ object QuadDetector {
             return null
         }
         val mask = BooleanArray(pixels.size)
-        var saturated = 0
+        // The old >=7% saturated-background requirement failed on real
+        // dark-purple woven cloth with sparse yellow threads, despite the
+        // plainly visible WHITE card and a correct live green outline.
+        // Here only the CAMERA shutter's small-card verifier calls this.
+        // The independent four-side bright-paper/dark-background check
+        // below already rejects blank frames, white desks and false text
+        // strips. Do not reject a legitimate card merely because most of
+        // the background is dark and nearly neutral.
         for (i in pixels.indices) {
             val color = pixels[i]
             val r = (color shr 16) and 0xFF
@@ -171,10 +178,8 @@ object QuadDetector {
             val hi = max(r, max(g, b))
             val lo = min(r, min(g, b))
             val spread = hi - lo
-            if (hi >= 60 && spread * 100 >= hi * 37) saturated++
             mask[i] = hi >= 106 && spread * 100 <= hi * 27
         }
-        if (saturated < pixels.size * .07) return null
         val eroded = BooleanArray(mask.size)
         for (y in 1 until height - 1) {
             for (x in 1 until width - 1) {
