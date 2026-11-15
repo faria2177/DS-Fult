@@ -170,7 +170,9 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
   /// insets or horizontally scrolled toolbar position. PopupMenuButton
   /// anchored to the first tool could end up behind its modal barrier.
   Future<void> _choosePenSize() async {
-    if (_busy) return;
+    if (_busy) {
+      return;
+    }
     final size = await showModalBottomSheet<double>(
       context: context,
       showDragHandle: true,
