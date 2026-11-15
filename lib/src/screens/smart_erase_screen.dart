@@ -204,6 +204,11 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
           child: Row(children: [
             PopupMenuButton<double>(
               tooltip: 'Pen and brush size',
+              // Keep the first menu fully inside the screen. When anchored
+              // to the leading edge of a horizontally scrolling toolbar,
+              // Flutter may otherwise position its entries at negative X.
+              position: PopupMenuPosition.under,
+              offset: const Offset(110, 0),
               enabled: !_busy,
               onSelected: (radius) => setState(() {
                 _mode = SmartEraseMode.pen;
