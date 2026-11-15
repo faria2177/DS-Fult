@@ -3,7 +3,7 @@ package dev.doclens.doclens
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
-import android.content.res.Configuration
+import android.view.Surface
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -47,6 +47,7 @@ class ScannerSession(
     private var imageCapture: ImageCapture? = null
     private var camera: androidx.camera.core.Camera? = null
     @Volatile private var sharedViewPortActive: Boolean = false
+    @Volatile private var boundTargetRotation: Int = Surface.ROTATION_0
 
     private var lensFacing: Int = CameraSelector.LENS_FACING_BACK
     private var flashMode: Int = ImageCapture.FLASH_MODE_AUTO
@@ -112,6 +113,14 @@ class ScannerSession(
     private fun bindUseCases(provider: ProcessCameraProvider) {
         provider.unbindAll()
         sharedViewPortActive = false
+        // A new binding invalidates the dimensions of all earlier frames.
+        // Never map a green quad using orientation from a previous camera.
+        latestFrameOrientation = null
+        latestPagePreviewHint = null
+        lastEmittedPreviewW = 0
+        lastEmittedPreviewH = 0
+        val targetRotation = activity.windowManager.defaultDisplay.rotation
+        boundTargetRotation = targetRotation
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         val surfaceTexture = textureEntry.surfaceTexture()
 
@@ -121,6 +130,7 @@ class ScannerSession(
         // Match preview, analysis and still-capture field of view on every
         // device. Flutter scales preview + overlay together using BoxFit.cover.
         preview = Preview.Builder()
+            .setTargetRotation(targetRotation)
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .build().also { p ->
             p.setSurfaceProvider { request: SurfaceRequest ->
@@ -167,6 +177,7 @@ class ScannerSession(
         }
 
         analysis = ImageAnalysis.Builder()
+            .setTargetRotation(targetRotation)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
@@ -176,6 +187,7 @@ class ScannerSession(
             }
 
         val captureBuilder = ImageCapture.Builder()
+            .setTargetRotation(targetRotation)
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setFlashMode(flashMode)
         val requestedSize = config.captureSize?.let { captureSize ->
@@ -203,12 +215,10 @@ class ScannerSession(
         // Use the portrait 3:4 (or landscape 4:3) visual camera field, not
         // the tall Flutter viewfinder which uses BoxFit.cover.
         fun bindMatchedViewPort(): androidx.camera.core.Camera {
-            val portrait = context.resources.configuration.orientation !=
-                Configuration.ORIENTATION_LANDSCAPE
+            val portrait = targetRotation == Surface.ROTATION_0 ||
+                targetRotation == Surface.ROTATION_180
             val ratio = if (portrait) Rational(3, 4) else Rational(4, 3)
-            val viewPort = ViewPort.Builder(
-                ratio, activity.windowManager.defaultDisplay.rotation,
-            ).setScaleType(ViewPort.FILL_CENTER).build()
+            val viewPort = ViewPort.Builder(ratio, targetRotation).setScaleType(ViewPort.FILL_CENTER).build()
             return provider.bindToLifecycle(owner, selector,
                 UseCaseGroup.Builder()
                     .addUseCase(checkNotNull(preview))
@@ -228,6 +238,7 @@ class ScannerSession(
             // the exact green-corner offset reported by users.
             provider.unbindAll()
             imageCapture = ImageCapture.Builder()
+                .setTargetRotation(targetRotation)
                 .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                 .setFlashMode(flashMode)
@@ -249,10 +260,15 @@ class ScannerSession(
 
             val image = proxy.image ?: return
             val rotation = proxy.imageInfo.rotationDegrees
-            // The reference detector needs enough pixels to resolve the page
-            // outline, particularly for ID cards and textured backgrounds.
+            // CameraX UseCaseGroup supplies a cropRect per stream. The full
+            // YUV buffer can contain pixels not visible in the JPEG or Preview.
+            // Detect ONLY the common ViewPort; normalized quad coordinates
+            // then refer to that exact field without a second offset guess.
+            val crop = YuvUtils.checkedCrop(
+                image.width, image.height, proxy.cropRect)
             val downscaleTo = 384
-            val (luma, width, height) = YuvUtils.extractLuma(image, downscaleTo)
+            val (luma, width, height) =
+                YuvUtils.extractLuma(image, downscaleTo, crop)
             lastFrameWidth = width
             lastFrameHeight = height
             val uprightFrameWidth = if (rotation % 180 == 0) width else height
@@ -264,7 +280,9 @@ class ScannerSession(
             // can be separated by saturation edges that luma alone misses.
             // If a device supplies an invalid chroma plane, preserve the
             // existing grayscale and connected-component fallbacks.
-            val rgba = YuvUtils.extractRgba(image, YuvUtils.Luma(luma, width, height), downscaleTo)
+            val rgba = YuvUtils.extractRgba(
+                image, YuvUtils.Luma(luma, width, height),
+                downscaleTo, crop)
             val detected = (if (rgba != null) {
                 openCvDetector.detectRgba(rgba, width, height,
                     config.preferIdCardBounds)
@@ -409,6 +427,14 @@ class ScannerSession(
         if (capture == null) {
             result.error("init_failed", "ImageCapture not ready", null); return
         }
+        // A changed device rotation requires a new shared CameraX ViewPort.
+        // Cropping with the earlier preview geometry would be destructive.
+        if (activity.windowManager.defaultDisplay.rotation != boundTargetRotation) {
+            cameraProvider?.let { bindUseCases(it) }
+            result.error("camera_orientation_changed",
+                "Camera orientation changed; please capture again", null)
+            return
+        }
         val shutterTime = System.currentTimeMillis()
         // Freeze binding geometry together with the green overlay at the
         // *tap*. Never infer it later from updated CameraX preview frames.
@@ -420,12 +446,10 @@ class ScannerSession(
         // detector's contour merely because its mapping is unavailable.
         val visibleGreenAtShutter = !config.preferIdCardBounds &&
             displayedQuad != null
-        val rawNativeHint = latestPagePreviewHint?.takeIf {
-            shutterTime - it.timestampMs in 0L..900L
-        }
-        val frameOrientationAtShutter = latestFrameOrientation?.takeIf {
-            shutterTime - it.timestampMs in 0L..1200L
-        }
+        // Orientation is binding metadata rather than a 1200ms detection
+        // confidence signal. The detector may briefly stall while the green
+        // box remains visible; keep its last known geometry until rebind.
+        val frameOrientationAtShutter = latestFrameOrientation
         // The four-corner Flutter overlay may be smoothed/hysteresis-filtered
         // and differ from this frame's raw OpenCV proposal. Use exactly the
         // visible quad when it is plausible in the upright analysis space.
@@ -440,14 +464,15 @@ class ScannerSession(
                 PagePreviewHint(visible, shutterTime, frame.width, frame.height)
             }
         }
-        val previewHintAtShutter = if (visibleGreenAtShutter)
-            displayedHint else rawNativeHint
+        // Never replace the Flutter-painted quad with a raw detector hint
+        // that the user did not actually see at the shutter.
+        val previewHintAtShutter = displayedHint
         // Keep the JPEG's camera target orientation synchronized with what
         // Android is displaying at the shutter. CameraX writes the required
         // rotation into EXIF. Never infer an extra quarter-turn simply from
         // portrait-vs-landscape pixel dimensions: a notebook can legitimately
         // be sideways, and that heuristic rotated pages after capture.
-        capture.targetRotation = activity.windowManager.defaultDisplay.rotation
+        capture.targetRotation = boundTargetRotation
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, captureExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onError(exception: ImageCaptureException) {
