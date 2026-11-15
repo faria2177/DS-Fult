@@ -259,6 +259,25 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * The green outline the USER SAW at shutter is a valid MANUAL review
+     * proposal even when its small/large page aspect does not fit the strict
+     * auto-warp classifier. The previous two size classes had a gap around
+     * coverage ~36% and rejected nearly-square notebooks and letter paper
+     * with perspective. NEVER call this method to authorize auto cropping:
+     * still-pixel evidence remains mandatory for that.
+     */
+    fun isSafeDisplayedGreenForReview(q: Quad, width: Int, height: Int): Boolean {
+        if (width < 16 || height < 16) return false
+        if (area(q) !in .045.. .94) return false
+        val points = listOf(q.topLeft, q.topRight, q.bottomRight, q.bottomLeft)
+        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
+                it.x !in .008f.. .992f || it.y !in .008f.. .992f }) return false
+        val (w, h) = sideLengths(q, width, height)
+        val ratio = max(w, h) / min(w, h).coerceAtLeast(1.0)
+        return ratio in 1.02..3.50
+    }
+
+    /**
      * Map a *small* live green quadrilateral into the captured JPEG's
      * coordinate frame, but only when an independent still-image card edge
      * corroborates every projected corner. CameraX may rotate the still by
