@@ -123,6 +123,12 @@ class _DoclensViewState extends State<DoclensView>
 
   void _wireUp(DoclensController c) {
     _previewSize = c.previewSize;
+    // Camera detection can start before this widget subscribes. The
+    // controller intentionally suppresses redundant steady-quad events,
+    // so seed the FIRST render with its most recent geometry and status.
+    // Otherwise a fully stable document could stay invisible until moved.
+    _quad = c.lastQuad;
+    _status = c.status;
     _quadSub = c.quadStream.listen((q) => setState(() => _quad = q));
     _statusSub = c.statusStream.listen((s) => setState(() => _status = s));
     _autoCaptureSub = c.autoCaptureStream.listen((r) {
