@@ -39,6 +39,11 @@ internal class OpenCvBoundaryAdapter {
             gray.put(0, 0, luma)
             Imgproc.cvtColor(gray, rgba, Imgproc.COLOR_GRAY2RGBA)
             toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
+                // Prefer a real outer notebook/page rather than the sharp
+                // diagonal interior colours or dense printed lines. Still
+                // detection already uses this more thorough search; run it
+                // on the downscaled live camera frame as well.
+                preferOuterPageInStill = !preferIdCardBounds,
                 preferIdCardBounds = preferIdCardBounds), width, height)
         } catch (_: Exception) {
             null // The original luma-only detector remains the safe fallback.
@@ -63,6 +68,7 @@ internal class OpenCvBoundaryAdapter {
         return try {
             rgba.put(0, 0, pixels)
             val contour = toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
+                preferOuterPageInStill = !preferIdCardBounds,
                 preferIdCardBounds = preferIdCardBounds), width, height)
             if (preferIdCardBounds) {
                 contour
