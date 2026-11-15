@@ -236,7 +236,7 @@ class ScannerSession(
             // If a device supplies an invalid chroma plane, preserve the
             // existing grayscale and connected-component fallbacks.
             val rgba = YuvUtils.extractRgba(image, YuvUtils.Luma(luma, width, height), downscaleTo)
-            val quad = (if (rgba != null) {
+            val detected = (if (rgba != null) {
                 openCvDetector.detectRgba(rgba, width, height,
                     config.preferIdCardBounds)
             } else {
@@ -247,6 +247,11 @@ class ScannerSession(
                 luma, width, height,
                 config.detectionPolarity, config.detectionThresholdOffset,
             ))
+            // The last-resort luma detector can also follow a sharp printed
+            // line or a coloured half of a notebook. Validate its four outer
+            // sides with the SAME safety gate as the OpenCV live detector.
+            val quad = if (config.preferIdCardBounds) detected else
+                LiveBoundarySelector.choose(detected, null, width, height)
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
@@ -398,6 +403,12 @@ class ScannerSession(
             }
         }
         val previewHintAtShutter = displayedHint ?: rawNativeHint
+        // Keep the JPEG's camera target orientation synchronized with what
+        // Android is displaying at the shutter. CameraX writes the required
+        // rotation into EXIF. Never infer an extra quarter-turn simply from
+        // portrait-vs-landscape pixel dimensions: a notebook can legitimately
+        // be sideways, and that heuristic rotated pages after capture.
+        capture.targetRotation = activity.windowManager.defaultDisplay.rotation
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, captureExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onError(exception: ImageCaptureException) {
@@ -413,19 +424,13 @@ class ScannerSession(
                     // subsampling it to 3MP before applying the perspective warp.
                     raw = decodeDownscaled(file.absolutePath, maxDimension = 4096)
                         ?: throw ScannerException.CaptureFailed("Decode failed")
-                    val exifUpright = ExifRotator.rotated(raw, file.absolutePath)
-                    val turns = frameOrientationAtShutter?.let { frame ->
-                        StillCaptureCropSafety.missingExifQuarterTurns(
-                            frame.width, frame.height,
-                            exifUpright.width, exifUpright.height,
-                            frame.rotationDegrees,
-                        )
-                    } ?: 0
-                    rotated = if (turns == 0) exifUpright else
-                        ImageWarper.rotateBitmap(exifUpright, turns)
-                    if (rotated !== exifUpright && exifUpright !== raw) {
-                        exifUpright.recycle()
-                    }
+                    // EXIF is the authoritative CameraX still orientation.
+                    // The old `missingExifQuarterTurns` path rotated again
+                    // whenever preview/still shapes were transposed, which
+                    // turned upright notebook pages sideways and mismapped
+                    // the captured green box. A different FOV is NOT proof
+                    // of a missing EXIF rotation.
+                    rotated = ExifRotator.rotated(raw, file.absolutePath)
                     val rawSize = Size(rotated.width, rotated.height)
                     // The preview quad is measured on a low-resolution YUV
                     // stream and can drift if a phone uses a different sensor
