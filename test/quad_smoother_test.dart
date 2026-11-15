@@ -141,6 +141,60 @@ void main() {
     }
   });
 
+
+  test('stationary green corners remain pixel-stable through alternating noise', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    final paper = rectangle(.21, .18, width: .52, height: .65);
+    expect(tracker.add(paper), paper);
+    // Tiny, alternating and asymmetric corner proposals are normal for
+    // OpenCV on a stationary sheet. None may move the visible green outline.
+    for (var i = 0; i < 64; i++) {
+      final a = i.isEven ? .011 : -.010;
+      final b = i % 4 < 2 ? .008 : -.009;
+      final noisy = Quad(
+        topLeft: paper.topLeft + Offset(a, b),
+        topRight: paper.topRight + Offset(-b, a * .7),
+        bottomRight: paper.bottomRight + Offset(a * .9, -b),
+        bottomLeft: paper.bottomLeft + Offset(-a * .8, -b * .65),
+      );
+      final shown = tracker.add(noisy);
+      expect(shown, paper,
+          reason: 'Frame $i must not vibrate a stationary paper border');
+    }
+  });
+
+  test('single same-document edge flicker cannot shift displayed corners', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    final paper = rectangle(.20, .19);
+    for (var i = 0; i < 8; i++) {
+      tracker.add(paper);
+    }
+    expect(tracker.add(rectangle(.236, .19)), paper);
+    expect(tracker.add(paper), paper);
+    expect(tracker.add(rectangle(.20, .221)), paper);
+    expect(tracker.add(paper), paper);
+  });
+
+  test('steady lock releases for persistent camera or document movement', () {
+    final tracker = QuadSmoother(windowSize: 7);
+    const start = .20;
+    final original = rectangle(start, .17);
+    for (var i = 0; i < 9; i++) {
+      tracker.add(original);
+    }
+    Quad? shown;
+    for (var i = 0; i < 8; i++) {
+      shown = tracker.add(rectangle(start + .025, .17));
+    }
+    expect(shown, isNotNull);
+    expect(shown!.topLeft.dx, greaterThan(start + .009));
+    // Repeated real movement must never be confused with stationary noise.
+    for (var i = 1; i <= 6; i++) {
+      shown = tracker.add(rectangle(start + .025 + .018 * i, .17));
+    }
+    expect(shown!.topLeft.dx, greaterThan(start + .055));
+  });
+
   test('full-preview camera border is not a document quadrilateral', () {
     final tracker = QuadSmoother(windowSize: 7);
     expect(tracker.add(rectangle(.001, .001, width: .998, height: .81)),
