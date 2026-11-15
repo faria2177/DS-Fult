@@ -21,6 +21,20 @@ class BatchCropPageState {
   // Initial machine detection is only a suggestion. Re-editing a previously
   // saved ID must never overwrite a side the user did not touch.
   bool touched = false;
+  bool fullImageSelected = false;
+
+  /// The CamScanner-style 'All' tool selects the entire current PHOTO,
+  /// rather than re-running Auto Crop or copying a quad to every page.
+  void selectWholeImage() {
+    corners
+      ..clear()
+      ..addAll(const [
+        Offset(0, 0), Offset(1, 0), Offset(1, 1), Offset(0, 1),
+      ]);
+    fullImageSelected = true;
+    confirmed = true;
+    touched = true;
+  }
 
   bool updateHandle(int handle, Offset delta) {
     final proposal = [...corners];
@@ -38,6 +52,7 @@ class BatchCropPageState {
     corners..clear()..addAll(proposal);
     confirmed = true;
     touched = true;
+    fullImageSelected = false;
     return true;
   }
 
@@ -53,6 +68,7 @@ class BatchCropPageState {
     corners..clear()..addAll(other.corners);
     confirmed = true;
     touched = true;
+    fullImageSelected = other.fullImageSelected;
     return true;
   }
 
@@ -165,6 +181,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         setState(() {
           _edits[index].corners..clear()..addAll(points);
           _edits[index].confirmed = true;
+          _edits[index].fullImageSelected = false;
           if (requested) _edits[index].touched = true;
           if (index == _index) _hint = 'Outside corners found. Review before Done.';
         });
@@ -201,7 +218,18 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     }
   }
 
-  Future<void> _applyToAll() async {
+  void _selectAllOfCurrentImage() {
+    if (_working) return;
+    setState(() {
+      _edits[_index].selectWholeImage();
+      _hint = 'Full image selected. Tap Auto Crop to return to the '
+          'document boundary, or drag the eight handles.';
+    });
+  }
+
+  // Separate batch operation retained for multi-page users. It is no longer
+  // bound to the camera crop editor\'s CamScanner-style 'All' button.
+  Future<void> _applyToPages() async {
     if (_working) return;
     if (widget.imagePaths.length == 1) {
       await _autoCrop();
@@ -327,7 +355,8 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         }
         final source = _bytes[i] ?? await File(widget.imagePaths[i]).readAsBytes();
         output[i] = await ImageProcessor.process(source,
-          crop: edit.confirmed ? CropQuad(edit.corners) : null,
+          crop: edit.confirmed && !edit.fullImageSelected
+              ? CropQuad(edit.corners) : null,
           rotateDegrees: edit.turns * 90,
         );
       }
@@ -391,6 +420,12 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         title: Text(widget.sideLabels.isEmpty ? 'Adjust Corners' : 'Crop',
             style: const TextStyle(fontSize: 17)),
         actions: [
+          if (widget.imagePaths.length > 1)
+            IconButton(
+              tooltip: 'Apply crop to all pages',
+              onPressed: _working ? null : _applyToPages,
+              icon: const Icon(Icons.copy_all_outlined),
+            ),
           if (widget.comparisonPaths.length == widget.imagePaths.length)
             TextButton.icon(
               onPressed: _working ? null : _compare,
@@ -470,7 +505,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
             _tool(Icons.rotate_left, 'Left', () => _rotate(3)),
             _tool(Icons.rotate_right, 'Right', () => _rotate(1)),
             _tool(Icons.crop_free, 'Auto Crop', () => _autoCrop()),
-            _tool(Icons.select_all, 'All', _applyToAll),
+            _tool(Icons.select_all, 'All', _selectAllOfCurrentImage),
           ])),
         Container(height: 48, color: const Color(0xFF27292C),
           child: Row(children: [
