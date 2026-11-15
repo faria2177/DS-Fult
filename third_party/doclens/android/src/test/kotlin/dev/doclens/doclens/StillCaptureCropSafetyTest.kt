@@ -104,7 +104,12 @@ class StillCaptureCropSafetyTest {
             green, 300, 400, 1600, 1200, 90, true,
         )
         val expected = rect(.16f, .21f, .80f, .78f)
-        assertTrue(mapped == expected)
+        assertTrue(mapped != null)
+        // Floating point rotation uses (1 - y), so compare with tolerance.
+        assertTrue(kotlin.math.abs(mapped.topLeft.x - expected.topLeft.x) < .001f)
+        assertTrue(kotlin.math.abs(mapped.topLeft.y - expected.topLeft.y) < .001f)
+        assertTrue(kotlin.math.abs(mapped.bottomRight.x - expected.bottomRight.x) < .001f)
+        assertTrue(kotlin.math.abs(mapped.bottomRight.y - expected.bottomRight.y) < .001f)
     }
 
     @Test
