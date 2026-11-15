@@ -77,6 +77,48 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun sharedViewPortPreservesEveryVisibleCornerEvenWhenStillDetectorWouldMissPaper() {
+        // YUV is 300x400 in display orientation; saved EXIF-upright JPEG
+        // contains the same sensor viewport at 1200x1600.
+        val green = Quad(
+            PointF(.13f, .18f), PointF(.82f, .12f),
+            PointF(.91f, .89f), PointF(.09f, .83f),
+        )
+        val mapped = StillCaptureCropSafety.sharedViewportGreen(
+            green, 300, 400, 1200, 1600, 90, true,
+        )
+        assertTrue(mapped == green)
+        // A second detector finding only a printed heading cannot replace
+        // the shutter selection.
+        val innerText = rect(.28f, .39f, .65f, .57f)
+        assertTrue(StillCaptureCropSafety.selectCameraStillBoundary(
+            mappedGreen = mapped, independentlyVerifiedCard = null,
+            liveGreenSeen = true, ordinaryStill = innerText,
+        ) == green)
+    }
+
+    @Test
+    fun sharedViewPortRotatesExactGreenIntoTransposedJpeg() {
+        val green = rect(.21f, .20f, .78f, .84f)
+        val mapped = StillCaptureCropSafety.sharedViewportGreen(
+            green, 300, 400, 1600, 1200, 90, true,
+        )
+        val expected = rect(.16f, .21f, .80f, .78f)
+        assertTrue(mapped == expected)
+    }
+
+    @Test
+    fun sharedViewPortNeverApprovesAnUnmatchedJpegOrDisabledBinding() {
+        val green = rect(.21f, .20f, .78f, .84f)
+        assertTrue(StillCaptureCropSafety.sharedViewportGreen(
+            green, 300, 400, 1920, 1080, 90, true,
+        ) == null)
+        assertTrue(StillCaptureCropSafety.sharedViewportGreen(
+            green, 300, 400, 1200, 1600, 90, false,
+        ) == null)
+    }
+
+    @Test
     fun shutterGreenAutoCropTrustsThreePhotoSidesEvenWithDenseHandwriting() {
         val width = 240
         val height = 320
