@@ -359,6 +359,35 @@ class QuadDetectorTest {
     }
 
     @Test
+    fun sparseYellowThreadsOnAlmostNeutralDarkClothDoNotBlockCardCrop() {
+        // The user's latest camera screenshot shows sparse yellow stitches
+        // on mostly dark purple material. The old 7% saturated-pixel gate
+        // rejected this still even while the green live outline was correct.
+        val width = 320
+        val height = 420
+        val pixels = IntArray(width * height) { 0xFF292B35.toInt() }
+        for (y in 17 until height step 46) {
+            fillRgb(pixels, width, 0, y, width, y + 1, 0xFFBCA65B.toInt())
+        }
+        // Same business card as the live portrait green quad, now placed
+        // horizontally in CameraX's captured still.
+        fillRgb(pixels, width, 67, 154, 261, 271, 0xFFF2F1EE.toInt())
+        for (y in 190 until 244 step 14) {
+            fillRgb(pixels, width, 95, y, 231, y + 2, 0xFF424950.toInt())
+        }
+        val green = Quad(
+            PointF(.32f, .32f), PointF(.61f, .32f),
+            PointF(.61f, .67f), PointF(.32f, .67f),
+        )
+        val found = assertNotNull(QuadDetector.detectSmallNeutralCardAtShutter(
+            pixels, width, height, green, width, height))
+        assertTrue(abs(found.topLeft.x - 67f / width) < .05f)
+        assertTrue(abs(found.topLeft.y - 154f / height) < .05f)
+        assertTrue(abs(found.bottomRight.x - 260f / width) < .05f)
+        assertTrue(abs(found.bottomRight.y - 270f / height) < .05f)
+    }
+
+    @Test
     fun shutterWhiteCardFallbackRejectsFabricOnlyAndTitleStrips() {
         val width = 320
         val height = 420
