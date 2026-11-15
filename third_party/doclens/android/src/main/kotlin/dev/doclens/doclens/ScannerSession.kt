@@ -534,6 +534,22 @@ class ScannerSession(
                                 rawSize.width, rawSize.height)
                         }
                     }
+                    // A dense notebook, coloured cover or handwritten form
+                    // can make the still detector return an *inner* contour,
+                    // even while the user's green camera box is exactly right.
+                    // Check the outside-vs-inside pixels around the projected
+                    // GREEN edges on the actual persisted still. When at least
+                    // three outer sides corroborate the green geometry, crop
+                    // those same four green corners without a second auto
+                    // detect/corner adjustment changing the user's selection.
+                    // Incompatible FOV/EXIF or weak borders still go to
+                    // manual Adjust Corners; never guess a rectangle.
+                    val photo = checkNotNull(rotated)
+                    val pixelVerifiedGreen = reviewGreen != null &&
+                        !config.preferIdCardBounds &&
+                        StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+                            reviewGreen, rawSize.width, rawSize.height,
+                        ) { x, y -> photo.getPixel(x, y) }
                     // The full-resolution JPEG can use a different view
                     // orientation AND camera crop than the analysis stream.
                     // If mapping the exact green quad fails, a white-paper
@@ -543,7 +559,8 @@ class ScannerSession(
                     // a landscape card photo: that was the user's narrow
                     // 4-handle crop in the 15 Nov 2026 screenshots.
                     val matchedLiveOutline =
-                        matchedPageOutline || verifiedSmallGreen != null
+                        matchedPageOutline || verifiedSmallGreen != null ||
+                            pixelVerifiedGreen
                     val verifiedSmallCardBoundary = recoveredSmallCard != null
                     val uncertainStill = when {
                         matchedLiveOutline || verifiedSmallCardBoundary -> false
@@ -553,8 +570,8 @@ class ScannerSession(
                                 stillQuad, rawSize.width, rawSize.height, null)
                     }
                     val q = StillCaptureCropSafety.selectCameraStillBoundary(
-                        mappedGreen = verifiedSmallGreen ?:
-                            if (matchedPageOutline) reviewGreen else null,
+                        mappedGreen = if (pixelVerifiedGreen || matchedPageOutline)
+                            reviewGreen else verifiedSmallGreen,
                         independentlyVerifiedCard = recoveredSmallCard,
                         liveGreenSeen = liveHint != null,
                         ordinaryStill = if (uncertainStill) null else stillQuad,
