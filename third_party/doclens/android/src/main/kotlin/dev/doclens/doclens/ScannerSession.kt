@@ -381,6 +381,12 @@ class ScannerSession(
         }
         val shutterTime = System.currentTimeMillis()
         val file = File(context.cacheDir, "fnds_raw_${shutterTime}.jpg")
+        // Record that Flutter was visibly showing a green quad even when
+        // CameraX has temporarily stopped publishing orientation frames.
+        // Never replace that on-screen selection with a different still
+        // detector's contour merely because its mapping is unavailable.
+        val visibleGreenAtShutter = !config.preferIdCardBounds &&
+            displayedQuad != null
         val rawNativeHint = latestPagePreviewHint?.takeIf {
             shutterTime - it.timestampMs in 0L..900L
         }
@@ -400,7 +406,8 @@ class ScannerSession(
                 PagePreviewHint(visible, shutterTime, frame.width, frame.height)
             }
         }
-        val previewHintAtShutter = displayedHint ?: rawNativeHint
+        val previewHintAtShutter = if (visibleGreenAtShutter)
+            displayedHint else rawNativeHint
         // Keep the JPEG's camera target orientation synchronized with what
         // Android is displaying at the shutter. CameraX writes the required
         // rotation into EXIF. Never infer an extra quarter-turn simply from
@@ -480,6 +487,7 @@ class ScannerSession(
                     val liveHint = previewHintAtShutter?.takeIf {
                         !config.preferIdCardBounds
                     }
+                    val liveGreenSeen = visibleGreenAtShutter || liveHint != null
                     // Capture a separate REVIEW quad even when the STILL
                     // detector cannot independently verify the paper.
                     // The old sentinel full-frame quad discarded the green
@@ -561,10 +569,12 @@ class ScannerSession(
                     val matchedLiveOutline =
                         matchedPageOutline || verifiedSmallGreen != null ||
                             pixelVerifiedGreen
-                    val verifiedSmallCardBoundary = recoveredSmallCard != null
                     val uncertainStill = when {
-                        matchedLiveOutline || verifiedSmallCardBoundary -> false
-                        liveHint != null -> true
+                        matchedLiveOutline -> false
+                        // Captured green corners are authoritative: if the
+                        // JPEG cannot verify them, review them manually.
+                        // Never substitute a different card/inner table.
+                        liveGreenSeen -> true
                         else -> !config.preferIdCardBounds && !verifiedColourCard &&
                             StillCaptureCropSafety.requiresManualReview(
                                 stillQuad, rawSize.width, rawSize.height, null)
@@ -573,7 +583,7 @@ class ScannerSession(
                         mappedGreen = if (pixelVerifiedGreen || matchedPageOutline)
                             reviewGreen else verifiedSmallGreen,
                         independentlyVerifiedCard = recoveredSmallCard,
-                        liveGreenSeen = liveHint != null,
+                        liveGreenSeen = liveGreenSeen,
                         ordinaryStill = if (uncertainStill) null else stillQuad,
                     )
                     val pixelQuad = q?.let {
@@ -621,11 +631,13 @@ class ScannerSession(
                         "warpError" to warpError,
                         // Camera-only metadata: gallery/import does not
                         // receive or depend on either of these fields.
-                        "liveOutlineAtShutter" to (liveHint != null),
+                        "liveOutlineAtShutter" to liveGreenSeen,
                         // Image-space green outline for explicit manual
                         // acceptance when still evidence is inconclusive.
                         // Deliberately separate from the warp-only "quad".
-                        "reviewQuad" to reviewGreen?.let { g ->
+                        "reviewQuad" to (if (verifiedSmallGreen != null &&
+                            !pixelVerifiedGreen && !matchedPageOutline)
+                            verifiedSmallGreen else reviewGreen)?.let { g ->
                             Quad(
                                 PointF(g.topLeft.x * rawSize.width,
                                     g.topLeft.y * rawSize.height),
@@ -642,8 +654,7 @@ class ScannerSession(
                         // Previously a tentative recovered card flagged this
                         // true even when no native crop was returned.
                         "liveOutlineMatched" to
-                            (croppedPath != null &&
-                                (matchedLiveOutline || verifiedSmallCardBoundary)),
+                            (croppedPath != null && matchedLiveOutline),
                         "quad" to (pixelQuad ?: Quad(
                             PointF(0f, 0f),
                             PointF(rawSize.width.toFloat(), 0f),
