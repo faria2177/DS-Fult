@@ -390,6 +390,31 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * CameraX's common ViewPort gives Preview, ImageAnalysis and the saved
+     * JPEG the same sensor crop. When that binding was active at shutter
+     * time, the *visible* quadrilateral mapped to the JPEG is the selection,
+     * regardless of low-contrast paper or interior text detected later.
+     * Incompatible aspect, missing rotation or unsafe corners return null
+     * rather than applying a guessed warp.
+     */
+    fun sharedViewportGreen(
+        visible: Quad?,
+        previewWidth: Int, previewHeight: Int,
+        stillWidth: Int, stillHeight: Int,
+        frameRotationDegrees: Int,
+        sharedViewPortAtShutter: Boolean,
+    ): Quad? {
+        if (!sharedViewPortAtShutter) return null
+        val mapped = projectGreenToCapturedStill(
+            visible, previewWidth, previewHeight,
+            stillWidth, stillHeight, frameRotationDegrees,
+        ) ?: return null
+        return mapped.takeIf {
+            isSafeDisplayedGreenForReview(it, stillWidth, stillHeight)
+        }
+    }
+
+    /**
      * Independently corroborate the DISPLAYED green quad against the actual
      * full-resolution shutter pixels. A busy notebook can make the still
      * contour detector choose a printed label or diagonal colour boundary
