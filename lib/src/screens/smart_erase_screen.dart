@@ -274,7 +274,9 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
                 // Rectangles and text boxes still require a drag gesture.
                 onTapUp: _busy || _compare ? null : (details) async {
                   if (_mode == SmartEraseMode.rectangle ||
-                      _mode == SmartEraseMode.text) return;
+                      _mode == SmartEraseMode.text) {
+                    return;
+                  }
                   setState(() {
                     _stroke = [_normalise(details.localPosition, size)];
                   });
