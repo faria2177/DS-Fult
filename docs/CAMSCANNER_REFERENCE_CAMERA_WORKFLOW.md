@@ -29,9 +29,9 @@ flowchart TD
   A[Scan opens live camera] --> B[Green document quad tracks four outer corners]
   B --> C[Manual shutter]
   C --> D[Freeze *visible* four corners; capture full-resolution original]
-  D --> E{Can captured still corroborate the SAME document edges?}
-  E -->|Yes| F[Map green corners to still orientation; perspective crop]
-  E -->|No| G[Keep full original; reopen captured green corners as editable handles]
+  D --> E{Does EXIF-upright JPEG match cropped camera ViewPort geometry?}
+  E -->|Yes| F[Warp EXACT painted green corners; no second contour]
+  E -->|No| G[Keep full original; manually adjust four corners]
   F --> H[Document preview with image enhancement / Crop / Filters]
   G --> H
   H --> I[Crop editor shows original photo with eight handles]
@@ -52,17 +52,16 @@ flowchart TD
    not the person's name/table or background. Keep normal manual shutter.
 2. **Capture:** snapshot the *smoothed, visible Flutter quad* together with
    the camera frame orientation and dimensions. Save the source bitmap before
-   warping. Native still detection is **corroboration**, not a replacement
-   rectangle. If JPEG and preview fields of view/rotation cannot be reconciled,
-   never irreversibly crop the wrong region.
-3. **Verified crop:** use the transformed **captured green** corners for
-   perspective warp; selected filter follows warp. When a small card is
-   independently re-detected, align/check it against live coordinates,
-   including potential 90/180/270-degree rotation, but don't silently use
-   a larger white-card or cloth rectangle in place of the green edges.
-4. **Unverified crop:** show full original, seed valid captured corners into
-   the manual editor, and require confirmation. Never accept a full-frame
-   detector sentinel or invalid quad as the document.
+   warping. Analyze only the CameraX ViewPort cropRect; do not expire bound
+   orientation after a short timeout. If JPEG and preview ViewPort aspect or
+   orientation cannot be reconciled, never irreversibly crop.
+3. **Geometric crop:** if the JPEG and analysis share the CameraX ViewPort
+   and upright aspect ratio, warp exactly the painted shutter-green quad.
+   Do not gate this on pixel-border colour or replace it with a still contour.
+   Save the raw original before filtering the cropped output.
+4. **Unmatched geometry:** retain the complete original and open manual
+   four-corner editing; never invent a 90/270 turn or silently crop an inner
+   table. A mismatched still rectangle is not the captured green outline.
 5. **Crop editor actions:** **Left** and **Right** rotate; four corner plus
    four edge-midpoint handles drag; **All** sets
    `[(0,0),(1,0),(1,1),(0,1)]` for the **current photograph only**;
