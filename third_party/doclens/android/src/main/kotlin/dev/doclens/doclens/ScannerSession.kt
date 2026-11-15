@@ -394,10 +394,8 @@ class ScannerSession(
         // shape before any automatic perspective warp is allowed.
         val displayedHint = displayedQuad?.let { visible ->
             frameOrientationAtShutter?.takeIf {
-                (StillCaptureCropSafety.isCrediblePage(
-                    visible, it.width, it.height) ||
-                 StillCaptureCropSafety.isCredibleSmallDisplayedCard(
-                    visible, it.width, it.height))
+                StillCaptureCropSafety.isSafeDisplayedGreenForReview(
+                    visible, it.width, it.height)
             }?.let { frame ->
                 PagePreviewHint(visible, shutterTime, frame.width, frame.height)
             }
@@ -493,10 +491,6 @@ class ScannerSession(
                             rawSize.width, rawSize.height,
                             frameOrientationAtShutter?.rotationDegrees ?: 0,
                         )
-                    }
-                    val compatibleLiveHint = liveHint?.takeIf {
-                        StillCaptureCropSafety.compatibleView(it.width, it.height,
-                            rawSize.width, rawSize.height)
                     }
                     // Exact GREEN corners are the crop target when the
                     // captured still independently confirms those edges,
