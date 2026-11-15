@@ -339,64 +339,51 @@ internal object StillCaptureCropSafety {
     }
 
     /**
-     * Recover the EXACT green quadrilateral displayed at shutter time into
-     * the persisted camera still's pixel coordinate space. This is a REVIEW
-     * hint, not automatic authorization to warp: for automatic crop the
-     * independent still border must also corroborate these four corners.
+     * Map green corners from the cropped, EXIF-upright analysis ViewPort to
+     * the cropped EXIF-upright JPEG ViewPort. Both streams share one CameraX
+     * UseCaseGroup, so no content detector or guessed 90-degree turn can
+     * change the user's four corners.
      *
-     * Some CameraX devices return a transposed JPEG even after EXIF handling.
-     * If still and preview have opposite orientations, map the four points
-     * by the analysis frame rotation, rather than sending the portrait green
-     * coordinates into an unrelated landscape JPEG. Never guess a transform
-     * across substantially different camera fields of view.
+     * Geometry-only safety: reject incompatible JPEG aspect ratios instead
+     * of incorrectly applying a rotated portrait green quad to landscape
+     * pixels. The persisted original remains available for manual review.
      */
+    fun mapGreenToStill(
+        green: Quad?, previewWidth: Int, previewHeight: Int,
+        stillWidth: Int, stillHeight: Int,
+    ): Quad? {
+        if (green == null || previewWidth < 16 || previewHeight < 16 ||
+            stillWidth < 16 || stillHeight < 16) return null
+        val points = listOf(green.topLeft, green.topRight,
+            green.bottomRight, green.bottomLeft)
+        if (area(green) !in .045.. .94 || points.any {
+                !it.x.isFinite() || !it.y.isFinite() ||
+                    it.x !in .002f.. .998f || it.y !in .002f.. .998f
+            }) return null
+        val previewAspect = previewWidth.toDouble() / previewHeight
+        val stillAspect = stillWidth.toDouble() / stillHeight
+        if (abs(previewAspect - stillAspect) / previewAspect > .025) {
+            return null
+        }
+        return green
+    }
+
+    /**
+     * Compatibility entry point. No transposed JPEG branch: saved files are
+     * EXIF-upright before their coordinates can be used for a crop.
+     */
+    @Suppress("UNUSED_PARAMETER")
     fun projectGreenToCapturedStill(
         green: Quad?,
         previewWidth: Int, previewHeight: Int,
         stillWidth: Int, stillHeight: Int,
         frameRotationDegrees: Int,
-    ): Quad? {
-        if (green == null || previewWidth < 16 || previewHeight < 16 ||
-            stillWidth < 16 || stillHeight < 16) return null
-        if (area(green) !in .045.. .94) return null
-        val points = listOf(green.topLeft, green.topRight,
-            green.bottomRight, green.bottomLeft)
-        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
-                it.x !in .002f.. .998f || it.y !in .002f.. .998f }) return null
+    ): Quad? = mapGreenToStill(
+        green, previewWidth, previewHeight, stillWidth, stillHeight,
+    )
 
-        val same = compatibleView(previewWidth, previewHeight,
-            stillWidth, stillHeight)
-        val rotated = compatibleView(previewWidth, previewHeight,
-            stillHeight, stillWidth)
-        if (!same && !rotated) return null
-        val degrees = if (same) 0 else when (
-            ((frameRotationDegrees % 360) + 360) % 360
-        ) {
-            90 -> 90
-            270 -> 270
-            // An undefined orientation is safer to review from the raw
-            // still than to assume an arbitrary 90-degree direction.
-            else -> return null
-        }
-        val transformed = points.map { p ->
-            when (degrees) {
-                90 -> PointF(1f - p.y, p.x)
-                270 -> PointF(p.y, 1f - p.x)
-                else -> p
-            }
-        }
-        val mapped = QuadOrdering.reorderClockwise(transformed)
-        return mapped.takeIf { area(it) in .045.. .94 }
-    }
-
-    /**
-     * CameraX's common ViewPort gives Preview, ImageAnalysis and the saved
-     * JPEG the same sensor crop. When that binding was active at shutter
-     * time, the *visible* quadrilateral mapped to the JPEG is the selection,
-     * regardless of low-contrast paper or interior text detected later.
-     * Incompatible aspect, missing rotation or unsafe corners return null
-     * rather than applying a guessed warp.
-     */
+    /** Only trusted CameraX shared-ViewPort bindings permit auto green crop. */
+    @Suppress("UNUSED_PARAMETER")
     fun sharedViewportGreen(
         visible: Quad?,
         previewWidth: Int, previewHeight: Int,
@@ -405,30 +392,31 @@ internal object StillCaptureCropSafety {
         sharedViewPortAtShutter: Boolean,
     ): Quad? {
         if (!sharedViewPortAtShutter) return null
-        val mapped = projectGreenToCapturedStill(
-            visible, previewWidth, previewHeight,
-            stillWidth, stillHeight, frameRotationDegrees,
-        ) ?: return null
-        return mapped.takeIf {
-            isSafeDisplayedGreenForReview(it, stillWidth, stillHeight)
-        }
+        return mapGreenToStill(
+            visible, previewWidth, previewHeight, stillWidth, stillHeight)
     }
 
     /**
-     * Independently corroborate the DISPLAYED green quad against the actual
-     * full-resolution shutter pixels. A busy notebook can make the still
-     * contour detector choose a printed label or diagonal colour boundary
-     * instead of the page's four outside edges. Rather than replacing the
-     * user's green corners with that unrelated suggestion, test the colour
-     * discontinuity immediately INSIDE vs OUTSIDE each green edge.
-     *
-     * - An accepted result preserves EXACTLY the projected green coordinates.
-     * - Require 3 of 4 independently supported outside sides. Printed lines
-     *   or one bright diagonal inside a page cannot authorize a warp.
-     * - If camera FOV/rotation drift or weak contrast makes the evidence
-     *   ambiguous, return false and offer manual Adjust Corners.
-     * - Only the live CAMERA capture path calls this; imported still photos
-     *   keep their existing detector and review pipeline.
+     * A screen-visible green selection always outranks a second JPEG edge
+     * detector. If its ViewPort geometry cannot be mapped, automatic crop
+     * is forbidden; the user adjusts the original instead.
+     */
+    fun cameraCaptureSelection(
+        liveGreenSeen: Boolean, mappedGreen: Quad?,
+        ordinaryStill: Quad?, independentlyVerifiedCard: Quad?,
+    ): Quad? = if (liveGreenSeen) mappedGreen else selectCameraStillBoundary(
+        mappedGreen = null,
+        independentlyVerifiedCard = independentlyVerifiedCard,
+        liveGreenSeen = false,
+        ordinaryStill = ordinaryStill,
+    )
+
+    /**
+     * Non-gating confidence signal about the mapped green boundary.
+     * Neutral paper against a light desktop is allowed to return false.
+     * 5x5 pixel neighbourhoods suppress noise and searching up to 4% of
+     * the viewport catches a green edge slightly inset from the paper.
+     * NEVER use this value to select a different crop rectangle.
      */
     internal fun hasCapturedGreenBorderEvidence(
         green: Quad, width: Int, height: Int,
@@ -438,46 +426,61 @@ internal object StillCaptureCropSafety {
             width < 64 || height < 64) return false
         val points = listOf(
             green.topLeft, green.topRight, green.bottomRight, green.bottomLeft)
-        val offset = (min(width, height) * .0125).coerceIn(3.0, 25.0)
-        var supportedSides = 0
+        val span = min(width, height).toDouble()
+        val offsets = listOf(.0125, .021, .03, .04).map {
+            (span * it).coerceAtLeast(3.0)
+        }
+        // Mean RGB sampled within a square, so a single handwriting pixel
+        // cannot corrupt an entire side's contrast confidence.
+        fun avg(x: Int, y: Int): IntArray? {
+            if (x < 2 || y < 2 || x + 2 >= width || y + 2 >= height) {
+                return null
+            }
+            val sum = IntArray(3)
+            for (dy in -2..2) for (dx in -2..2) {
+                val c = pixelAt(x + dx, y + dy)
+                sum[0] += (c shr 16) and 255
+                sum[1] += (c shr 8) and 255
+                sum[2] += c and 255
+            }
+            return intArrayOf(sum[0] / 25, sum[1] / 25, sum[2] / 25)
+        }
+        var supported = 0
         for (index in 0..3) {
-            val start = points[index]
-            val end = points[(index + 1) % 4]
-            val dx = (end.x - start.x).toDouble() * width
-            val dy = (end.y - start.y).toDouble() * height
-            val edgeLength = hypot(dx, dy)
-            if (edgeLength < offset * 5) continue
-            // Ordered TL→TR→BR→BL is clockwise in bitmap coordinates.
-            // The left-hand normal points INSIDE the document on each side.
-            val nx = -dy / edgeLength
-            val ny = dx / edgeLength
+            val a = points[index]
+            val b = points[(index + 1) % 4]
+            val dx = (b.x - a.x) * width.toDouble()
+            val dy = (b.y - a.y) * height.toDouble()
+            val length = hypot(dx, dy)
+            if (length < offsets.first() * 5) continue
+            val nx = -dy / length
+            val ny = dx / length
             var sampled = 0
             var strong = 0
             for (sample in 1..9) {
-                val fraction = sample.toDouble() / 10.0
-                val x = start.x.toDouble() * width + dx * fraction
-                val y = start.y.toDouble() * height + dy * fraction
-                val insideX = (x + nx * offset).toInt()
-                val insideY = (y + ny * offset).toInt()
-                val outsideX = (x - nx * offset).toInt()
-                val outsideY = (y - ny * offset).toInt()
-                if (insideX !in 0 until width || insideY !in 0 until height ||
-                    outsideX !in 0 until width || outsideY !in 0 until height) {
-                    continue
+                val t = sample.toDouble() / 10
+                val x = a.x * width + dx * t
+                val y = a.y * height + dy * t
+                var best = -1.0
+                for (offset in offsets) {
+                    val inside = avg((x + nx * offset).toInt(),
+                        (y + ny * offset).toInt()) ?: continue
+                    val outside = avg((x - nx * offset).toInt(),
+                        (y - ny * offset).toInt()) ?: continue
+                    val contrast = (
+                        abs(inside[0] - outside[0]) +
+                        abs(inside[1] - outside[1]) +
+                        abs(inside[2] - outside[2])
+                    ) / 3.0
+                    best = max(best, contrast)
                 }
-                val inside = pixelAt(insideX, insideY)
-                val outside = pixelAt(outsideX, outsideY)
-                val colourDifference = (
-                    abs(((inside shr 16) and 255) - ((outside shr 16) and 255)) +
-                    abs(((inside shr 8) and 255) - ((outside shr 8) and 255)) +
-                    abs((inside and 255) - (outside and 255))
-                ) / 3.0
+                if (best < 0.0) continue
                 sampled++
-                if (colourDifference >= 19.0) strong++
+                if (best >= 13.0) strong++
             }
-            if (sampled >= 6 && strong * 2 >= sampled) supportedSides++
+            if (sampled >= 6 && strong * 2 >= sampled) supported++
         }
-        return supportedSides >= 3
+        return supported >= 3
     }
 
     /**
