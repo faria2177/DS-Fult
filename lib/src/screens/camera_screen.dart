@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../services/camera_crop_review_decision.dart';
 import '../services/document_edges.dart';
 import '../services/image_processor.dart';
 import '../services/online_auto_crop_service.dart';
@@ -292,6 +293,29 @@ class _CameraScreenState extends State<CameraScreen> {
   /// Recover those captures with the same safe still-image auto-crop pipeline
   /// used by gallery import. Never re-crop a successful native perspective
   /// result, and never force an uncertain crop of the original image.
+  Future<void> _discardCanceledCameraCaptures(
+      List<ScanResult> results, List<String> generatedOutputs) async {
+    // CameraCapture results are privately owned temporary files, unlike
+    // gallery/image imports. Never remove user-selected import originals.
+    final files = <String>{
+      for (final result in results) ...[
+        result.rawImagePath,
+        if (result.croppedImagePath != null) result.croppedImagePath!,
+      ],
+      ...generatedOutputs,
+    };
+    for (final path in files) {
+      if (path.isEmpty) continue;
+      try {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) {
+        // Cancellation must always return to the camera, including when
+        // Android has already cleaned one of its temporary cache files.
+      }
+    }
+  }
+
   Future<void> _finishCapturedResults(List<ScanResult> results) async {
     if (!mounted || _finished || _processingGallery || results.isEmpty) return;
     setState(() => _processingGallery = true);
@@ -388,6 +412,21 @@ class _CameraScreenState extends State<CameraScreen> {
         )),
       );
       if (!mounted) return;
+      // Cancel/Back returns null; Done returns an empty or populated map.
+      // Previously null fell through to _finishProcessed(outputs), saving
+      // the whole raw photo even when the user explicitly canceled.
+      if (cameraCropReviewDecision(edits) ==
+          CameraCropReviewDecision.discard) {
+        // Discard ALL captures from this pending shutter transaction.
+        // A multi-page batch is an uncommitted transaction too: cancel
+        // must not silently save its successfully pre-cropped siblings.
+        // Original files belong to the camera's private temporary cache.
+        if (!widget.cardMode) {
+          await _discardCanceledCameraCaptures(results, outputs);
+        }
+        if (mounted) setState(() => _cameraSuspended = false);
+        return;
+      }
       if (edits != null && edits.isNotEmpty) {
         final directory = await getTemporaryDirectory();
         for (final entry in edits.entries) {
@@ -404,7 +443,8 @@ class _CameraScreenState extends State<CameraScreen> {
         }
       }
     }
-    // Explicitly canceling corner review preserves the raw still.
+    // Only explicit Done reaches this commit: Cancel/Back has already
+    // returned without calling _finishProcessed or onOutputSourcePaths.
     if (outputs.isNotEmpty) {
       await _finishProcessed(outputs,
           confirmedCrops: confirmedCrops,
