@@ -156,10 +156,28 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
   }
 
   Future<bool> _detect(int index, {bool requested = false}) async {
-    // The captured green box is the user's intended boundary. Re-running the
-    // still detector on editor open must not replace it with an inner printed
-    // rectangle. The user can explicitly tap Auto Crop to request a new quad.
-    if (!requested && widget.capturedCornerHints.containsKey(index)) {
+    // When returning from All, Auto Crop must return to the four *visible*
+    // camera-capture corners, not silently replace them with the blue cloth
+    // or a larger rectangle suggested by a second detector. A camera hint
+    // appears ONLY for unverified captures; the user reviews the handles
+    // before confirming the crop. Imports have no capturedCornerHints and
+    // still follow their existing Online First / offline detection route.
+    final hint = widget.capturedCornerHints[index];
+    if (hint != null && CropQuad(hint).isValid) {
+      if (requested && mounted) {
+        setState(() {
+          final edit = _edits[index];
+          edit.corners..clear()..addAll(hint);
+          edit.confirmed = true;
+          edit.touched = true;
+          edit.fullImageSelected = false;
+          if (index == _index) {
+            _hint = 'Captured green document outline restored. '
+                'Review the four corners before Done.';
+          }
+        });
+        return true;
+      }
       return false;
     }
     try {
