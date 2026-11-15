@@ -32,6 +32,40 @@ void main() {
     expect(hint.corners[2].dy, closeTo(.89, .0001));
   });
 
+  test('shutter green corners survive lost still border and full-frame sentinel', () {
+    // Real screenshots: live camera framed the LEFT grey notebook page,
+    // CameraX saved the whole two-page landscape still, and the editor used
+    // the full-frame sentinel. The camera-only reviewQuad must win instead.
+    final capture = ScanResult.fromMap({
+      'rawImagePath': 'capture_landscape.jpg',
+      'croppedImagePath': null,
+      'quad': quadInPixels(0, 0, 1, 1).toMap(),
+      'reviewQuad': quadInPixels(.21, .08, .77, .93).toMap(),
+      'rawImageSize': [1200, 900],
+      'liveOutlineAtShutter': true,
+      'liveOutlineMatched': false,
+    });
+    final hint = DocumentEdges.captureQuadHint(capture);
+    expect(hint, isNotNull);
+    expect(hint!.corners[0], const Offset(.21, .08));
+    expect(hint.corners[2], const Offset(.77, .93));
+    expect(capture.reviewQuad, isNotNull);
+    expect(capture.copyWith(liveOutlineMatched: true).reviewQuad,
+        capture.reviewQuad);
+  });
+
+  test('unverified gallery input cannot inherit camera-only review geometry', () {
+    final gallery = ScanResult.fromMap({
+      'rawImagePath': 'imported.jpg',
+      'croppedImagePath': null,
+      'quad': quadInPixels(0, 0, 1, 1).toMap(),
+      'reviewQuad': quadInPixels(.21, .08, .77, .93).toMap(),
+      'rawImageSize': [1200, 900],
+      'liveOutlineAtShutter': false,
+    });
+    expect(DocumentEdges.captureQuadHint(gallery), isNull);
+  });
+
   test('full frame native sentinel must not become an invisible crop', () {
     final capture = captured(quadInPixels(0, 0, 1, 1));
     expect(DocumentEdges.captureQuadHint(capture), isNull);
