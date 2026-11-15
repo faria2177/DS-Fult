@@ -115,6 +115,38 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun cameraPhotoUsesVerifiedHorizontalCardNotUnrotatedVerticalGreenBox() {
+        val previewGreen = rect(.34f, .35f, .61f, .67f)
+        val stillCard = rect(.24f, .35f, .78f, .62f)
+        val mistakenStillContour = rect(.39f, .37f, .59f, .67f)
+        // This is what the latest three screenshots demonstrate: the
+        // upright preview green shape cannot be copied to captured still
+        // pixels after CameraX changes orientation and field of view.
+        val chosen = StillCaptureCropSafety.selectCameraStillBoundary(
+            mappedGreen = null,
+            independentlyVerifiedCard = stillCard,
+            liveGreenSeen = true,
+            ordinaryStill = mistakenStillContour,
+        )
+        assertTrue(chosen == stillCard)
+        assertFalse(chosen == previewGreen)
+        assertTrue(StillCaptureCropSafety.selectCameraStillBoundary(
+            mappedGreen = null, independentlyVerifiedCard = null,
+            liveGreenSeen = true, ordinaryStill = mistakenStillContour,
+        ) == null)
+    }
+
+    @Test
+    fun cameraMappedGreenStillTakesPriorityWhenIndependentlyConfirmed() {
+        val verifiedGreen = rect(.26f, .35f, .77f, .62f)
+        val stillCard = rect(.24f, .33f, .80f, .65f)
+        assertTrue(StillCaptureCropSafety.selectCameraStillBoundary(
+            mappedGreen = verifiedGreen, independentlyVerifiedCard = stillCard,
+            liveGreenSeen = true, ordinaryStill = null,
+        ) == verifiedGreen)
+    }
+
+    @Test
     fun capturedSmallCardUsesRotatedGreenEdgesNotWiderClothBoundary() {
         // In the supplied video the live image is upright and portrait,
         // while the JPEG may contain the same card rotated clockwise.
