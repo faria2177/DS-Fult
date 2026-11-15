@@ -129,6 +129,7 @@ class ScanResult {
     this.liveOutlineAtShutter = false,
     this.liveOutlineMatched = false,
     this.reviewQuad,
+    this.borderConfidence,
   });
 
   /// Perspective-warped, cropped document. `null` when
@@ -161,6 +162,12 @@ class ScanResult {
   /// A false result must not be auto-cropped using another rectangle.
   final bool liveOutlineMatched;
 
+  /// Diagnostic only: true if captured pixels independently show an
+  /// outside-paper gradient near the geometrically mapped green boundary.
+  /// False does NOT invalidate a shared-ViewPort crop (e.g. white-on-white).
+  /// Null for older builds or non-camera sources.
+  final bool? borderConfidence;
+
   /// Camera-only green corners in captured raw image PIXEL coordinates.
   /// This is a REVIEW hint, not a verified auto-crop; null on imports.
   /// Keep it even if native still detection returns a full-frame sentinel.
@@ -178,6 +185,7 @@ class ScanResult {
     bool? liveOutlineAtShutter,
     bool? liveOutlineMatched,
     Quad? reviewQuad,
+    bool? borderConfidence,
   }) {
     return ScanResult(
       croppedImagePath: croppedImagePath ?? this.croppedImagePath,
@@ -189,6 +197,7 @@ class ScanResult {
           liveOutlineAtShutter ?? this.liveOutlineAtShutter,
       liveOutlineMatched: liveOutlineMatched ?? this.liveOutlineMatched,
       reviewQuad: reviewQuad ?? this.reviewQuad,
+      borderConfidence: borderConfidence ?? this.borderConfidence,
     );
   }
 
@@ -211,6 +220,8 @@ class ScanResult {
       warpError: m['warpError'] as String?,
       liveOutlineAtShutter: m['liveOutlineAtShutter'] == true,
       liveOutlineMatched: m['liveOutlineMatched'] == true,
+      borderConfidence: m['borderConfidence'] is bool
+          ? m['borderConfidence'] as bool : null,
       reviewQuad: m['reviewQuad'] is Map
           ? Quad.fromMap(m['reviewQuad'] as Map<dynamic, dynamic>)
           : null,
