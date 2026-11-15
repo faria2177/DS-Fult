@@ -77,6 +77,69 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun shutterGreenAutoCropTrustsThreePhotoSidesEvenWithDenseHandwriting() {
+        val width = 240
+        val height = 320
+        val pixels = IntArray(width * height) { 0xFF2B344C.toInt() }
+        for (y in 70 until 262) {
+            for (x in 48 until 192) {
+                pixels[y * width + x] = 0xFFEAE7DF.toInt()
+            }
+        }
+        // Dense interior writing must not replace the *outer* edges.
+        for (y in 115 until 235 step 12) {
+            for (x in 67 until 177) {
+                pixels[y * width + x] = 0xFF283045.toInt()
+            }
+        }
+        val visibleGreen = rect(.20f, 70f / height, .80f, 262f / height)
+        assertTrue(StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+            visibleGreen, width, height) { x, y -> pixels[y * width + x] })
+        // Image processing uses exactly visibleGreen; the competing still
+        // detector's inner text-box proposal cannot change this quad.
+        val chosen = StillCaptureCropSafety.selectCameraStillBoundary(
+            mappedGreen = visibleGreen,
+            independentlyVerifiedCard = null,
+            liveGreenSeen = true,
+            ordinaryStill = rect(.29f, .39f, .72f, .66f),
+        )
+        assertTrue(chosen == visibleGreen)
+    }
+
+    @Test
+    fun photographedPageMustNotAutoCropWithShiftedOrUnrelatedGreenBox() {
+        val width = 240
+        val height = 320
+        val pixels = IntArray(width * height) { index ->
+            val x = index % width
+            val y = index / width
+            if (x in 48 until 192 && y in 70 until 262)
+                0xFFEAE7DF.toInt() else 0xFF2B344C.toInt()
+        }
+        // Same scene, but camera moved and the frozen quad no longer
+        // follows the actual paper. Manual Adjust is the safe fallback.
+        val shifted = rect(.30f, .31f, .90f, .91f)
+        assertFalse(StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+            shifted, width, height) { x, y -> pixels[y * width + x] })
+        assertFalse(StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+            shifted, width, height) { _, _ -> 0xFF777777.toInt() })
+    }
+
+    @Test
+    fun printedColourStripeAloneCannotAuthorizeFourCornerCrop() {
+        val width = 240
+        val height = 320
+        val pixels = IntArray(width * height) { index ->
+            val y = index / width
+            if (y in 135 until 153) 0xFFF4CE48.toInt()
+            else 0xFF43546E.toInt()
+        }
+        val insideStripe = rect(.21f, .39f, .79f, .79f)
+        assertFalse(StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+            insideStripe, width, height) { x, y -> pixels[y * width + x] })
+    }
+
+    @Test
     fun shutterUsesExactlyGreenQuadWhenStillCorroboratesSamePaper() {
         val green = rect(.10f, .08f, .90f, .92f)
         val slightlyShiftedStill = rect(.115f, .095f, .885f, .905f)
