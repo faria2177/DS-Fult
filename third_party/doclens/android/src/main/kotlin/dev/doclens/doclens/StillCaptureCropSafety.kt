@@ -320,6 +320,28 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * Camera-only captured-still boundary preference. A live preview quad is
+     * valid in the STILL image only after the rotation/FOV verifier mapped it.
+     * When that mapping fails but an independently verified white card exists
+     * in still pixels, prefer that card. NEVER send the unrotated preview
+     * coordinates to the editor: it generates a tall green strip across the
+     * landscape business card, then Done preserves the wrong full photo.
+     *
+     * No gallery/import route uses this function.
+     */
+    fun selectCameraStillBoundary(
+        mappedGreen: Quad?,
+        independentlyVerifiedCard: Quad?,
+        liveGreenSeen: Boolean,
+        ordinaryStill: Quad?,
+    ): Quad? = when {
+        mappedGreen != null -> mappedGreen
+        independentlyVerifiedCard != null -> independentlyVerifiedCard
+        liveGreenSeen -> null
+        else -> ordinaryStill
+    }
+
+    /**
      * A green contour at shutter time belongs to the *analysis* stream, not
      * the still JPEG. Trust its exact four corners only when the captured
      * image independently confirms the same document outside boundary and
