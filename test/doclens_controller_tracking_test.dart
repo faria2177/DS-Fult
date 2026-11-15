@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:doclens/doclens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 
 Quad _rectangle(double x, double y) => Quad(
       topLeft: Offset(x, y),
@@ -62,6 +63,48 @@ void main() {
       controller.recordPaintedGreenQuad(detectedButNotPainted);
       expect(frozenAtTap, paintedAtTap);
       expect(controller.visibleGreenQuad, detectedButNotPainted);
+    } finally {
+      await controller.dispose();
+      await fake.events.close();
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  testWidgets('green overlay receives quad detected before widget subscription',
+      (tester) async {
+    final previous = DoclensPlatform.instance;
+    final fake = _LiveFakePlatform();
+    DoclensPlatform.instance = fake;
+    final controller = DoclensController(
+      config: const ScannerConfig(
+        enableAutoCapture: false,
+        enableQuadSmoothing: false,
+      ),
+    );
+    try {
+      await controller.initialize();
+      final paper = _rectangle(.18, .17);
+      fake.events.add(DetectionEvent(quad: paper));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.lastQuad, paper);
+
+      // No new event should be required to paint already-stable corners.
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: SizedBox(
+            width: 320,
+            height: 420,
+            child: DoclensView(
+              controller: controller,
+              overlayBuilder: (context, quad, status) =>
+                  Text(quad == paper ? 'visible-green' : 'missing-green'),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('visible-green'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
     } finally {
       await controller.dispose();
       await fake.events.close();
