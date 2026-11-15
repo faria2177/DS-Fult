@@ -61,8 +61,8 @@ class YuvUtilsColorTest {
 
     @Test
     fun analysisViewportSamplesOnlyCropRectNotInvisibleFullSensor() {
-        val crop = android.graphics.Rect(2, 0, 4, 4)
-        assertEquals(2, YuvUtils.checkedCrop(4, 4, crop).width())
+        val crop = YuvUtils.checkedCropBounds(4, 4, 2, 0, 4, 4)
+        assertEquals(2, crop.width)
         // 4x4 YUV has two independent 2x2 chroma regions. The visible
         // right-hand crop must sample x=2 / x=3, never left-side chroma.
         val luma = YuvUtils.Luma(ByteArray(2) { 82.toByte() }, 1, 2)
@@ -71,7 +71,7 @@ class YuvUtilsColorTest {
             sourceWidth = 4,
             sourceHeight = 4,
             downscaleTo = 2,
-            cropRect = crop,
+            cropBounds = crop,
             uPlane = ByteBuffer.wrap(byteArrayOf(90, 240.toByte(), 90, 240.toByte())),
             uRowStride = 2,
             uPixelStride = 1,
@@ -86,9 +86,8 @@ class YuvUtilsColorTest {
 
     @Test
     fun invalidCropRectCannotBeUsedForGreenOverlay() {
-        val bad = android.graphics.Rect(2, 1, 5, 4)
         try {
-            YuvUtils.checkedCrop(4, 4, bad)
+            YuvUtils.checkedCropBounds(4, 4, 2, 1, 5, 4)
             throw AssertionError("Out-of-bounds crop must be rejected")
         } catch (_: IllegalArgumentException) {
             // Never silently stretch a mismatched sensor crop.
