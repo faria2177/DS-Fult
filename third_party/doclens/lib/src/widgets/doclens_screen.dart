@@ -1415,13 +1415,20 @@ class _DoclensScreenState extends State<DoclensScreen> {
 
   Future<void> _manualCapture() async {
     if (_controller.isCapturing || _atPageLimit) return;
+    // Freeze the *painted* green outline at the button press, BEFORE optional
+    // autofocus awaits 300 ms. Otherwise the photo uses a later detector
+    // proposal and crops a different polygon than the visible one.
+    final tappedGreen = _controller.visibleGreenQuad;
     try {
       if (widget.referenceDoubleFocus) {
         await _controller.focusAt(const Offset(.5, .5));
         await Future<void>.delayed(const Duration(milliseconds: 300));
       }
       widget.onReferenceShutterTap?.call();
-      final result = await _controller.capture();
+      final result = await _controller.capture(
+        displayedQuadAtTap: tappedGreen,
+        useTapSnapshot: true,
+      );
       await _handleCapture(result);
     } catch (_) {
       // Errors flow back through autoCaptureStream → onCapture; manual
