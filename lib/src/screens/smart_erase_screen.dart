@@ -166,6 +166,46 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
     }
   }
 
+  /// Keep brush sizes reachable regardless of screen size, system
+  /// insets or horizontally scrolled toolbar position. PopupMenuButton
+  /// anchored to the first tool could end up behind its modal barrier.
+  Future<void> _choosePenSize() async {
+    if (_busy) return;
+    final size = await showModalBottomSheet<double>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('Pen size', style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w600)),
+          ),
+          for (final choice in const <(double, String)>[
+            (.006, 'Pen · Fine'),
+            (.012, 'Pen · Medium'),
+            (.022, 'Pen · Large'),
+            (.033, 'Pen · Extra large'),
+          ])
+            ListTile(
+              title: Text(choice.$2),
+              trailing: (_strokeRadius - choice.$1).abs() < .00001
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () => Navigator.pop(sheetContext, choice.$1),
+            ),
+        ]),
+      ),
+    );
+    if (size != null && mounted) {
+      setState(() {
+        _mode = SmartEraseMode.pen;
+        _strokeRadius = size;
+        _stroke = [];
+      });
+    }
+  }
+
   Future<void> _cancel() async {
     if (_busy) return;
     if (!_changed) {
@@ -202,24 +242,9 @@ class _SmartEraseScreenState extends State<SmartEraseScreen> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(children: [
-            PopupMenuButton<double>(
-              tooltip: 'Pen and brush size',
-              // Keep the first menu fully inside the screen. When anchored
-              // to the leading edge of a horizontally scrolling toolbar,
-              // Flutter may otherwise position its entries at negative X.
-              position: PopupMenuPosition.under,
-              offset: const Offset(110, 0),
-              enabled: !_busy,
-              onSelected: (radius) => setState(() {
-                _mode = SmartEraseMode.pen;
-                _strokeRadius = radius;
-              }),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: .006, child: Text('Pen · Fine')),
-                PopupMenuItem(value: .012, child: Text('Pen · Medium')),
-                PopupMenuItem(value: .022, child: Text('Pen · Large')),
-                PopupMenuItem(value: .033, child: Text('Pen · Extra large')),
-              ],
+            InkWell(
+              key: const Key('smart-erase-pen'),
+              onTap: _busy ? null : _choosePenSize,
               child: _toolFace(Icons.edit_outlined, 'Pen',
                 selected: _mode == SmartEraseMode.pen, dropdown: true),
             ),
