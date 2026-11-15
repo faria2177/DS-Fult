@@ -23,6 +23,51 @@ class LiveBoundarySelectorTest {
     }
 
     @Test
+    fun notebookDiagonalInteriorIsNotTheFourOuterCorners() {
+        // November 15 screenshots: one half of a multicolour cover became
+        // a wedge with a tiny top and a full-width bottom. The real document
+        // is visible around that interior stripe and must not be cropped.
+        val diagonalSection = Quad(
+            PointF(.74f, .36f), PointF(.90f, .36f),
+            PointF(.92f, .96f), PointF(.22f, .97f),
+        )
+        assertEquals(null, LiveBoundarySelector.choose(
+            diagonalSection, null, 384, 288))
+        val trueNotebook = Quad(
+            PointF(.22f, .24f), PointF(.88f, .25f),
+            PointF(.91f, .95f), PointF(.18f, .94f),
+        )
+        assertEquals(trueNotebook, LiveBoundarySelector.choose(
+            trueNotebook, diagonalSection, 384, 288))
+    }
+
+    @Test
+    fun writingAndNotebookLinesMustNotCreateAFalseTopStrip() {
+        // A dense ruled notebook with scribbles can generate a short-sided
+        // trapezoid covering just its top few lines (not the whole page).
+        val ruledStrip = Quad(
+            PointF(.22f, .27f), PointF(.89f, .29f),
+            PointF(.85f, .46f), PointF(.20f, .34f),
+        )
+        assertNull(LiveBoundarySelector.choose(
+            ruledStrip, null, 384, 288))
+        val actualPage = rect(.17f, .27f, .88f, .94f)
+        assertEquals(actualPage, LiveBoundarySelector.choose(
+            actualPage, ruledStrip, 384, 288))
+    }
+
+    @Test
+    fun legitimatePerspectivePageStillHasFourVisibleBalancedSides() {
+        val page = Quad(
+            PointF(.18f, .24f), PointF(.84f, .27f),
+            PointF(.88f, .92f), PointF(.15f, .94f),
+        )
+        assertEquals(page, LiveBoundarySelector.choose(page, null, 384, 288))
+        assertEquals(null, LiveBoundarySelector.choose(
+            rect(0f, 0f, 1f, 1f), null, 384, 288))
+    }
+
+    @Test
     fun normalWhitePageBeatsItsInnerColouredPanel() {
         val page = rect(.13f, .12f, .87f, .86f)
         val colouredSection = rect(.20f, .22f, .80f, .79f)
