@@ -360,9 +360,19 @@ class _CameraScreenState extends State<CameraScreen> {
         }
         continue;
       }
-      // A ready, consented Online First detector gets the raw still before
-      // accepting a native-cropped candidate. A failed online/offline attempt
-      // must not discard a usable native crop.
+      // Camera-only: a successful native perspective crop is final. Never
+      // run Online First / another still detector over its raw original;
+      // doing so can silently substitute an interior text box or turn the
+      // page after the green outline was already confirmed.
+      // Imports still retain their separate Online First detection path.
+      if (!widget.cardMode && nativeCrop != null && nativeCrop.isNotEmpty) {
+        outputs.add(nativeCrop);
+        rawPathsForOutputs.add(raw.isEmpty ? nativeCrop : raw);
+        confirmedCrops.add(nativeCrop);
+        continue;
+      }
+      // With no native crop and no green shutter outline, still-image
+      // fallback remains available for legacy/system camera behavior.
       if (raw.isNotEmpty && await OnlineAutoCropConfig.canUpload()) {
         final first = await DocumentEdges.autoCropFiles([raw],
             preferIdCardBounds: _detectCardBounds);
