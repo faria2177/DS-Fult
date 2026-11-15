@@ -238,6 +238,18 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 
 **Related:** `ScannerSession.kt`, `YuvUtils.kt`, `StillCaptureCropSafety.kt`, `DoclensController`, `ScanResult`, `BUGS.md` B-001, native regression tests.
 
+## ADR-030 — Steady-state lock for the displayed green document outline
+
+**Status:** Accepted for 2026-11-16 candidate, automated tests and physical camera verification pending.
+
+**Context:** Even after median smoothing and false-background suppression, the preview may jitter because every small valid OpenCV corner change was blended into the visible four-corner polygon. Such micro-jitter should not create new screen geometry or a different tap-time shutter crop.
+
+**Decision:** Preserve the exact displayed quad when the four most recent observations' mean and the tracking-window median are within the steady-state noise envelope. Release that hold on persistent movement and adapt interpolation speed to the displacement. Keep the established challenger identity hysteresis, near-frame rejection and null-frame behavior. Skip redundant Flutter quad repaint signals when unchanged. On camera pause/resume/switch reset both quad tracking and the previous painted-shutter snapshot.
+
+**Risks:** Very small deliberate movements near the noise floor may be held briefly to eliminate vibration. The thresholds require phone video comparison to balance responsive tracking, stable corners and exact shutter-to-JPEG crop. The camera's existing detector and Capture/JPEG geometry policy (ADR-029) remain unchanged.
+
+**Related:** `third_party/doclens/lib/src/quad_smoother.dart`, `controller.dart`, `test/quad_smoother_test.dart`, `BUGS.md` B-015.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
