@@ -506,11 +506,19 @@ class ScannerSession(
                                 rawSize.width, rawSize.height)
                         }
                     }
+                    // The full-resolution JPEG can use a different view
+                    // orientation AND camera crop than the analysis stream.
+                    // If mapping the exact green quad fails, a white-paper
+                    // component that independently matches the visible small
+                    // card is a safe still-space boundary. Crucially, NEVER
+                    // fall back to the unrotated portrait green rectangle on
+                    // a landscape card photo: that was the user's narrow
+                    // 4-handle crop in the 15 Nov 2026 screenshots.
                     val matchedLiveOutline =
                         matchedPageOutline || verifiedSmallGreen != null
-                    val reviewHint = compatibleLiveHint?.quad
+                    val verifiedSmallCardBoundary = recoveredSmallCard != null
                     val uncertainStill = when {
-                        matchedLiveOutline -> false
+                        matchedLiveOutline || verifiedSmallCardBoundary -> false
                         liveHint != null -> true
                         else -> !config.preferIdCardBounds && !verifiedColourCard &&
                             StillCaptureCropSafety.requiresManualReview(
@@ -518,9 +526,13 @@ class ScannerSession(
                     }
                     val q = when {
                         verifiedSmallGreen != null -> verifiedSmallGreen
-                        matchedPageOutline -> reviewHint
-                        liveHint != null ->
-                            reviewHint ?: recoveredSmallCard ?: stillQuad
+                        matchedPageOutline -> compatibleLiveHint?.quad
+                        verifiedSmallCardBoundary -> recoveredSmallCard
+                        // Preview-space coordinates are not JPEG coordinates.
+                        // Returning the raw still without a guessed quad is
+                        // safer than showing an unrelated green crop and
+                        // silently retaining the whole fabric background.
+                        liveHint != null -> null
                         uncertainStill -> null
                         else -> stillQuad
                     }
@@ -570,8 +582,13 @@ class ScannerSession(
                         // Camera-only metadata: gallery/import does not
                         // receive or depend on either of these fields.
                         "liveOutlineAtShutter" to (liveHint != null),
+                        // True only if a perspective crop was actually
+                        // generated from a verified SAME document boundary.
+                        // Previously a tentative recovered card flagged this
+                        // true even when no native crop was returned.
                         "liveOutlineMatched" to
-                            (matchedLiveOutline || recoveredSmallCard != null),
+                            (croppedPath != null &&
+                                (matchedLiveOutline || verifiedSmallCardBoundary)),
                         "quad" to (pixelQuad ?: Quad(
                             PointF(0f, 0f),
                             PointF(rawSize.width.toFloat(), 0f),
