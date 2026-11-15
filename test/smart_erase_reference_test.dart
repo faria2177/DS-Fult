@@ -48,11 +48,19 @@ void main() {
     expect(find.text('Brush over a mark: locally match its background'),
         findsOneWidget);
 
-    await tester.tap(find.text('Pen'));
+    // The brush-size picker is a bottom sheet, not a popup obscured by
+    // the horizontally scrolling toolbar. Verify every choice is visible
+    // and tapping a real choice actually returns to Pen mode.
+    await tester.tap(find.byKey(const Key('smart-erase-pen')));
     await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Pen size'), findsOneWidget);
     expect(find.text('Pen · Fine'), findsOneWidget);
+    expect(find.text('Pen · Medium'), findsOneWidget);
+    expect(find.text('Pen · Large'), findsOneWidget);
+    expect(find.text('Pen · Extra large'), findsOneWidget);
     await tester.tap(find.text('Pen · Fine'));
     await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Pen size'), findsNothing);
     expect(find.text('Draw a brush stroke to erase the selected mark'),
         findsOneWidget);
   });
