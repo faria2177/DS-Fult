@@ -52,15 +52,27 @@ void main() {
     // the horizontally scrolling toolbar. Verify every choice is visible
     // and tapping a real choice actually returns to Pen mode.
     await tester.tap(find.byKey(const Key('smart-erase-pen')));
-    await tester.pump(const Duration(milliseconds: 350));
+    // Modal route transitions need an initial frame to *start* the 250 ms
+    // animation, followed by a later frame to complete it. A single
+    // pump(Duration) can still leave the sheet below the hit-test viewport.
+    // Do not pumpAndSettle: the editor has an intentional endless loading
+    // indicator when this test uses a missing source document.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Pen size'), findsOneWidget);
     expect(find.text('Pen · Fine'), findsOneWidget);
     expect(find.text('Pen · Medium'), findsOneWidget);
     expect(find.text('Pen · Large'), findsOneWidget);
     expect(find.text('Pen · Extra large'), findsOneWidget);
-    await tester.tap(find.text('Pen · Fine'));
-    await tester.pump(const Duration(milliseconds: 350));
+    final fine = find.text('Pen · Fine');
+    expect(tester.getTopLeft(fine).dy, greaterThanOrEqualTo(0));
+    expect(tester.getBottomRight(fine).dy, lessThanOrEqualTo(1100));
+    await tester.tap(fine);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Pen size'), findsNothing);
+    expect(tester.widget<Slider>(find.byType(Slider)).value,
+        closeTo(.006, .00001));
     expect(find.text('Draw a brush stroke to erase the selected mark'),
         findsOneWidget);
   });
