@@ -176,8 +176,13 @@ class DoclensController extends ChangeNotifier {
     final smoother = _smoother;
     final smoothed =
         smoother == null ? event.quad : smoother.add(event.quad);
-    _lastQuad = smoothed;
-    _quadCtrl.add(smoothed);
+    // The steady-state smoother intentionally returns the exact previous
+    // polygon for micro-jitter. Do not rebuild the Texture overlay when the
+    // displayed four corners have not moved.
+    if (smoothed != _lastQuad) {
+      _lastQuad = smoothed;
+      _quadCtrl.add(smoothed);
+    }
 
     if (_config.enableLowLightDetection) {
       _lowLightCtrl.add(event.lowLight);
@@ -523,6 +528,10 @@ class DoclensController extends ChangeNotifier {
   void _resetTracking() {
     _smoother?.reset();
     _lastQuad = null;
+    // The previous painter belongs to an old preview/camera binding.
+    // Never capture its stale quad immediately after a lens or app resume.
+    _lastPaintedQuad = null;
+    _hasPaintedQuad = false;
     _quadCtrl.add(null);
     _stability.reset();
     _resetFocusEpisode();
