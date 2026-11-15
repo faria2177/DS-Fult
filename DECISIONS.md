@@ -1,6 +1,6 @@
 # DocScanner — Architecture Decision Records (ADRs)
 
-**Last reviewed:** 2026-11-09. These decisions summarize current implementation and user-confirmed constraints. A new decision should include date, context, choice, consequences, alternatives and affected code; do not silently reverse an accepted decision.
+**Last reviewed:** 2026-11-16. These decisions summarize current implementation and user-confirmed constraints. A new decision should include date, context, choice, consequences, alternatives and affected code; do not silently reverse an accepted decision.
 
 ## ADR-001 — Flutter UI, Android-native scanner
 
@@ -225,6 +225,18 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 **Why:** In `381772.mp4` the green live quad frames a portrait A4 timetable, but shutter preview and final document show only a cropped horizontal fragment. The screenshot requests discoverable API-key instructions for every provider.
 **Consequences:** More borderline scenes may require manual corner confirmation; the correction cannot compensate for every sensor-space orientation inconsistency or prove exact Auto Crop fidelity without device captures. Opening an official dashboard neither obtains nor uses an API key automatically. Users remain responsible for provider sign-in, quota and billing; API keys stay protected in local secure storage.
 **Related:** `ScannerSession.kt`, `StillCaptureCropSafety.kt`, native safety tests, `ai_mode_screen.dart`, `ai_provider_catalog.dart`, `test/ai_mode_screen_test.dart`, and `BUGS.md` B-001.
+
+## ADR-029 — The painted green quad is authoritative when camera geometry matches
+
+**Status:** Accepted 2026-11-16 candidate; CI and physical HONOR retest pending.
+
+**Context:** A valid live green document quad was overwritten by a different still detector contour, and an ImageAnalysis buffer included sensor pixels outside CameraX's ViewPort/JPEG crop. A 1200ms expiry could also discard orientation while the green box remained visible.
+
+**Decision:** Bind CameraX Preview, Analysis and ImageCapture with synchronized target rotation and the same ViewPort. Sample only `ImageProxy.cropRect` in the YUV luma/chroma detector. Freeze the quad that Flutter actually painted at the shutter; preserve the binding's orientation until rebind. Crop that exact normalized quad only when the JPEG is EXIF-upright and ViewPort aspect ratios match (2.5% tolerance). A second content detector and pixel-colour evidence cannot change that selection. If geometry is incompatible, retain the full original and provide manual Adjust Corners, not an inferred 90/270 turn. With no painted green quad, keep the existing safe still detection path.
+
+**Consequences:** This amends the older still-detector and manual-review camera rules in ADR-011 and ADR-028 **only for visible-green captures**; gallery/import behaviour is unchanged. A wrongly placed overlay can still crop incorrectly; retaining the raw image and verifying on a HONOR device is essential. Unit CI alone does not prove optical alignment.
+
+**Related:** `ScannerSession.kt`, `YuvUtils.kt`, `StillCaptureCropSafety.kt`, `DoclensController`, `ScanResult`, `BUGS.md` B-001, native regression tests.
 
 ## How to change a decision
 
