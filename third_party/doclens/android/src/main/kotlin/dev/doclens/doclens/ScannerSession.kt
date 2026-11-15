@@ -3,12 +3,14 @@ package dev.doclens.doclens
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
+import android.content.res.Configuration
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.os.Build
 import android.util.Size
+import android.util.Rational
 import androidx.annotation.MainThread
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.AspectRatio
@@ -18,6 +20,8 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.ViewPort
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -42,6 +46,7 @@ class ScannerSession(
     private var analysis: ImageAnalysis? = null
     private var imageCapture: ImageCapture? = null
     private var camera: androidx.camera.core.Camera? = null
+    @Volatile private var sharedViewPortActive: Boolean = false
 
     private var lensFacing: Int = CameraSelector.LENS_FACING_BACK
     private var flashMode: Int = ImageCapture.FLASH_MODE_AUTO
@@ -106,6 +111,7 @@ class ScannerSession(
 
     private fun bindUseCases(provider: ProcessCameraProvider) {
         provider.unbindAll()
+        sharedViewPortActive = false
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         val surfaceTexture = textureEntry.surfaceTexture()
 
@@ -191,21 +197,44 @@ class ScannerSession(
 
         val owner = activity as? LifecycleOwner
             ?: throw ScannerException.InitFailed("Activity must be LifecycleOwner")
+        // CameraX's same aspect-ratio settings do NOT guarantee the same
+        // sensor field of view at different resolutions. A common ViewPort
+        // guarantees matching Preview / Analysis / on-disk JPEG crop regions.
+        // Use the portrait 3:4 (or landscape 4:3) visual camera field, not
+        // the tall Flutter viewfinder which uses BoxFit.cover.
+        fun bindMatchedViewPort(): androidx.camera.core.Camera {
+            val portrait = context.resources.configuration.orientation !=
+                Configuration.ORIENTATION_LANDSCAPE
+            val ratio = if (portrait) Rational(3, 4) else Rational(4, 3)
+            val viewPort = ViewPort.Builder(
+                ratio, activity.windowManager.defaultDisplay.rotation,
+            ).setScaleType(ViewPort.FILL_CENTER).build()
+            return provider.bindToLifecycle(owner, selector,
+                UseCaseGroup.Builder()
+                    .addUseCase(checkNotNull(preview))
+                    .addUseCase(checkNotNull(analysis))
+                    .addUseCase(checkNotNull(imageCapture))
+                    .setViewPort(viewPort)
+                    .build()
+            )
+        }
         camera = try {
-            provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+            bindMatchedViewPort()
         } catch (error: IllegalArgumentException) {
             if (requestedSize == null) throw error
-            // A JPEG size can be listed by Camera2 yet be incompatible with
-            // concurrent Preview + Analysis on older hardware. Keep the live
-            // scanner functional if CameraX rejects that combination.
+            // Some cameras cannot stream their requested HD size with two
+            // other use cases. Retry 4:3 Capture without losing the shared
+            // sensor ViewPort. Falling back to an ungrouped bind would cause
+            // the exact green-corner offset reported by users.
             provider.unbindAll()
             imageCapture = ImageCapture.Builder()
                 .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                 .setFlashMode(flashMode)
                 .build()
-            provider.bindToLifecycle(owner, selector, preview, analysis, imageCapture)
+            bindMatchedViewPort()
         }
+        sharedViewPortActive = true
         if (torch) camera?.cameraControl?.enableTorch(true)
     }
 
@@ -331,6 +360,7 @@ class ScannerSession(
     @MainThread
     fun pause() {
         latestPagePreviewHint = null
+        sharedViewPortActive = false
         cameraProvider?.unbindAll()
     }
 
@@ -380,6 +410,9 @@ class ScannerSession(
             result.error("init_failed", "ImageCapture not ready", null); return
         }
         val shutterTime = System.currentTimeMillis()
+        // Freeze binding geometry together with the green overlay at the
+        // *tap*. Never infer it later from updated CameraX preview frames.
+        val matchedViewPortAtShutter = sharedViewPortActive
         val file = File(context.cacheDir, "fnds_raw_${shutterTime}.jpg")
         // Record that Flutter was visibly showing a green quad even when
         // CameraX has temporarily stopped publishing orientation frames.
@@ -396,8 +429,9 @@ class ScannerSession(
         // The four-corner Flutter overlay may be smoothed/hysteresis-filtered
         // and differ from this frame's raw OpenCV proposal. Use exactly the
         // visible quad when it is plausible in the upright analysis space.
-        // Its *actual still-image pixels* must separately corroborate that
-        // shape before any automatic perspective warp is allowed.
+        // A shared CameraX ViewPort gives the preview and on-disk JPEG the
+        // same sensor crop. Independently detected still boundaries are used
+        // only when CameraX cannot establish this coordinate relationship.
         val displayedHint = displayedQuad?.let { visible ->
             frameOrientationAtShutter?.takeIf {
                 StillCaptureCropSafety.isSafeDisplayedGreenForReview(
@@ -566,9 +600,22 @@ class ScannerSession(
                     // fall back to the unrotated portrait green rectangle on
                     // a landscape card photo: that was the user's narrow
                     // 4-handle crop in the 15 Nov 2026 screenshots.
-                    val matchedLiveOutline =
+                    // The screen's green outline is the crop contract. With
+                    // CameraX's shared sensor ViewPort, the mapped corners are
+                    // authoritative even for low-contrast pages where a second
+                    // edge detector would choose an inner title/table or no
+                    // border at all. A JPEG of incompatible orientation/ratio
+                    // still cannot use them and requires manual adjustment.
+                    val mappedViewportGreen = if (matchedViewPortAtShutter &&
+                        lensFacing == CameraSelector.LENS_FACING_BACK &&
+                        reviewGreen != null &&
+                        StillCaptureCropSafety.isSafeDisplayedGreenForReview(
+                            reviewGreen, rawSize.width, rawSize.height)) {
+                        reviewGreen
+                    } else null
+                    val matchedLiveOutline = mappedViewportGreen != null ||
                         matchedPageOutline || verifiedSmallGreen != null ||
-                            pixelVerifiedGreen
+                        pixelVerifiedGreen
                     val uncertainStill = when {
                         matchedLiveOutline -> false
                         // Captured green corners are authoritative: if the
@@ -580,8 +627,11 @@ class ScannerSession(
                                 stillQuad, rawSize.width, rawSize.height, null)
                     }
                     val q = StillCaptureCropSafety.selectCameraStillBoundary(
-                        mappedGreen = if (pixelVerifiedGreen || matchedPageOutline)
-                            reviewGreen else verifiedSmallGreen,
+                        mappedGreen = when {
+                            mappedViewportGreen != null -> mappedViewportGreen
+                            pixelVerifiedGreen || matchedPageOutline -> reviewGreen
+                            else -> verifiedSmallGreen
+                        },
                         independentlyVerifiedCard = recoveredSmallCard,
                         liveGreenSeen = liveGreenSeen,
                         ordinaryStill = if (uncertainStill) null else stillQuad,
@@ -635,9 +685,10 @@ class ScannerSession(
                         // Image-space green outline for explicit manual
                         // acceptance when still evidence is inconclusive.
                         // Deliberately separate from the warp-only "quad".
-                        "reviewQuad" to (if (verifiedSmallGreen != null &&
-                            !pixelVerifiedGreen && !matchedPageOutline)
-                            verifiedSmallGreen else reviewGreen)?.let { g ->
+                        "reviewQuad" to (mappedViewportGreen ?: 
+                            if (verifiedSmallGreen != null &&
+                                !pixelVerifiedGreen && !matchedPageOutline)
+                                verifiedSmallGreen else reviewGreen)?.let { g ->
                             Quad(
                                 PointF(g.topLeft.x * rawSize.width,
                                     g.topLeft.y * rawSize.height),
