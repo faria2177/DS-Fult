@@ -27,6 +27,48 @@ class _LiveFakePlatform extends DoclensPlatform {
 }
 
 void main() {
+
+  test('shutter uses the last painted green quad, not the newest detector frame',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _LiveFakePlatform();
+    DoclensPlatform.instance = fake;
+    final controller = DoclensController(
+      config: const ScannerConfig(
+        enableAutoCapture: false,
+        enableQuadSmoothing: false,
+      ),
+    );
+    Future<void> emit(Quad quad) async {
+      fake.events.add(DetectionEvent(quad: quad));
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    try {
+      await controller.initialize();
+      final paintedAtTap = _rectangle(.12, .10);
+      final detectedButNotPainted = _rectangle(.45, .32);
+      await emit(paintedAtTap);
+      controller.recordPaintedGreenQuad(paintedAtTap);
+
+      // ImageAnalysis can emit a newer quad before Flutter has painted it.
+      await emit(detectedButNotPainted);
+      expect(controller.lastQuad, detectedButNotPainted);
+      expect(controller.visibleGreenQuad, paintedAtTap);
+
+      // Focusing after the shutter may move the visible outline. The tap
+      // snapshot still identifies the exact previous four corners.
+      final frozenAtTap = controller.visibleGreenQuad;
+      controller.recordPaintedGreenQuad(detectedButNotPainted);
+      expect(frozenAtTap, paintedAtTap);
+      expect(controller.visibleGreenQuad, detectedButNotPainted);
+    } finally {
+      await controller.dispose();
+      await fake.events.close();
+      DoclensPlatform.instance = previous;
+    }
+  });
+
   test('controller never restores a candidate rejected by smoothing', () async {
     final previous = DoclensPlatform.instance;
     final fake = _LiveFakePlatform();
