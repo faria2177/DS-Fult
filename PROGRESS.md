@@ -1,6 +1,6 @@
 # DocScanner — Progress Snapshot
 
-**Last documented:** 2026-11-10
+**Last documented:** 2026-11-16
 **Current candidate release:** `0.5.33+47`
 **Last fully successful CI baseline before this patch:** [GitHub Actions run #42683897645](https://github.com/faria2177/DS-Fult/actions/runs/42683897645)
 **Baseline commit:** [`385d537`](https://github.com/faria2177/DS-Fult/commit/385d5372e6139a3ac820e41dbf37ed5e8cec8f20)
@@ -238,6 +238,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Native detection independently inspects a small saturated-colour region for every normal Scan frame; it can prefer a fully visible cloth over a camera-border chair, and hides near-frame contours when no credible cloth/page evidence exists. ID Card detection remains separate.
 - The Dart tracker ignores sub-0.6%-of-frame movement and demands additional confirmations before a sudden, larger border-hugging rectangle replaces a tracked document. The actual document polygon, not the entire camera preview, receives a faint mint-green fill. This overlay is **visual feedback only**, not an algorithmic detection input.
 - Regression tests cover native frame-border rejection, transient/reappearing quads, deadband jitter, slow takeover and the controller's rejected-quad leak. **Manual capture remains unchanged; measure actual 12 Hz CPU/frame time and compare the same moving scene on HONOR VKP-NX9 after CI succeeds.**
+
+## 2026-11-16 — Green Box shutter/JPEG geometry correction
+
+- Read the uploaded `green_box_crop_analysis.pdf`, project bug register and architecture decisions. Earlier CameraX code grouped three use cases but still analyzed uncropped YUV buffers, allowing the overlay and JPEG to refer to different sensor regions.
+- Bind Preview / Analysis / Capture with synchronized rotation and a shared 3:4/4:3 ViewPort. Detect only within `ImageProxy.cropRect` for both luminance and chroma; discard stale frame geometry on a camera rebind but do not expire valid orientation after 1200ms.
+- Freeze the Flutter-painted green quad at shutter tap. Crop exactly its normalized coordinates when the upright JPEG and analysis ViewPort have matching aspect ratios; otherwise retain the full upright original for manual Adjust Corners. No guessed 90-degree transform, independently detected inner rectangle, or pixel-gradient gate for a visible green quad.
+- Border evidence is a diagnostic confidence signal calculated from 5×5 RGB neighbourhoods and several offsets. Unit regressions cover YUV cropped chroma, geometry match/mismatch and low-contrast paper. **CI completion and real HONOR camera accuracy still require verification.** Import Images / Files and card-specific flows remain separate.
 
 ## Recent CI note
 
