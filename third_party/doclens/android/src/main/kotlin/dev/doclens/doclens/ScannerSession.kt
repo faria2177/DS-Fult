@@ -467,7 +467,7 @@ class ScannerSession(
                         StillCaptureCropSafety.compatibleView(it.width, it.height,
                             rawSize.width, rawSize.height)
                     }
-                    val matchedLiveOutline = compatibleLiveHint != null &&
+                    val matchedPageOutline = compatibleLiveHint != null &&
                         StillCaptureCropSafety.sameDocumentAsLivePreview(
                             compatibleLiveHint.quad, stillQuad,
                             compatibleLiveHint.width, compatibleLiveHint.height,
@@ -493,18 +493,34 @@ class ScannerSession(
                             rotated, liveHint.quad,
                             liveHint.width, liveHint.height)
                     } else null
+                    // On small cards the old A4-only comparator always
+                    // failed, then selected the white-card segmentation quad
+                    // instead of the *visible* green corners. That can leave
+                    // strips of fabric around an otherwise correct scan.
+                    // Use the independent white-card boundary as verification
+                    // evidence; warp using GREEN coordinates in still space.
+                    val verifiedSmallGreen = liveHint?.let { hint ->
+                        recoveredSmallCard?.let { paper ->
+                            StillCaptureCropSafety.verifiedSmallGreenOnStill(
+                                hint.quad, paper, hint.width, hint.height,
+                                rawSize.width, rawSize.height)
+                        }
+                    }
+                    val matchedLiveOutline =
+                        matchedPageOutline || verifiedSmallGreen != null
                     val reviewHint = compatibleLiveHint?.quad
                     val uncertainStill = when {
-                        recoveredSmallCard != null -> false
-                        liveHint != null -> !matchedLiveOutline
+                        matchedLiveOutline -> false
+                        liveHint != null -> true
                         else -> !config.preferIdCardBounds && !verifiedColourCard &&
                             StillCaptureCropSafety.requiresManualReview(
                                 stillQuad, rawSize.width, rawSize.height, null)
                     }
                     val q = when {
-                        recoveredSmallCard != null -> recoveredSmallCard
-                        matchedLiveOutline -> reviewHint
-                        liveHint != null -> reviewHint // manual editor only
+                        verifiedSmallGreen != null -> verifiedSmallGreen
+                        matchedPageOutline -> reviewHint
+                        liveHint != null ->
+                            reviewHint ?: recoveredSmallCard ?: stillQuad
                         uncertainStill -> null
                         else -> stillQuad
                     }
