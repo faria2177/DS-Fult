@@ -36,6 +36,18 @@ class BatchCropPageState {
     touched = true;
   }
 
+  /// Auto Crop after All re-selects the camera's originally visible green
+  /// quad, not a second still-image rectangle. The user must still inspect
+  /// the handles and confirm; invalid coordinate sets cannot be applied.
+  bool restoreCapturedOutline(List<Offset> hint) {
+    if (hint.length != 4 || !CropQuad(hint).isValid) return false;
+    corners..clear()..addAll(hint);
+    confirmed = true;
+    touched = true;
+    fullImageSelected = false;
+    return true;
+  }
+
   bool updateHandle(int handle, Offset delta) {
     final proposal = [...corners];
     if (handle < 4) {
@@ -166,11 +178,7 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
     if (hint != null && CropQuad(hint).isValid) {
       if (requested && mounted) {
         setState(() {
-          final edit = _edits[index];
-          edit.corners..clear()..addAll(hint);
-          edit.confirmed = true;
-          edit.touched = true;
-          edit.fullImageSelected = false;
+          _edits[index].restoreCapturedOutline(hint);
           if (index == _index) {
             _hint = 'Captured green document outline restored. '
                 'Review the four corners before Done.';
