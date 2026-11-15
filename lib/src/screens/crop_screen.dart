@@ -85,12 +85,20 @@ class _CropScreenState extends State<CropScreen> {
   }
 
   void _resetCorners() {
+    // CamScanner's "All" means the whole CURRENT source picture, not
+    // automatic detection and not all pages in the batch.
     setState(() {
       _corners
         ..clear()
-        ..addAll(CropQuad.inset().corners);
+        ..addAll(const [
+          Offset(0, 0), Offset(1, 0),
+          Offset(1, 1), Offset(0, 1),
+        ]);
+      // Preserve original pixels when Done is tapped without an adjustment;
+      // avoid a redundant full-frame perspective warp or image recompression.
       _cropSelectionConfirmed = false;
-      _hint = 'Full photo restored. Drag corners to crop; Done keeps it unchanged if you do not adjust.';
+      _hint = 'Whole image selected. Drag a handle to crop or tap Done '
+          'to preserve the full original.';
     });
   }
 
@@ -194,7 +202,7 @@ class _CropScreenState extends State<CropScreen> {
                 OutlinedButton.icon(
                   onPressed: _busy || _detecting ? null : _resetCorners,
                   icon: const Icon(Icons.crop_free_outlined),
-                  label: const Text('Reset'),
+                  label: const Text('All'),
                 ),
               ]),
               const SizedBox(height: 10),
