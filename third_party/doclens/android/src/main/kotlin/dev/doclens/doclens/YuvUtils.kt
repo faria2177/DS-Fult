@@ -13,34 +13,50 @@ object YuvUtils {
      * Cropping both luma and chroma *before* detection prevents a border
      * outside the visible ViewPort from being reported as a green quad.
      */
-    internal fun checkedCrop(w: Int, h: Int, cropRect: Rect?): Rect {
-        val crop = cropRect ?: Rect(0, 0, w, h)
-        require(crop.left >= 0 && crop.top >= 0 &&
-            crop.right <= w && crop.bottom <= h &&
-            crop.width() > 0 && crop.height() > 0)
-        return crop
+    // Pure integer geometry can run in local JVM tests without Android's
+    // unmocked Rect constructor. Android Rect stays at the CameraX boundary.
+    data class CropBounds(
+        val left: Int, val top: Int, val width: Int, val height: Int,
+    )
+
+    internal fun checkedCropBounds(
+        w: Int, h: Int, left: Int, top: Int, right: Int, bottom: Int,
+    ): CropBounds {
+        require(left >= 0 && top >= 0 && right <= w && bottom <= h &&
+            right > left && bottom > top)
+        return CropBounds(left, top, right - left, bottom - top)
+    }
+
+    internal fun checkedCrop(w: Int, h: Int, cropRect: Rect?): CropBounds {
+        return if (cropRect == null) {
+            checkedCropBounds(w, h, 0, 0, w, h)
+        } else checkedCropBounds(
+            w, h, cropRect.left, cropRect.top, cropRect.right, cropRect.bottom)
     }
 
     /** Downsample the cropRect only. Coordinates returned by the detector
      * are now already normalized inside the shared CameraX ViewPort. */
-    fun extractLuma(image: Image, downscaleTo: Int, cropRect: Rect? = null): Luma {
+    fun extractLuma(
+        image: Image, downscaleTo: Int, cropBounds: CropBounds? = null,
+    ): Luma {
         val plane = image.planes[0]
         val rowStride = plane.rowStride
         val pixelStride = plane.pixelStride
-        val crop = checkedCrop(image.width, image.height, cropRect)
+        val crop = cropBounds ?: checkedCropBounds(
+            image.width, image.height, 0, 0, image.width, image.height)
         val buffer = plane.buffer.duplicate()
         val origin = buffer.position()
         val scale = (downscaleTo.toFloat() /
-            maxOf(crop.width(), crop.height())).coerceAtMost(1f)
-        val outW = (crop.width() * scale).toInt().coerceAtLeast(1)
-        val outH = (crop.height() * scale).toInt().coerceAtLeast(1)
+            maxOf(crop.width, crop.height)).coerceAtMost(1f)
+        val outW = (crop.width * scale).toInt().coerceAtLeast(1)
+        val outH = (crop.height * scale).toInt().coerceAtLeast(1)
         val out = ByteArray(outW * outH)
         for (y in 0 until outH) {
             val srcY = crop.top +
-                (y / scale).toInt().coerceIn(0, crop.height() - 1)
+                (y / scale).toInt().coerceIn(0, crop.height - 1)
             for (x in 0 until outW) {
                 val srcX = crop.left +
-                    (x / scale).toInt().coerceIn(0, crop.width() - 1)
+                    (x / scale).toInt().coerceIn(0, crop.width - 1)
                 out[y * outW + x] = buffer.get(
                     origin + srcY * rowStride + srcX * pixelStride)
             }
@@ -58,7 +74,7 @@ object YuvUtils {
      * An unsupported/truncated plane falls back to the original luma path.
      */
     fun extractRgba(image: Image, luma: Luma, downscaleTo: Int,
-                    cropRect: Rect? = null): ByteArray? {
+                    cropBounds: CropBounds? = null): ByteArray? {
         if (image.planes.size < 3) return null
         val u = image.planes[1]
         val v = image.planes[2]
@@ -68,7 +84,9 @@ object YuvUtils {
                 sourceWidth = image.width,
                 sourceHeight = image.height,
                 downscaleTo = downscaleTo,
-                cropRect = checkedCrop(image.width, image.height, cropRect),
+                cropBounds = cropBounds ?: checkedCropBounds(
+                    image.width, image.height, 0, 0,
+                    image.width, image.height),
                 uPlane = u.buffer.duplicate(),
                 uRowStride = u.rowStride,
                 uPixelStride = u.pixelStride,
@@ -87,7 +105,7 @@ object YuvUtils {
         sourceWidth: Int,
         sourceHeight: Int,
         downscaleTo: Int,
-        cropRect: Rect = Rect(0, 0, sourceWidth, sourceHeight),
+        cropBounds: CropBounds = CropBounds(0, 0, sourceWidth, sourceHeight),
         uPlane: ByteBuffer,
         uRowStride: Int,
         uPixelStride: Int,
@@ -100,22 +118,25 @@ object YuvUtils {
                 uPixelStride > 0 && vPixelStride > 0)
         require(luma.data.size == luma.width * luma.height)
 
-        val crop = checkedCrop(sourceWidth, sourceHeight, cropRect)
+        val crop = checkedCropBounds(sourceWidth, sourceHeight,
+            cropBounds.left, cropBounds.top,
+            cropBounds.left + cropBounds.width,
+            cropBounds.top + cropBounds.height)
         val scale = (downscaleTo.toFloat() /
-            maxOf(crop.width(), crop.height())).coerceAtMost(1f)
-        require(luma.width == (crop.width() * scale).toInt().coerceAtLeast(1))
-        require(luma.height == (crop.height() * scale).toInt().coerceAtLeast(1))
+            maxOf(crop.width, crop.height)).coerceAtMost(1f)
+        require(luma.width == (crop.width * scale).toInt().coerceAtLeast(1))
+        require(luma.height == (crop.height * scale).toInt().coerceAtLeast(1))
 
         val uBase = uPlane.position()
         val vBase = vPlane.position()
         val rgba = ByteArray(luma.width * luma.height * 4)
         for (y in 0 until luma.height) {
             val srcY = crop.top +
-                (y / scale).toInt().coerceIn(0, crop.height() - 1)
+                (y / scale).toInt().coerceIn(0, crop.height - 1)
             val chromaY = srcY / 2
             for (x in 0 until luma.width) {
                 val srcX = crop.left +
-                    (x / scale).toInt().coerceIn(0, crop.width() - 1)
+                    (x / scale).toInt().coerceIn(0, crop.width - 1)
                 val chromaX = srcX / 2
                 val u = uPlane.get(uBase + chromaY * uRowStride +
                     chromaX * uPixelStride).toInt() and 0xFF
