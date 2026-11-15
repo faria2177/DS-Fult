@@ -524,18 +524,13 @@ class ScannerSession(
                             StillCaptureCropSafety.requiresManualReview(
                                 stillQuad, rawSize.width, rawSize.height, null)
                     }
-                    val q = when {
-                        verifiedSmallGreen != null -> verifiedSmallGreen
-                        matchedPageOutline -> compatibleLiveHint?.quad
-                        verifiedSmallCardBoundary -> recoveredSmallCard
-                        // Preview-space coordinates are not JPEG coordinates.
-                        // Returning the raw still without a guessed quad is
-                        // safer than showing an unrelated green crop and
-                        // silently retaining the whole fabric background.
-                        liveHint != null -> null
-                        uncertainStill -> null
-                        else -> stillQuad
-                    }
+                    val q = StillCaptureCropSafety.selectCameraStillBoundary(
+                        mappedGreen = verifiedSmallGreen ?:
+                            if (matchedPageOutline) compatibleLiveHint?.quad else null,
+                        independentlyVerifiedCard = recoveredSmallCard,
+                        liveGreenSeen = liveHint != null,
+                        ordinaryStill = if (uncertainStill) null else stillQuad,
+                    )
                     val pixelQuad = q?.let {
                         Quad(
                             PointF(it.topLeft.x * rawSize.width, it.topLeft.y * rawSize.height),
