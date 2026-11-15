@@ -143,8 +143,11 @@ mandatory before claiming comparable quality.
 1. Camera opens with a stable rectangular overlay. Manual shutter is the
    default; camera auto-capture is OFF unless explicitly switched on.
 2. The captured full-resolution upright original is retained.
-3. Re-detect corners from the captured still rather than reusing a stale
-   preview outline. Prefer complete paper/card borders to internal labels.
+3. Camera: freeze the quad actually painted at shutter tap and map it through
+   the shared CameraX ViewPort to the EXIF-upright JPEG. Do not replace it with
+   re-detected inner contours or require colour evidence when geometry matches.
+   Re-detect only if no green quad was visible (or on import). Keep the full
+   original for manual adjustment if orientation/aspect cannot be reconciled.
 4. Apply a reliable perspective crop; if uncertain, open Adjust Corners
    and keep the full original on Cancel or unconfirmed handles.
 5. Apply the selected filter to the cropped output, then show **one page** in
