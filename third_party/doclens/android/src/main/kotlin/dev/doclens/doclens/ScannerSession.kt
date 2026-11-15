@@ -510,159 +510,68 @@ class ScannerSession(
                         exifUpright.recycle()
                     }
                     val rawSize = Size(rotated.width, rotated.height)
-                    // The preview quad is measured on a low-resolution YUV
-                    // stream and can drift if a phone uses a different sensor
-                    // crop for still capture. Re-detect against the actual
-                    // upright captured pixels before the irreversible warp.
-                    // Do NOT apply a stale preview quad if still detection
-                    // fails. CameraX stills can have a different crop/zoom;
-                    // preserving the whole original lets the user adjust
-                    // all four corners without irreversible mis-cropping.
-                    val ordinaryStillQuad = QuadDetector.detectInBitmap(
-                        rotated,
-                        config.detectionPolarity,
-                        config.detectionThresholdOffset,
-                        config.preferIdCardBounds,
-                    )
-                    // A coloured card on ruled paper can appear as a small
-                    // object *inside* the large notebook quad detected by
-                    // ordinary page edges. Verify its physical outer border
-                    // independently before warping any captured pixels.
-                    // This stays entirely offline and never synthesizes or
-                    // rewrites the person's portrait or card text.
-                    val colourCard = if (config.preferIdCardBounds) null else
+                    // The Flutter-painted green quad is frozen at shutter.
+                    // CameraX's shared ViewPort makes that selection a
+                    // geometric crop in the EXIF-upright JPEG space.
+                    val liveHint = previewHintAtShutter?.takeIf {
+                        !config.preferIdCardBounds
+                    }
+                    val liveGreenSeen = visibleGreenAtShutter
+                    val mappedGreen = if (liveGreenSeen && matchedViewPortAtShutter &&
+                        lensFacing == CameraSelector.LENS_FACING_BACK) {
+                        liveHint?.let { hint ->
+                            StillCaptureCropSafety.mapGreenToStill(
+                                hint.quad, hint.width, hint.height,
+                                rawSize.width, rawSize.height,
+                            )
+                        }
+                    } else null
+
+                    // The still-image detector is not allowed to overrule
+                    // a screen-visible green outline. Only captures without
+                    // an outline (or dedicated ID-card mode) detect again.
+                    val ordinaryStillQuad = if (!liveGreenSeen ||
+                        config.preferIdCardBounds) QuadDetector.detectInBitmap(
+                            rotated, config.detectionPolarity,
+                            config.detectionThresholdOffset,
+                            config.preferIdCardBounds,
+                        ) else null
+                    val colourCard = if (!liveGreenSeen &&
+                        !config.preferIdCardBounds)
                         QuadDetector.detectColoredCardInBitmap(rotated)
-                    val verifiedColourCard = !config.preferIdCardBounds &&
+                        else null
+                    val verifiedColourCard = !liveGreenSeen &&
+                        !config.preferIdCardBounds &&
                         StillCaptureCropSafety.verifiedColorCardOverBackground(
                             ordinaryStillQuad, colourCard,
                             rawSize.width, rawSize.height)
                     val stillQuad = if (verifiedColourCard) colourCard
                         else ordinaryStillQuad
-                    // CameraX can have a different sensor crop or EXIF rotation
-                    // from the low-resolution preview. Lock the *actual green*
-                    // four-corner quad from the shutter frame only when still
-                    // detection independently corroborates the very same page.
-                    // Do not silently replace it with a different inner table.
-                    val liveHint = previewHintAtShutter?.takeIf {
-                        !config.preferIdCardBounds
-                    }
-                    val liveGreenSeen = visibleGreenAtShutter || liveHint != null
-                    // Capture a separate REVIEW quad even when the STILL
-                    // detector cannot independently verify the paper.
-                    // The old sentinel full-frame quad discarded the green
-                    // coordinates and made the editor select patterned cloth.
-                    // Review metadata never authorizes an automatic warp.
-                    val reviewGreen = liveHint?.let { hint ->
-                        StillCaptureCropSafety.projectGreenToCapturedStill(
-                            hint.quad, hint.width, hint.height,
-                            rawSize.width, rawSize.height,
-                            frameOrientationAtShutter?.rotationDegrees ?: 0,
-                        )
-                    }
-                    // Exact GREEN corners are the crop target when the
-                    // captured still independently confirms those edges,
-                    // including after a 90/270-degree sensor transformation.
-                    val matchedPageOutline = reviewGreen != null && liveHint != null &&
-                        StillCaptureCropSafety.sameDocumentAsLivePreview(
-                            reviewGreen, stillQuad,
-                            rawSize.width, rawSize.height,
-                            rawSize.width, rawSize.height)
-                    // A *small* paper card may cover only ~10% of the live
-                    // view (video 382753.mp4). A4-only gates discard its
-                    // otherwise correct green box and the still detector
-                    // may prefer the patterned cloth. Segment the actual
-                    // neutral WHITE card on the shutter bitmap instead.
-                    // It must pass independent outside-edge contrast and
-                    // live-document aspect/position checks. This is NOT the
-                    // gallery/import detector and never changes that flow.
-                    //
-                    // A CameraX/EXIF 90-degree content rotation may change
-                    // normalized coordinates: use verified STILL corners
-                    // rather than blindly scaling the green coordinates in
-                    // that case. They represent the same physical 4 edges.
-                    val recoveredSmallCard = if (!config.preferIdCardBounds &&
-                        liveHint != null &&
-                        StillCaptureCropSafety.isCredibleSmallDisplayedCard(
-                            liveHint.quad, liveHint.width, liveHint.height)) {
-                        QuadDetector.detectSmallNeutralCardInBitmap(
-                            rotated, liveHint.quad,
-                            liveHint.width, liveHint.height)
-                    } else null
-                    // On small cards the old A4-only comparator always
-                    // failed, then selected the white-card segmentation quad
-                    // instead of the *visible* green corners. That can leave
-                    // strips of fabric around an otherwise correct scan.
-                    // Use the independent white-card boundary as verification
-                    // evidence; warp using GREEN coordinates in still space.
-                    val verifiedSmallGreen = liveHint?.let { hint ->
-                        recoveredSmallCard?.let { paper ->
-                            StillCaptureCropSafety.verifiedSmallGreenOnStill(
-                                hint.quad, paper, hint.width, hint.height,
-                                rawSize.width, rawSize.height)
-                        }
-                    }
-                    // A dense notebook, coloured cover or handwritten form
-                    // can make the still detector return an *inner* contour,
-                    // even while the user's green camera box is exactly right.
-                    // Check the outside-vs-inside pixels around the projected
-                    // GREEN edges on the actual persisted still. When at least
-                    // three outer sides corroborate the green geometry, crop
-                    // those same four green corners without a second auto
-                    // detect/corner adjustment changing the user's selection.
-                    // Incompatible FOV/EXIF or weak borders still go to
-                    // manual Adjust Corners; never guess a rectangle.
-                    val photo = checkNotNull(rotated)
-                    val pixelVerifiedGreen = reviewGreen != null &&
-                        !config.preferIdCardBounds &&
-                        StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
-                            reviewGreen, rawSize.width, rawSize.height,
-                        ) { x, y -> photo.getPixel(x, y) }
-                    // The full-resolution JPEG can use a different view
-                    // orientation AND camera crop than the analysis stream.
-                    // If mapping the exact green quad fails, a white-paper
-                    // component that independently matches the visible small
-                    // card is a safe still-space boundary. Crucially, NEVER
-                    // fall back to the unrotated portrait green rectangle on
-                    // a landscape card photo: that was the user's narrow
-                    // 4-handle crop in the 15 Nov 2026 screenshots.
-                    // The screen's green outline is the crop contract. With
-                    // CameraX's shared sensor ViewPort, the mapped corners are
-                    // authoritative even for low-contrast pages where a second
-                    // edge detector would choose an inner title/table or no
-                    // border at all. A JPEG of incompatible orientation/ratio
-                    // still cannot use them and requires manual adjustment.
-                    val mappedViewportGreen = liveHint?.let { hint ->
-                        StillCaptureCropSafety.sharedViewportGreen(
-                            hint.quad, hint.width, hint.height,
-                            rawSize.width, rawSize.height,
-                            frameOrientationAtShutter?.rotationDegrees ?: 0,
-                            matchedViewPortAtShutter &&
-                                lensFacing == CameraSelector.LENS_FACING_BACK,
-                        )
-                    }
-                    val matchedLiveOutline = mappedViewportGreen != null ||
-                        matchedPageOutline || verifiedSmallGreen != null ||
-                        pixelVerifiedGreen
-                    val uncertainStill = when {
-                        matchedLiveOutline -> false
-                        // Captured green corners are authoritative: if the
-                        // JPEG cannot verify them, review them manually.
-                        // Never substitute a different card/inner table.
-                        liveGreenSeen -> true
-                        else -> !config.preferIdCardBounds && !verifiedColourCard &&
+
+                    val matchedLiveOutline = liveGreenSeen && mappedGreen != null
+                    val uncertainStill = if (liveGreenSeen) {
+                        mappedGreen == null
+                    } else {
+                        !config.preferIdCardBounds && !verifiedColourCard &&
                             StillCaptureCropSafety.requiresManualReview(
                                 stillQuad, rawSize.width, rawSize.height, null)
                     }
-                    val q = StillCaptureCropSafety.selectCameraStillBoundary(
-                        mappedGreen = when {
-                            mappedViewportGreen != null -> mappedViewportGreen
-                            pixelVerifiedGreen || matchedPageOutline -> reviewGreen
-                            else -> verifiedSmallGreen
-                        },
-                        independentlyVerifiedCard = recoveredSmallCard,
+                    val q = StillCaptureCropSafety.cameraCaptureSelection(
                         liveGreenSeen = liveGreenSeen,
+                        mappedGreen = mappedGreen,
                         ordinaryStill = if (uncertainStill) null else stillQuad,
+                        independentlyVerifiedCard =
+                            if (verifiedColourCard) colourCard else null,
                     )
+
+                    // Pixel evidence is diagnostic confidence only. Neutral
+                    // paper, dense writing and slightly inset outlines must
+                    // NOT block the exact visible quad.
+                    val photo = checkNotNull(rotated)
+                    val borderConfidence = mappedGreen != null &&
+                        StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+                            mappedGreen, rawSize.width, rawSize.height,
+                        ) { x, y -> photo.getPixel(x, y) }
                     val pixelQuad = q?.let {
                         Quad(
                             PointF(it.topLeft.x * rawSize.width, it.topLeft.y * rawSize.height),
@@ -709,13 +618,12 @@ class ScannerSession(
                         // Camera-only metadata: gallery/import does not
                         // receive or depend on either of these fields.
                         "liveOutlineAtShutter" to liveGreenSeen,
+                        // Informative only: never a crop authorization gate.
+                        "borderConfidence" to borderConfidence,
                         // Image-space green outline for explicit manual
                         // acceptance when still evidence is inconclusive.
                         // Deliberately separate from the warp-only "quad".
-                        "reviewQuad" to (mappedViewportGreen ?: 
-                            if (verifiedSmallGreen != null &&
-                                !pixelVerifiedGreen && !matchedPageOutline)
-                                verifiedSmallGreen else reviewGreen)?.let { g ->
+                        "reviewQuad" to mappedGreen?.let { g ->
                             Quad(
                                 PointF(g.topLeft.x * rawSize.width,
                                     g.topLeft.y * rawSize.height),
@@ -727,10 +635,8 @@ class ScannerSession(
                                     g.bottomLeft.y * rawSize.height),
                             ).toMap()
                         },
-                        // True only if a perspective crop was actually
-                        // generated from a verified SAME document boundary.
-                        // Previously a tentative recovered card flagged this
-                        // true even when no native crop was returned.
+                        // True when the frozen green corners were mapped
+                        // geometrically and successfully perspective-warped.
                         "liveOutlineMatched" to
                             (croppedPath != null && matchedLiveOutline),
                         "quad" to (pixelQuad ?: Quad(
