@@ -149,10 +149,15 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
         _ratios[index] = ratio;
         final hint = widget.capturedCornerHints[index];
         if (hint != null && hint.length == 4 && CropQuad(hint).isValid) {
-          _edits[index].corners..clear()..addAll(hint);
+          // The camera already showed these green corners. Opening Adjust
+          // Corners is the explicit review step; Done accepts its visible
+          // selection (and Cancel discards the scan). Requiring a second
+          // hidden "Use captured outline" tap previously saved the WHOLE
+          // original instead of cropping the selected notebook page.
+          _edits[index].restoreCapturedOutline(hint);
           if (index == _index) {
-            _hint = 'Captured four corners restored. Adjust a handle or '
-                'confirm this outline to crop.';
+            _hint = 'Camera green corners selected. Review or drag them, '
+                'then tap Done to crop this exact document.';
           }
         }
       });
