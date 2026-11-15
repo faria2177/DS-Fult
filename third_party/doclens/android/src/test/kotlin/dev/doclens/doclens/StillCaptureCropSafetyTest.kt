@@ -115,6 +115,41 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun capturedSmallCardUsesRotatedGreenEdgesNotWiderClothBoundary() {
+        // In the supplied video the live image is upright and portrait,
+        // while the JPEG may contain the same card rotated clockwise.
+        val visibleGreen = rect(.33f, .31f, .61f, .67f)
+        val independentCard = rect(.341f, .340f, .681f, .600f)
+        val verified = StillCaptureCropSafety.verifiedSmallGreenOnStill(
+            visibleGreen, independentCard, 320, 420, 420, 320)
+        assertTrue(verified != null)
+        // The independent detector checks the paper but does NOT become
+        // the crop target. Returned corners are the transformed GREEN box.
+        assertTrue(kotlin.math.abs(verified.topLeft.x - .33f) < .0001f)
+        assertTrue(kotlin.math.abs(verified.topLeft.y - .33f) < .0001f)
+        assertTrue(kotlin.math.abs(verified.bottomRight.x - .69f) < .0001f)
+        assertTrue(kotlin.math.abs(verified.bottomRight.y - .61f) < .0001f)
+    }
+
+    @Test
+    fun greenCaptureRejectsUnrelatedLargeBackgroundRectangle() {
+        val visibleGreen = rect(.33f, .31f, .61f, .67f)
+        val largeCloth = rect(.05f, .05f, .95f, .95f)
+        assertTrue(StillCaptureCropSafety.verifiedSmallGreenOnStill(
+            visibleGreen, largeCloth, 320, 420, 420, 320) == null)
+        assertTrue(StillCaptureCropSafety.verifiedSmallGreenOnStill(
+            visibleGreen, null, 320, 420, 420, 320) == null)
+    }
+
+    @Test
+    fun greenCaptureDoesNotForceCropOnIncompatibleSensorAspect() {
+        val visibleGreen = rect(.33f, .31f, .61f, .67f)
+        val captured = rect(.33f, .33f, .69f, .61f)
+        assertTrue(StillCaptureCropSafety.verifiedSmallGreenOnStill(
+            visibleGreen, captured, 320, 420, 1920, 1080) == null)
+    }
+
+    @Test
     fun video382753SmallGreenCardIsNotDiscardedByA4PageThreshold() {
         // Live frame: small, 90°-rotated landscape business card on patterned
         // fabric. Its four real corners cover only ~10% of the preview.
