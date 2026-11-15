@@ -305,10 +305,14 @@ class _CameraScreenState extends State<CameraScreen> {
       ...generatedOutputs,
     };
     for (final path in files) {
-      if (path.isEmpty) continue;
+      if (path.isEmpty) {
+        continue;
+      }
       try {
         final file = File(path);
-        if (await file.exists()) await file.delete();
+        if (await file.exists()) {
+          await file.delete();
+        }
       } catch (_) {
         // Cancellation must always return to the camera, including when
         // Android has already cleaned one of its temporary cache files.
