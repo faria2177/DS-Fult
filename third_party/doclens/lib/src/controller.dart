@@ -97,6 +97,22 @@ class DoclensController extends ChangeNotifier {
   Quad? _lastQuad;
   Quad? get lastQuad => _lastQuad;
 
+  // The latest native detection can run ahead of the UI by one Flutter frame.
+  // Capture MUST use the quad that was actually painted green, not a newer
+  // detection whose corners the user has never seen.
+  Quad? _lastPaintedQuad;
+  bool _hasPaintedQuad = false;
+  Quad? get visibleGreenQuad =>
+      _hasPaintedQuad ? _lastPaintedQuad : _lastQuad;
+
+  /// Called after Flutter finishes painting its preview/green overlay.
+  /// Does not notify listeners or schedule another frame.
+  void recordPaintedGreenQuad(Quad? quad) {
+    if (_disposed) return;
+    _lastPaintedQuad = quad;
+    _hasPaintedQuad = true;
+  }
+
   DetectionStatus _status = DetectionStatus.searching;
   DetectionStatus get status => _status;
 
@@ -304,7 +320,10 @@ class DoclensController extends ChangeNotifier {
     _capturing = true;
     _log('autoCapture: native capture starting');
     try {
-      final result = await DoclensPlatform.instance.capture();
+      final platform = DoclensPlatform.instance;
+      final result = platform is MethodChannelDoclens
+          ? await platform.captureWithDisplayedQuad(visibleGreenQuad)
+          : await platform.capture();
       _log('autoCapture: native capture succeeded '
           '(cropped=${result.croppedImagePath != null}, '
           'warpError=${result.warpError})');
@@ -337,9 +356,14 @@ class DoclensController extends ChangeNotifier {
     }
   }
 
-  /// Trigger a full-resolution capture using the most recently detected quad.
-  /// Throws [StateError] if a capture is already in flight.
-  Future<ScanResult> capture() async {
+  /// Capture using the quad visible when the shutter was tapped. When a
+  /// focus delay is enabled, callers pass the frozen tap-time selection.
+  /// Never replace it with a newer frame while focus is running.
+  /// Throws [StateError] if another capture is already in flight.
+  Future<ScanResult> capture({
+    Quad? displayedQuadAtTap,
+    bool useTapSnapshot = false,
+  }) async {
     _ensureReady();
     if (_capturing) {
       throw StateError('Capture already in progress');
@@ -353,7 +377,9 @@ class DoclensController extends ChangeNotifier {
       // to the Android native still verifier. Custom platform implementations
       // retain the original interface unchanged.
       if (platform is MethodChannelDoclens) {
-        return await platform.captureWithDisplayedQuad(_lastQuad);
+        return await platform.captureWithDisplayedQuad(
+          useTapSnapshot ? displayedQuadAtTap : visibleGreenQuad,
+        );
       }
       return await platform.capture();
     } finally {
