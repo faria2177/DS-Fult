@@ -259,6 +259,67 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * Map a *small* live green quadrilateral into the captured JPEG's
+     * coordinate frame, but only when an independent still-image card edge
+     * corroborates every projected corner. CameraX may rotate the still by
+     * 90/180/270 degrees even when the screen remains portrait.
+     *
+     * Critical: return the rotated GREEN corners, never replace them with
+     * the detector's looser rectangle (which can include blue fabric).
+     * The still quad acts solely as the verification target. A weak match
+     * is NOT an authorization to crop and must go to manual review.
+     */
+    fun verifiedSmallGreenOnStill(
+        green: Quad, still: Quad?,
+        previewWidth: Int, previewHeight: Int,
+        stillWidth: Int, stillHeight: Int,
+    ): Quad? {
+        if (still == null || !isCredibleSmallDisplayedCard(
+                green, previewWidth, previewHeight)) return null
+        if (!isCredibleSmallDisplayedCard(still, stillWidth, stillHeight) &&
+            !isCredibleCard(still, stillWidth, stillHeight)) return null
+        if (!compatibleView(previewWidth, previewHeight, stillWidth, stillHeight) &&
+            !compatibleView(previewWidth, previewHeight, stillHeight, stillWidth)) {
+            return null
+        }
+        val original = listOf(green.topLeft, green.topRight,
+            green.bottomRight, green.bottomLeft)
+        val detected = listOf(still.topLeft, still.topRight,
+            still.bottomRight, still.bottomLeft)
+        val stillArea = area(still)
+        var best: Quad? = null
+        var bestDistance = Double.POSITIVE_INFINITY
+        for (degrees in listOf(0, 90, 180, 270)) {
+            val projectedPoints = original.map { p ->
+                when (degrees) {
+                    90 -> PointF(1f - p.y, p.x)
+                    180 -> PointF(1f - p.x, 1f - p.y)
+                    270 -> PointF(p.y, 1f - p.x)
+                    else -> p
+                }
+            }
+            val projected = QuadOrdering.reorderClockwise(projectedPoints)
+            val ratio = area(projected) / stillArea.coerceAtLeast(.001)
+            if (ratio !in .76..1.27) continue
+            val corners = listOf(projected.topLeft, projected.topRight,
+                projected.bottomRight, projected.bottomLeft)
+            val distances = corners.indices.map { i ->
+                hypot((corners[i].x - detected[i].x).toDouble(),
+                    (corners[i].y - detected[i].y).toDouble())
+            }
+            // Distinguish small edge jitter from a different rectangle.
+            val worst = distances.maxOrNull() ?: continue
+            val mean = distances.average()
+            if (worst > .095 || mean > .061) continue
+            if (mean < bestDistance) {
+                bestDistance = mean
+                best = projected
+            }
+        }
+        return best
+    }
+
+    /**
      * A green contour at shutter time belongs to the *analysis* stream, not
      * the still JPEG. Trust its exact four corners only when the captured
      * image independently confirms the same document outside boundary and
