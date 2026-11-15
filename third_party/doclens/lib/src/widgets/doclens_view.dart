@@ -191,6 +191,16 @@ class _DoclensViewState extends State<DoclensView>
     final textureId = c.textureId;
     final preview = _previewSize;
 
+    // The native detector may publish new corners before Flutter paints
+    // them. Record the *actually rendered* green outline after this frame,
+    // so pressing the shutter never freezes a newer, unseen detection.
+    final paintedQuad = _quad;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(widget.controller, c)) {
+        c.recordPaintedGreenQuad(paintedQuad);
+      }
+    });
+
     // The Texture + quad overlay must share the same coordinate rect so
     // that normalized [0,1] corners land on the right pixels. We compose
     // them inside a SizedBox sized to the *buffer's* dimensions, then
