@@ -233,7 +233,7 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
-    fun cameraPhotoUsesVerifiedHorizontalCardNotUnrotatedVerticalGreenBox() {
+    fun unmatchedGreenMustNotBeReplacedByDifferentStillCardBoundary() {
         val previewGreen = rect(.34f, .35f, .61f, .67f)
         val stillCard = rect(.24f, .35f, .78f, .62f)
         val mistakenStillContour = rect(.39f, .37f, .59f, .67f)
@@ -246,12 +246,20 @@ class StillCaptureCropSafetyTest {
             liveGreenSeen = true,
             ordinaryStill = mistakenStillContour,
         )
-        assertTrue(chosen == stillCard)
+        // The separate still card may be offset from the quad the user
+        // actually saw. Never silently crop that other boundary.
+        assertTrue(chosen == null)
         assertFalse(chosen == previewGreen)
         assertTrue(StillCaptureCropSafety.selectCameraStillBoundary(
             mappedGreen = null, independentlyVerifiedCard = null,
             liveGreenSeen = true, ordinaryStill = mistakenStillContour,
         ) == null)
+        // Without visible green, traditional safe still-image selection is
+        // still available (e.g. camera captured before detection appeared).
+        assertTrue(StillCaptureCropSafety.selectCameraStillBoundary(
+            mappedGreen = null, independentlyVerifiedCard = stillCard,
+            liveGreenSeen = false, ordinaryStill = mistakenStillContour,
+        ) == stillCard)
     }
 
     @Test
