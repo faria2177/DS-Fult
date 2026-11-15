@@ -424,13 +424,27 @@ class ScannerSession(
                     // subsampling it to 3MP before applying the perspective warp.
                     raw = decodeDownscaled(file.absolutePath, maxDimension = 4096)
                         ?: throw ScannerException.CaptureFailed("Decode failed")
-                    // EXIF is the authoritative CameraX still orientation.
-                    // The old `missingExifQuarterTurns` path rotated again
-                    // whenever preview/still shapes were transposed, which
-                    // turned upright notebook pages sideways and mismapped
-                    // the captured green box. A different FOV is NOT proof
-                    // of a missing EXIF rotation.
-                    rotated = ExifRotator.rotated(raw, file.absolutePath)
+                    // EXIF is authoritative when present. HONOR CameraX
+                    // can nevertheless save LANDSCAPE pixel data without
+                    // its expected 90/270 EXIF while the analysis preview is
+                    // portrait (the user's scan then appeared rotated in
+                    // Adjust Corners). Recover a missing EXIF quarter-turn
+                    // ONLY on an exact transposed 4:3 aspect match AND a
+                    // known 90/270 frame rotation. Never guess based merely
+                    // on document text direction or a square subject.
+                    val exifUpright = ExifRotator.rotated(raw, file.absolutePath)
+                    val missingTurns = frameOrientationAtShutter?.let { frame ->
+                        StillCaptureCropSafety.missingExifQuarterTurns(
+                            frame.width, frame.height,
+                            exifUpright.width, exifUpright.height,
+                            frame.rotationDegrees,
+                        )
+                    } ?: 0
+                    rotated = if (missingTurns == 0) exifUpright else
+                        ImageWarper.rotateBitmap(exifUpright, missingTurns)
+                    if (rotated !== exifUpright && exifUpright !== raw) {
+                        exifUpright.recycle()
+                    }
                     val rawSize = Size(rotated.width, rotated.height)
                     // The preview quad is measured on a low-resolution YUV
                     // stream and can drift if a phone uses a different sensor
@@ -468,14 +482,29 @@ class ScannerSession(
                     val liveHint = previewHintAtShutter?.takeIf {
                         !config.preferIdCardBounds
                     }
+                    // Capture a separate REVIEW quad even when the STILL
+                    // detector cannot independently verify the paper.
+                    // The old sentinel full-frame quad discarded the green
+                    // coordinates and made the editor select patterned cloth.
+                    // Review metadata never authorizes an automatic warp.
+                    val reviewGreen = liveHint?.let { hint ->
+                        StillCaptureCropSafety.projectGreenToCapturedStill(
+                            hint.quad, hint.width, hint.height,
+                            rawSize.width, rawSize.height,
+                            frameOrientationAtShutter?.rotationDegrees ?: 0,
+                        )
+                    }
                     val compatibleLiveHint = liveHint?.takeIf {
                         StillCaptureCropSafety.compatibleView(it.width, it.height,
                             rawSize.width, rawSize.height)
                     }
-                    val matchedPageOutline = compatibleLiveHint != null &&
+                    // Exact GREEN corners are the crop target when the
+                    // captured still independently confirms those edges,
+                    // including after a 90/270-degree sensor transformation.
+                    val matchedPageOutline = reviewGreen != null && liveHint != null &&
                         StillCaptureCropSafety.sameDocumentAsLivePreview(
-                            compatibleLiveHint.quad, stillQuad,
-                            compatibleLiveHint.width, compatibleLiveHint.height,
+                            reviewGreen, stillQuad,
+                            rawSize.width, rawSize.height,
                             rawSize.width, rawSize.height)
                     // A *small* paper card may cover only ~10% of the live
                     // view (video 382753.mp4). A4-only gates discard its
@@ -531,7 +560,7 @@ class ScannerSession(
                     }
                     val q = StillCaptureCropSafety.selectCameraStillBoundary(
                         mappedGreen = verifiedSmallGreen ?:
-                            if (matchedPageOutline) compatibleLiveHint?.quad else null,
+                            if (matchedPageOutline) reviewGreen else null,
                         independentlyVerifiedCard = recoveredSmallCard,
                         liveGreenSeen = liveHint != null,
                         ordinaryStill = if (uncertainStill) null else stillQuad,
@@ -582,6 +611,21 @@ class ScannerSession(
                         // Camera-only metadata: gallery/import does not
                         // receive or depend on either of these fields.
                         "liveOutlineAtShutter" to (liveHint != null),
+                        // Image-space green outline for explicit manual
+                        // acceptance when still evidence is inconclusive.
+                        // Deliberately separate from the warp-only "quad".
+                        "reviewQuad" to reviewGreen?.let { g ->
+                            Quad(
+                                PointF(g.topLeft.x * rawSize.width,
+                                    g.topLeft.y * rawSize.height),
+                                PointF(g.topRight.x * rawSize.width,
+                                    g.topRight.y * rawSize.height),
+                                PointF(g.bottomRight.x * rawSize.width,
+                                    g.bottomRight.y * rawSize.height),
+                                PointF(g.bottomLeft.x * rawSize.width,
+                                    g.bottomLeft.y * rawSize.height),
+                            ).toMap()
+                        },
                         // True only if a perspective crop was actually
                         // generated from a verified SAME document boundary.
                         // Previously a tentative recovered card flagged this
