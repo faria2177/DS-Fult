@@ -219,7 +219,9 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
   }
 
   void _selectAllOfCurrentImage() {
-    if (_working) return;
+    if (_working) {
+      return;
+    }
     setState(() {
       _edits[_index].selectWholeImage();
       _hint = 'Full image selected. Tap Auto Crop to return to the '
