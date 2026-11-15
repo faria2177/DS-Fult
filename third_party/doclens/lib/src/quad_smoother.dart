@@ -7,8 +7,11 @@ import 'quad.dart';
 /// Sliding-window median filter with document-identity hysteresis.
 ///
 /// Candidate observations of the same document are median-filtered and then
-/// adaptively blended into a single displayed quadrilateral. Tiny variations
-/// move very slowly; deliberate camera movement follows faster. A detector can
+/// adaptively blended into a single displayed quadrilateral. In a stationary
+/// scene a short robust average and the median must both disagree with the
+/// displayed outline before it moves. This rejects single-frame corner noise
+/// without locking out a genuinely moving page. Deliberate camera motion
+/// follows with a larger adaptive blending factor. A detector can
 /// briefly prefer a background rectangle when light changes: feeding that
 /// outlier directly into the display would cause a jumping green box.
 /// Large changes must therefore persist for [switchConfirmationFrames]
@@ -84,18 +87,39 @@ class QuadSmoother {
       _unmatchedFrames = 0;
       _outlineSuppressed = false;
       _append(quad);
-      final distance = _tracked!.maxCornerDistance(quad);
-      // ~3-4 preview pixels of hand tremor must not animate all four edges.
-      // The median still receives every valid frame and catches up when
-      // deliberate movement extends beyond this display deadband.
-      if (distance < .006) {
-        return _tracked;
+
+      final displayed = _tracked!;
+      final median = _median();
+      final mean = _recentMean(4);
+      final rawDelta = displayed.maxCornerDistance(quad);
+      final medianDelta = displayed.maxCornerDistance(median);
+      final meanDelta = displayed.maxCornerDistance(mean);
+
+      // A perfectly still sheet may produce alternating 1% corner errors
+      // from auto-exposure, focus, subpixel contour fitting or faint edges.
+      // The old interpolation followed those errors on every frame and the
+      // green edges visibly vibrated. A genuine displacement, in contrast,
+      // causes *several consecutive observations* to move their mean.
+      //
+      // Keep the EXACT same displayed points while the recent geometry
+      // agrees within a small noise envelope. This also prevents needless
+      // overlay paints and preserves the shutter's visible four corners.
+      // Median protects against a one-frame spike; mean rejects alternating
+      // jitter even when an odd-sized median alternates sign.
+      if ((meanDelta <= .012 && medianDelta <= .014) ||
+          (meanDelta <= .008 && rawDelta <= .036)) {
+        return displayed;
       }
-      final alpha = distance < .008 ? .20 : distance < .035 ? .45 : .68;
-      // Give recent movement more influence than the window median so a
-      // moving phone does not leave a visibly lagging box on the document.
-      final target = Quad.interpolate(_median(), quad, .72);
-      _tracked = Quad.interpolate(_tracked!, target, alpha);
+
+      // Once consistent movement exceeds the noise envelope, follow the
+      // actual object without the long lag of a full-window median. Smaller
+      // shifts are damped more strongly than large intentional movement.
+      final blendRecent = rawDelta > .040 ? .76 : .46;
+      final target = Quad.interpolate(median, quad, blendRecent);
+      final distance = displayed.maxCornerDistance(target);
+      if (distance <= .004) return displayed;
+      final alpha = distance < .020 ? .30 : distance < .055 ? .53 : .74;
+      _tracked = Quad.interpolate(displayed, target, alpha);
       return _tracked;
     }
 
@@ -192,6 +216,32 @@ class QuadSmoother {
       return false;
     }
     return a.maxCornerDistance(b) <= switchDistanceThreshold;
+  }
+
+  /// Average of the most recent observations, used only to detect
+  /// persistent movement (not as the visible corner coordinates). This
+  /// keeps the output quiet even if a 7-sample median flips back/forth
+  /// between two equally plausible subpixel paper edges.
+  Quad _recentMean(int count) {
+    final recent = _buffer.toList().reversed.take(count).toList();
+    assert(recent.isNotEmpty);
+    Offset mean(Offset Function(Quad) corner) {
+      var x = 0.0;
+      var y = 0.0;
+      for (final observation in recent) {
+        final p = corner(observation);
+        x += p.dx;
+        y += p.dy;
+      }
+      return Offset(x / recent.length, y / recent.length);
+    }
+
+    return Quad(
+      topLeft: mean((q) => q.topLeft),
+      topRight: mean((q) => q.topRight),
+      bottomRight: mean((q) => q.bottomRight),
+      bottomLeft: mean((q) => q.bottomLeft),
+    );
   }
 
   Quad _median() {
