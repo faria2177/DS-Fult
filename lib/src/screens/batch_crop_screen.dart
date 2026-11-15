@@ -96,7 +96,8 @@ class BatchCropScreen extends StatefulWidget {
       this.initialIndex = 0, this.preferIdCardBounds = false,
       this.onlyEdited = false, this.sideLabels = const <String>[],
       this.comparisonPaths = const <String>[],
-      this.capturedCornerHints = const <int, List<Offset>>{} });
+      this.capturedCornerHints = const <int, List<Offset>>{},
+      this.manualOnlyCameraPages = const <int>{} });
 
   final List<String> imagePaths;
   final int initialIndex;
@@ -110,6 +111,11 @@ class BatchCropScreen extends StatefulWidget {
   /// Hints are preview-only until a still detector validates them or the user
   /// explicitly accepts/adjusts the corners.
   final Map<int, List<Offset>> capturedCornerHints;
+
+  /// A camera capture that had visible green corners but whose preview/JPEG
+  /// mapping is unknown. Do not display another detector's arbitrary border
+  /// on first review; let the user position the four handles instead.
+  final Set<int> manualOnlyCameraPages;
 
   @override
   State<BatchCropScreen> createState() => _BatchCropScreenState();
@@ -161,7 +167,15 @@ class _BatchCropScreenState extends State<BatchCropScreen> {
           }
         }
       });
-      await _detect(index);
+      if (widget.manualOnlyCameraPages.contains(index)) {
+        if (index == _index && mounted) {
+          setState(() => _hint = 'Camera outline could not be aligned with '
+              'the captured photo. Adjust the four corners manually; '
+              'Done without an adjustment preserves the full photo.');
+        }
+      } else {
+        await _detect(index);
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _hint =
