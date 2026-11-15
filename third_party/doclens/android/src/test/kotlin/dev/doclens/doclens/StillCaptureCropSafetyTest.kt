@@ -115,6 +115,41 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun previewGreenKeepsExactlySameFourCornersInUprightStillReview() {
+        // Portrait camera captures one page of an open notebook; the still
+        // detector misses it because of pencil marks and a second ruled page.
+        val green = rect(.22f, .22f, .80f, .84f)
+        val mapped = StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1200, 1600, 90)
+        assertTrue(mapped == green)
+    }
+
+    @Test
+    fun portraitGreenMapsIntoLandscapeJpegAndNeverBecomesFullFrame() {
+        val green = rect(.21f, .20f, .78f, .84f)
+        val rotated = StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1600, 1200, 90)
+        val expected = rect(.16f, .21f, .80f, .78f)
+        assertTrue(rotated == expected)
+        assertTrue(StillCaptureCropSafety.area(rotated) < .60)
+        // CameraX's opposite 270-degree pixel orientation must work too.
+        val other = StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1600, 1200, 270)
+        assertTrue(other == rect(.20f, .22f, .84f, .79f))
+    }
+
+    @Test
+    fun cameraGreenReviewNeverGuessesIncompatibleFovOrMissingRotation() {
+        val green = rect(.21f, .20f, .78f, .84f)
+        assertTrue(StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1920, 1080, 90) == null)
+        assertTrue(StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1600, 1200, 0) == null)
+        assertTrue(StillCaptureCropSafety.projectGreenToCapturedStill(
+            rect(0f, 0f, 1f, 1f), 300, 400, 1200, 1600, 90) == null)
+    }
+
+    @Test
     fun cameraPhotoUsesVerifiedHorizontalCardNotUnrotatedVerticalGreenBox() {
         val previewGreen = rect(.34f, .35f, .61f, .67f)
         val stillCard = rect(.24f, .35f, .78f, .62f)
