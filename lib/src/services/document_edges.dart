@@ -390,7 +390,15 @@ class DocumentEdges {
         size.width < 16 || size.height < 16) {
       return null;
     }
-    final points = capture.detectedQuad.points.map(
+    // CameraX can lose its still-image detector after capturing a correctly
+    // tracked document (e.g. grey drawn page beside a lined white page).
+    // Native then returns a full-frame sentinel in detectedQuad. Prefer the
+    // *separate*, orientation-mapped visible green quad for MANUAL review.
+    // This hint is never automatic proof of the still's document edges.
+    final source = capture.liveOutlineAtShutter && capture.reviewQuad != null
+        ? capture.reviewQuad!
+        : capture.detectedQuad;
+    final points = source.points.map(
       (p) => Offset(p.dx / size.width, p.dy / size.height),
     ).toList(growable: false);
     final candidate = CropQuad(points);
@@ -401,7 +409,21 @@ class DocumentEdges {
     );
     // A full-frame rectangle is the native payload's sentinel for "nothing
     // found", not a real contour. Do not recreate the false border.
-    if (quad.area > .94 || quad.area < .06) return null;
+    if (quad.area > .94 || quad.area < .045) return null;
+    if (capture.reviewQuad != null && capture.liveOutlineAtShutter) {
+      // Already converted into the persisted raw JPEG's coordinates. Let the
+      // user adjust/explicitly accept the exact camera green four corners
+      // regardless of still-only contour detector failure. Gallery and
+      // imported file detection never use this path.
+      final px = quad.scaleToSize(size).points;
+      final w = ((px[1] - px[0]).distance +
+                 (px[2] - px[3]).distance) / 2;
+      final h = ((px[3] - px[0]).distance +
+                 (px[2] - px[1]).distance) / 2;
+      if (w <= 0 || h <= 0) return null;
+      final ratio = math.max(w, h) / math.min(w, h);
+      return ratio >= 1.02 && ratio <= 3.5 ? candidate : null;
+    }
     final detection = ImageDetection(quad: quad, imageSize: size);
     if (preferIdCardBounds) {
       // A small photo of a card may still use these corners for *manual*
