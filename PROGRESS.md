@@ -246,6 +246,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Freeze the Flutter-painted green quad at shutter tap. Crop exactly its normalized coordinates when the upright JPEG and analysis ViewPort have matching aspect ratios; otherwise retain the full upright original for manual Adjust Corners. No guessed 90-degree transform, independently detected inner rectangle, or pixel-gradient gate for a visible green quad.
 - Border evidence is a diagnostic confidence signal calculated from 5×5 RGB neighbourhoods and several offsets. Unit regressions cover YUV cropped chroma, geometry match/mismatch and low-contrast paper. **CI completion and real HONOR camera accuracy still require verification.** Import Images / Files and card-specific flows remain separate.
 
+## 2026-11-16 — Suppress residual green-border micro-jitter
+
+- The existing 7-frame identity median still blended a single small (~0.6–3.5% normalized) detector displacement into the live polygon with a high alpha, leaving noticeable edge vibration while a sheet was stationary.
+- The Flutter `QuadSmoother` now keeps the **exact** same displayed corners when a short-term mean and robust median agree within a small noise envelope. Once coherent movement persists, a larger adaptive blend follows the new four corners. Incoherent false-background rectangles still require the original identity-switch confirmation.
+- `DoclensController` no longer re-emits unchanged quad geometry to the Flutter painter; previously painted corners are cleared on camera session resets so the shutter never reuses a stale screen polygon.
+- Three synthetic regressions exercise dozens of alternating asymmetric corner-jitter frames, one-frame false contour movement, and sustained intentional movement. Actual HONOR Android 16 jitter, frame rate and shutter alignment **must** be rechecked with a successful new APK build.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
