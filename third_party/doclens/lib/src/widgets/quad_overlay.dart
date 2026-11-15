@@ -154,7 +154,14 @@ class QuadOverlay extends StatelessWidget {
 
   final _QuadStyle _style;
 
-  Color get _resolvedColor {
+  /// Keep the Single/Batch document outline consistently green while a
+  /// valid quad is visible. Detection guidance can fluctuate briefly between
+  /// aligned/tilted/near during auto-exposure; this should not flash the
+  /// accepted green boundary amber or vary its opacity.
+  Color get resolvedColor {
+    if (quad != null && _style == _QuadStyle.filled) {
+      return accent.withValues(alpha: .95);
+    }
     switch (status) {
       case DetectionStatus.confirming:
         return accent;
@@ -181,7 +188,7 @@ class QuadOverlay extends StatelessWidget {
     return CustomPaint(
       painter: _QuadOverlayPainter(
         quad: quad,
-        color: _resolvedColor,
+        color: resolvedColor,
         style: _style,
         status: status,
         strokeWidth: strokeWidth,
@@ -348,7 +355,9 @@ class _QuadOverlayPainter extends CustomPainter {
       old.quad != quad ||
       old.color != color ||
       old.style != style ||
-      old.status != status ||
+      // Filled camera outlines do not use status for color or geometry;
+      // avoid repainting a stationary green quad on guidance-only changes.
+      (style != _QuadStyle.filled && old.status != status) ||
       old.strokeWidth != strokeWidth ||
       old.bracketLength != bracketLength ||
       old.dotRadius != dotRadius;
