@@ -19,6 +19,28 @@ void main() {
     expect(outline.strokeWidth, 2.0);
   });
 
+  test('visible filled green outline keeps one color through status jitter', () {
+    const green = Color(0xFF00B69B);
+    const paper = Quad(
+      topLeft: Offset(.2, .15),
+      topRight: Offset(.8, .15),
+      bottomRight: Offset(.8, .88),
+      bottomLeft: Offset(.2, .88),
+    );
+    final colors = [
+      DetectionStatus.aligned,
+      DetectionStatus.tilted,
+      DetectionStatus.tooFar,
+      DetectionStatus.confirming,
+      DetectionStatus.searching,
+      DetectionStatus.focusing,
+    ].map((status) => QuadOverlay.filled(
+      quad: paper, status: status, accent: green,
+    ).resolvedColor).toSet();
+
+    expect(colors, {green.withValues(alpha: .95)});
+  });
+
   // Widget-tree smoke test: intentionally avoid RepaintBoundary.toImage().
   // CI's headless software renderer can stall during pixel readback even
   // though the painter and layout are valid, blocking the release APK.
