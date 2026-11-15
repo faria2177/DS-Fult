@@ -98,18 +98,13 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
-    fun sharedViewPortRotatesExactGreenIntoTransposedJpeg() {
+    fun sharedViewPortRejectsTransposedStillInsteadOfGuessingRotation() {
         val green = rect(.21f, .20f, .78f, .84f)
-        val mapped = StillCaptureCropSafety.sharedViewportGreen(
+        // An EXIF-upright JPEG should have the same ViewPort aspect.
+        // An unexplained transpose must go to manual review.
+        assertTrue(StillCaptureCropSafety.sharedViewportGreen(
             green, 300, 400, 1600, 1200, 90, true,
-        )
-        val expected = rect(.16f, .21f, .80f, .78f)
-        assertTrue(mapped != null)
-        // Floating point rotation uses (1 - y), so compare with tolerance.
-        assertTrue(kotlin.math.abs(mapped.topLeft.x - expected.topLeft.x) < .001f)
-        assertTrue(kotlin.math.abs(mapped.topLeft.y - expected.topLeft.y) < .001f)
-        assertTrue(kotlin.math.abs(mapped.bottomRight.x - expected.bottomRight.x) < .001f)
-        assertTrue(kotlin.math.abs(mapped.bottomRight.y - expected.bottomRight.y) < .001f)
+        ) == null)
     }
 
     @Test
@@ -121,6 +116,39 @@ class StillCaptureCropSafetyTest {
         assertTrue(StillCaptureCropSafety.sharedViewportGreen(
             green, 300, 400, 1200, 1600, 90, false,
         ) == null)
+    }
+
+    @Test
+    fun lowContrastDeskCannotRejectGeometricallyMatchedGreen() {
+        val green = rect(.17f, .16f, .83f, .88f)
+        val mapped = StillCaptureCropSafety.mapGreenToStill(
+            green, 300, 400, 1200, 1600,
+        )
+        assertTrue(mapped == green)
+        val confidence = StillCaptureCropSafety.hasCapturedGreenBorderEvidence(
+            green, 240, 320) { _, _ -> 0xFFECEBE8.toInt() }
+        assertFalse(confidence)
+        // Content confidence is not passed as an authorization argument.
+        // The original green geometry wins over a detected inner label.
+        assertTrue(StillCaptureCropSafety.cameraCaptureSelection(
+            liveGreenSeen = true, mappedGreen = mapped,
+            ordinaryStill = rect(.30f, .38f, .70f, .58f),
+            independentlyVerifiedCard = null,
+        ) == green)
+        assertTrue(StillCaptureCropSafety.cameraCaptureSelection(
+            liveGreenSeen = true, mappedGreen = null,
+            ordinaryStill = rect(.30f, .38f, .70f, .58f),
+            independentlyVerifiedCard = null,
+        ) == null)
+    }
+
+    @Test
+    fun mapGreenToStillRejectsBadAspectOrSentinel() {
+        val green = rect(.17f, .16f, .83f, .88f)
+        assertTrue(StillCaptureCropSafety.mapGreenToStill(
+            green, 300, 400, 1920, 1080) == null)
+        assertTrue(StillCaptureCropSafety.mapGreenToStill(
+            rect(0f, 0f, 1f, 1f), 300, 400, 1200, 1600) == null)
     }
 
     @Test
@@ -248,24 +276,14 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
-    fun portraitGreenMapsIntoLandscapeJpegAndNeverBecomesFullFrame() {
+    fun portraitGreenCannotBeWarpedIntoIncompatibleLandscapeStill() {
         val green = rect(.21f, .20f, .78f, .84f)
-        val rotated = StillCaptureCropSafety.projectGreenToCapturedStill(
-            green, 300, 400, 1600, 1200, 90)
-        val expected = rect(.16f, .21f, .80f, .78f)
-        assertTrue(kotlin.math.abs(rotated!!.topLeft.x - expected.topLeft.x) < .001f)
-        assertTrue(kotlin.math.abs(rotated.topLeft.y - expected.topLeft.y) < .001f)
-        assertTrue(kotlin.math.abs(rotated.bottomRight.x - expected.bottomRight.x) < .001f)
-        assertTrue(kotlin.math.abs(rotated.bottomRight.y - expected.bottomRight.y) < .001f)
-        assertTrue(StillCaptureCropSafety.area(rotated) < .60)
-        // CameraX's opposite 270-degree pixel orientation must work too.
-        val other = StillCaptureCropSafety.projectGreenToCapturedStill(
-            green, 300, 400, 1600, 1200, 270)
-        assertTrue(other != null)
-        assertTrue(kotlin.math.abs(other.topLeft.x - .20f) < .001f)
-        assertTrue(kotlin.math.abs(other.topLeft.y - .22f) < .001f)
-        assertTrue(kotlin.math.abs(other.bottomRight.x - .84f) < .001f)
-        assertTrue(kotlin.math.abs(other.bottomRight.y - .79f) < .001f)
+        // No unverified 90/270 transform. Only the same EXIF-upright
+        // camera ViewPort is eligible for an automatic crop.
+        assertTrue(StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1600, 1200, 90) == null)
+        assertTrue(StillCaptureCropSafety.projectGreenToCapturedStill(
+            green, 300, 400, 1600, 1200, 270) == null)
     }
 
     @Test
