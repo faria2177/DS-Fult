@@ -428,7 +428,9 @@ class _CameraScreenState extends State<CameraScreen> {
         if (!widget.cardMode) {
           await _discardCanceledCameraCaptures(results, outputs);
         }
-        if (mounted) setState(() => _cameraSuspended = false);
+        if (mounted) {
+          setState(() => _cameraSuspended = false);
+        }
         return;
       }
       if (edits != null && edits.isNotEmpty) {
