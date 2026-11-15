@@ -320,6 +320,57 @@ internal object StillCaptureCropSafety {
     }
 
     /**
+     * Recover the EXACT green quadrilateral displayed at shutter time into
+     * the persisted camera still's pixel coordinate space. This is a REVIEW
+     * hint, not automatic authorization to warp: for automatic crop the
+     * independent still border must also corroborate these four corners.
+     *
+     * Some CameraX devices return a transposed JPEG even after EXIF handling.
+     * If still and preview have opposite orientations, map the four points
+     * by the analysis frame rotation, rather than sending the portrait green
+     * coordinates into an unrelated landscape JPEG. Never guess a transform
+     * across substantially different camera fields of view.
+     */
+    fun projectGreenToCapturedStill(
+        green: Quad?,
+        previewWidth: Int, previewHeight: Int,
+        stillWidth: Int, stillHeight: Int,
+        frameRotationDegrees: Int,
+    ): Quad? {
+        if (green == null || previewWidth < 16 || previewHeight < 16 ||
+            stillWidth < 16 || stillHeight < 16) return null
+        if (area(green) !in .045.. .94) return null
+        val points = listOf(green.topLeft, green.topRight,
+            green.bottomRight, green.bottomLeft)
+        if (points.any { !it.x.isFinite() || !it.y.isFinite() ||
+                it.x !in .002f.. .998f || it.y !in .002f.. .998f }) return null
+
+        val same = compatibleView(previewWidth, previewHeight,
+            stillWidth, stillHeight)
+        val rotated = compatibleView(previewWidth, previewHeight,
+            stillHeight, stillWidth)
+        if (!same && !rotated) return null
+        val degrees = if (same) 0 else when (
+            ((frameRotationDegrees % 360) + 360) % 360
+        ) {
+            90 -> 90
+            270 -> 270
+            // An undefined orientation is safer to review from the raw
+            // still than to assume an arbitrary 90-degree direction.
+            else -> return null
+        }
+        val transformed = points.map { p ->
+            when (degrees) {
+                90 -> PointF(1f - p.y, p.x)
+                270 -> PointF(p.y, 1f - p.x)
+                else -> p
+            }
+        }
+        val mapped = QuadOrdering.reorderClockwise(transformed)
+        return mapped.takeIf { area(it) in .045.. .94 }
+    }
+
+    /**
      * Camera-only captured-still boundary preference. A live preview quad is
      * valid in the STILL image only after the rotation/FOV verifier mapped it.
      * When that mapping fails but an independently verified white card exists
