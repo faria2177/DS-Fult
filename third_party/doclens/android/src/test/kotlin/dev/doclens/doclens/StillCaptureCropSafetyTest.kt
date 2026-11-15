@@ -115,6 +115,19 @@ class StillCaptureCropSafetyTest {
     }
 
     @Test
+    fun visibleNotebookGreenIsSavedForReviewAcrossSizeClassGap() {
+        val leftGreySheet = rect(.21f, .22f, .80f, .86f)
+        // A prominent live green page can occupy 38% of the view, outside
+        // the tiny-card gate and with perspective outside a strict A4 ratio.
+        assertTrue(StillCaptureCropSafety.isSafeDisplayedGreenForReview(
+            leftGreySheet, 360, 480))
+        assertFalse(StillCaptureCropSafety.isCredibleSmallDisplayedCard(
+            leftGreySheet, 360, 480))
+        assertFalse(StillCaptureCropSafety.isSafeDisplayedGreenForReview(
+            rect(0f, 0f, 1f, 1f), 360, 480))
+    }
+
+    @Test
     fun previewGreenKeepsExactlySameFourCornersInUprightStillReview() {
         // Portrait camera captures one page of an open notebook; the still
         // detector misses it because of pencil marks and a second ruled page.
