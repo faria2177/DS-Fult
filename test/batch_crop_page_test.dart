@@ -39,6 +39,34 @@ void main() {
     expect(page.touched, isTrue);
   });
 
+  test('CamScanner All selects entire current image rather than re-detect', () {
+    final page = BatchCropPageState();
+    expect(page.confirmed, isFalse);
+    page.selectWholeImage();
+    expect(page.corners, const [
+      Offset(0, 0), Offset(1, 0), Offset(1, 1), Offset(0, 1),
+    ]);
+    expect(page.confirmed, isTrue);
+    expect(page.touched, isTrue);
+    expect(page.fullImageSelected, isTrue);
+    expect(CropQuad(page.corners).isValid, isTrue);
+
+    // A manual corner adjustment switches to actual perspective cropping.
+    expect(page.updateHandle(0, const Offset(.04, .03)), isTrue);
+    expect(page.fullImageSelected, isFalse);
+    expect(page.corners[0], const Offset(.04, .03));
+  });
+
+  test('All selection never silently changes another batch page', () {
+    final one = BatchCropPageState();
+    final two = BatchCropPageState();
+    final preserved = List<Offset>.from(two.corners);
+    one.selectWholeImage();
+    expect(two.corners, preserved);
+    expect(two.confirmed, isFalse);
+    expect(two.touched, isFalse);
+  });
+
   test('All: copies confirmed corners without changing the source shape', () {
     final original = BatchCropPageState();
     final other = BatchCropPageState();
