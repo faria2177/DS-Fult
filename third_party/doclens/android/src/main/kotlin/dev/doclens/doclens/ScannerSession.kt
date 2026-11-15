@@ -606,13 +606,15 @@ class ScannerSession(
                     // edge detector would choose an inner title/table or no
                     // border at all. A JPEG of incompatible orientation/ratio
                     // still cannot use them and requires manual adjustment.
-                    val mappedViewportGreen = if (matchedViewPortAtShutter &&
-                        lensFacing == CameraSelector.LENS_FACING_BACK &&
-                        reviewGreen != null &&
-                        StillCaptureCropSafety.isSafeDisplayedGreenForReview(
-                            reviewGreen, rawSize.width, rawSize.height)) {
-                        reviewGreen
-                    } else null
+                    val mappedViewportGreen = liveHint?.let { hint ->
+                        StillCaptureCropSafety.sharedViewportGreen(
+                            hint.quad, hint.width, hint.height,
+                            rawSize.width, rawSize.height,
+                            frameOrientationAtShutter?.rotationDegrees ?: 0,
+                            matchedViewPortAtShutter &&
+                                lensFacing == CameraSelector.LENS_FACING_BACK,
+                        )
+                    }
                     val matchedLiveOutline = mappedViewportGreen != null ||
                         matchedPageOutline || verifiedSmallGreen != null ||
                         pixelVerifiedGreen
