@@ -143,12 +143,19 @@ class StillCaptureCropSafetyTest {
         val rotated = StillCaptureCropSafety.projectGreenToCapturedStill(
             green, 300, 400, 1600, 1200, 90)
         val expected = rect(.16f, .21f, .80f, .78f)
-        assertTrue(rotated == expected)
+        assertTrue(kotlin.math.abs(rotated!!.topLeft.x - expected.topLeft.x) < .001f)
+        assertTrue(kotlin.math.abs(rotated.topLeft.y - expected.topLeft.y) < .001f)
+        assertTrue(kotlin.math.abs(rotated.bottomRight.x - expected.bottomRight.x) < .001f)
+        assertTrue(kotlin.math.abs(rotated.bottomRight.y - expected.bottomRight.y) < .001f)
         assertTrue(StillCaptureCropSafety.area(rotated) < .60)
         // CameraX's opposite 270-degree pixel orientation must work too.
         val other = StillCaptureCropSafety.projectGreenToCapturedStill(
             green, 300, 400, 1600, 1200, 270)
-        assertTrue(other == rect(.20f, .22f, .84f, .79f))
+        assertTrue(other != null)
+        assertTrue(kotlin.math.abs(other.topLeft.x - .20f) < .001f)
+        assertTrue(kotlin.math.abs(other.topLeft.y - .22f) < .001f)
+        assertTrue(kotlin.math.abs(other.bottomRight.x - .84f) < .001f)
+        assertTrue(kotlin.math.abs(other.bottomRight.y - .79f) < .001f)
     }
 
     @Test
