@@ -54,7 +54,6 @@ class PhotoStudioOperations {
   /// on-device AI call. This avoids sending enormous camera bitmaps over
   /// the Flutter platform channel while preserving enough subject detail
   /// for ML Kit's >=512px recommended input dimensions.
-  @visibleForTesting
   static Uint8List prepareAiImage(Uint8List bytes) {
     var source = _decode(bytes);
     final longest = math.max(source.width, source.height);
