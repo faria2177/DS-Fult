@@ -130,6 +130,7 @@ class DoclensPlugin :
             "warpImage" -> handleWarp(call, result)
             "rotateImage" -> handleRotate(call, result)
             "recognizeText" -> handleRecognizeText(call, result)
+            "removeSubjectBackground" -> handleRemoveSubjectBackground(call, result)
             "setFlashMode" -> { session?.setFlashMode(call.argument<String>("mode") ?: "auto"); result.success(null) }
             "switchCamera" -> { session?.switchCamera(); result.success(null) }
             "pause" -> { session?.pause(); result.success(null) }
@@ -455,6 +456,35 @@ class DoclensPlugin :
                 mainHandler.post { result.success(out) }
             } catch (e: Exception) {
                 mainHandler.post { result.error("capture_failed", e.message, null) }
+            }
+        }
+    }
+
+    /** ML Kit runs locally; first use may require Google Play services to
+     * obtain its subject model. No photo data is sent to an AI cloud API.
+     * Fail explicitly so Flutter can offer manual color removal instead of
+     * silently producing a bad transparent image. */
+    private fun handleRemoveSubjectBackground(
+        call: MethodCall, result: MethodChannel.Result,
+    ) {
+        val bytes = call.argument<ByteArray>("imageBytes")
+        val background = call.argument<Int>("backgroundArgb")
+        if (bytes == null || bytes.isEmpty()) {
+            result.error("invalid_image", "Missing image for BG Remover", null)
+            return
+        }
+        stillImageExecutor.execute {
+            try {
+                val png = SubjectBackgroundRemover.process(bytes, background)
+                mainHandler.post { result.success(png) }
+            } catch (e: Exception) {
+                val detail = e.cause?.message ?: e.message ?: "Unknown error"
+                mainHandler.post {
+                    result.error("ai_model_unavailable",
+                        "AI background removal failed. Google Play services " +
+                        "may need to download its subject model; connect to " +
+                        "the internet once and retry. $detail", null)
+                }
             }
         }
     }
