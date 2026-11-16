@@ -468,7 +468,9 @@ class DoclensPlugin :
         call: MethodCall, result: MethodChannel.Result,
     ) {
         val bytes = call.argument<ByteArray>("imageBytes")
-        val background = call.argument<Int>("backgroundArgb")
+        // ARGB colours such as 0xFFFFFFFF may arrive as a 64-bit Long
+        // through Flutter's codec. Normalize any Number to 32-bit pixels.
+        val background = call.argument<Number>("backgroundArgb")?.toInt()
         if (bytes == null || bytes.isEmpty()) {
             result.error("invalid_image", "Missing image for BG Remover", null)
             return
