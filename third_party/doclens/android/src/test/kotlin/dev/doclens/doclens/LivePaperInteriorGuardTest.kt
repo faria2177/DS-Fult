@@ -32,6 +32,22 @@ class LivePaperInteriorGuardTest {
     }
 
     @Test
+    fun higherResolutionRetryOnlyPromotesActualEnclosingPage() {
+        val innerText = rectangle(.24f, .18f, .76f, .84f)
+        val outerPage = rectangle(.12f, .08f, .88f, .93f)
+        assertTrue(LivePaperInteriorGuard.recoveredOuterPage(
+            innerText, outerPage, 384, 512) == outerPage)
+        // The scanner must not invent more paper or follow an unrelated
+        // near-frame desk/shadow contour when moving the camera closer.
+        assertTrue(LivePaperInteriorGuard.recoveredOuterPage(
+            innerText, rectangle(.01f, .01f, .99f, .99f),
+            384, 512) == null)
+        assertTrue(LivePaperInteriorGuard.recoveredOuterPage(
+            innerText, rectangle(.01f, .01f, .70f, .70f),
+            384, 512) == null)
+    }
+
+    @Test
     fun writtenTextRectangleWithinWhiteA4HasPaleOutsideOnAllSides() {
         val width = 384
         val height = 512
