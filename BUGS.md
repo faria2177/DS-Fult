@@ -23,6 +23,8 @@
 
 | B-015 | User report, 16 Nov 2026, Single Scan green box on a steady document | Four green corners still oscillate slightly in place although the document is steady | FIX IN CODE — device pending: add four-frame mean/median consensus steady-state lock, lower interpolation for small coherent shifts, skip redundant quad redraws, reset painted quad on camera lifecycle changes. Flutter regression tests added; physical-camera comparison is still required | On HONOR VKP-NX9, hold A4 paper still for 10 seconds and compare screen recordings before/after; verify near-zero static corner drift and that moving the document 2–5 cm promptly moves the box, then shutter crop still uses the visible points |
 
+| B-016 | 16 Nov 2026 Tools screenshot `382991.jpg` | Tools tab remains black even while app-wide Dark theme is disabled | FIX IN CODE — device pending: removed forced VideoToolStyle.dark and hard-coded white labels; Tools palette follows Theme.of(context). Widget regression added | Toggle Me → Dark theme OFF/ON; verify Tools background and all labels have correct contrast, no black screen in Light mode |
+
 ## Historical fixes requiring targeted hardware retest
 
 | ID | Original symptom | Fix introduced | Status | Required confirmation |
