@@ -76,7 +76,10 @@ internal object LivePaperInteriorGuard {
                 val blue = rgba[pos + 2].toInt() and 255
                 val brightness = (r + g + blue) / 3
                 val colourSpread = maxOf(r, g, blue) - minOf(r, g, blue)
-                if (brightness >= 169 && colourSpread <= 55) white++
+                // The provided 383047.jpg has genuine white paper
+                // shaded to roughly RGB 153–167 near the bottom/left.
+                // Do not misclassify those margins as a dark desktop.
+                if (brightness >= 150 && colourSpread <= 55) white++
                 valid++
             }
             if (valid >= 4) {
