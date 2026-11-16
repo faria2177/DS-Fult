@@ -31,8 +31,10 @@ void main() {
     expect(light.color, dsPaper);
     expect(find.text("What's New"), findsOneWidget);
 
+    // MaterialApp animates theme changes (AnimatedTheme); a single pump
+    // still observes the previous light color before the transition ends.
     await tester.pumpWidget(shell(true));
-    await tester.pump();
+    await tester.pumpAndSettle();
     final dark = tester.widget<ColoredBox>(
       find.byKey(const Key('tools-tab-background')),
     );
