@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:docscanner/src/services/ai_background_removal.dart';
 import 'package:docscanner/src/services/photo_studio_operations.dart';
 import 'package:flutter/services.dart';
