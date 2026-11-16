@@ -44,7 +44,8 @@ internal class OpenCvBoundaryAdapter {
                 // detection already uses this more thorough search; run it
                 // on the downscaled live camera frame as well.
                 preferOuterPageInStill = !preferIdCardBounds,
-                preferIdCardBounds = preferIdCardBounds), width, height)
+                preferIdCardBounds = preferIdCardBounds,
+                closePagePreview = !preferIdCardBounds), width, height)
         } catch (_: Exception) {
             null // The original luma-only detector remains the safe fallback.
         } finally {
@@ -69,7 +70,8 @@ internal class OpenCvBoundaryAdapter {
             rgba.put(0, 0, pixels)
             val contour = toNormalizedQuad(boundaryDetector.detectBoundary(rgba,
                 preferOuterPageInStill = !preferIdCardBounds,
-                preferIdCardBounds = preferIdCardBounds), width, height)
+                preferIdCardBounds = preferIdCardBounds,
+                closePagePreview = !preferIdCardBounds), width, height)
             if (preferIdCardBounds) {
                 contour
             } else {
