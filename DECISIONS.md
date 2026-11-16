@@ -250,6 +250,16 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 
 **Related:** `third_party/doclens/lib/src/quad_smoother.dart`, `controller.dart`, `test/quad_smoother_test.dart`, `BUGS.md` B-015.
 
+## ADR-031 — Theme-consistent Tools and privacy-preserving AI BG Remover
+
+**Status:** Accepted candidate 2026-11-16; CI and real-device QA pending.
+
+**Decision:** Every Tools tab follows app-wide theme rather than a forced reference-video palette. PDF compression estimates are exact byte sizes from the selected encoder output, then the exact same bytes are saved. BG Remover uses Android ML Kit Subject Segmentation locally, with explicit color-based fallback and preserved source photo. First-use AI model download via Google Play services may require network; image inference remains on-device. No API-key or automatic image upload.
+
+**Tradeoffs:** Android API 24 becomes the minimum required for the on-device subject model; Google Play services availability may vary. AI accuracy is not guaranteed for unusual subjects, fine hair or reflective edges. Never silently output an empty mask or falsely claim an offline model is installed. Image and PDF tests on physical HONOR Android 16 are still required.
+
+**Related:** `home_shell.dart`, `compress_screen.dart`, `photo_studio_screen.dart`, `ai_background_removal.dart`, `SubjectBackgroundRemover.kt`, `BUGS.md` B-016.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
