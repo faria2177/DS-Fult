@@ -190,7 +190,7 @@ class _CompressScreenState extends State<CompressScreen> {
                       : colors.surface,
                   shape: RoundedRectangleBorder(
                     side: BorderSide(color: _level == level
-                        ? VideoToolStyle.teal : colors.outlineVariant)),
+                        ? VideoToolStyle.teal : colors.outlineVariant),
                     borderRadius: BorderRadius.circular(5)),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
