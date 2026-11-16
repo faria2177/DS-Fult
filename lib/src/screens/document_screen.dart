@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
 import '../services/document_export.dart';
+import '../services/gallery_import_flow.dart';
 import '../services/id_card_page_composer.dart';
 import '../services/docx_export.dart';
 import '../services/image_processor.dart';
@@ -16,7 +17,6 @@ import '../theme.dart';
 import 'camera_screen.dart';
 import 'batch_crop_screen.dart';
 import 'crop_screen.dart';
-import 'gallery_import_review_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'mosaic_screen.dart';
 import 'pdf_tools_screen.dart';
@@ -279,33 +279,20 @@ class _DocumentScreenState extends State<DocumentScreen> {
         paths = await Navigator.push<List<String>>(context, MaterialPageRoute(
           builder: (_) => CameraScreen(cardMode: doc.kind.twoSided),
         )) ?? [];
-      } else if (remaining == 1) {
-        final photo = await _picker.pickImage(source: ImageSource.gallery);
-        if (photo != null) paths = [photo.path];
       } else {
-        final picked = await _picker.pickMultiImage(
+        if (!mounted) return;
+        final review = await pickAndImportFromGallery(context,
+          picker: _picker,
           limit: remaining,
-          requestFullMetadata: false,
+          preferIdCardBounds: doc.kind.twoSided,
         );
-        paths = picked.map((photo) => photo.path).toList();
+        if (review == null || !mounted) return;
+        paths = review.paths;
       }
       if (paths.isEmpty) return;
       if (remaining != null && paths.length > remaining) {
         _message('Only $remaining more image(s) allowed.');
         return;
-      }
-      if (!fromCamera) {
-        if (!mounted) return;
-        final review = await Navigator.of(context).push<GalleryImportResult>(
-          MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
-            imagePaths: paths,
-            preferIdCardBounds: doc.kind.twoSided,
-          )),
-        );
-        if (review == null || !mounted) return;
-        paths = review.paths;
-        // GalleryImportReviewScreen already offers a four-handle correction
-        // route before these pages are appended to the document.
       }
       if (doc.compositeCardPages) {
         final combined = await _composeExtraCard(paths);

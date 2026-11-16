@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models.dart';
 import '../services/ai_credential_store.dart';
 import '../services/document_export.dart';
+import '../services/gallery_import_flow.dart';
 import '../services/scan_settings_store.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
@@ -19,7 +20,6 @@ import 'extract_text_screen.dart';
 import 'extract_pdf_pages_screen.dart';
 import 'files_workspace.dart';
 import 'files_merge_screen.dart';
-import 'gallery_import_review_screen.dart';
 import 'id_card_screen.dart';
 import 'id_card_template_screen.dart';
 import 'image_to_pdf_screen.dart';
@@ -127,13 +127,8 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _import() async {
     try {
-      final files = await _picker.pickMultiImage(requestFullMetadata: false);
-      if (files.isEmpty || !mounted) return;
-      final reviewed = await Navigator.of(context).push<GalleryImportResult>(
-        MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
-          imagePaths: files.map((file) => file.path).toList(),
-        )),
-      );
+      final reviewed = await pickAndImportFromGallery(context,
+          picker: _picker);
       if (reviewed == null || !mounted) return;
       // Uncertain photos were already offered interactive corner review on
       // the import route, so no bottom snackbar should obscure the editor.

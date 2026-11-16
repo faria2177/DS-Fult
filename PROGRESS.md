@@ -274,6 +274,15 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - **Accuracy:** the first outline is the median of the confirming frames, and a held outline moves once onto the median of a full, tightly agreeing window instead of staying on the single frame that first locked.
 - Only `quad_smoother.dart` and its tests changed; native detection, shutter crop and ID Card flows are untouched. Logic was checked in an offline simulation only. **`flutter test` and a physical-phone retest have not been run.**
 
+## 2026-11-17 — Import Images follows the CamScanner flow
+
+- Analysed the user's screen recording of CamScanner: Scan → Import Images opens one in-app "Select Photo" grid (corner box selects, numbered in pick order; tapping the picture opens an `n/total` preview with Select), bottom bar has Enhance and Auto Crop, `Import(n)` goes straight to the document pages with no corner dialog.
+- DocScanner previously opened the system photo picker and then a second confirmation screen, and stopped on a corner-review screen for uncertain photos.
+- New `GalleryPickerScreen` + `PhotoLibrarySource` (`photo_manager`) reproduce the single-screen flow for Scan, Home import and Add page. Import no longer stops for corner review in this flow; a photo without a trustworthy outline stays whole and can be cropped from the editor.
+- If photo access is refused or the library cannot be read, the old system-picker + confirmation path is used unchanged. `tool/setup_android.sh` now adds the photo read permissions.
+- The import pipeline was extracted to `processGalleryImport` and is shared by both screens.
+- Not replicated: CamScanner shows the document immediately with per-page "processing" placeholders; DocScanner still shows a progress overlay until all pages are ready. **Phone retest needed (permission prompt, large libraries, HEIC photos).**
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

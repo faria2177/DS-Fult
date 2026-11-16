@@ -40,6 +40,14 @@ if [ -f "$manifest" ]; then
   if ! grep -q 'android.permission.INTERNET' "$manifest"; then
     sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$manifest"
   fi
+  # The in-app "Select Photo" grid lists device photos through MediaStore.
+  # Android 13+ needs READ_MEDIA_IMAGES; Android 14+ may grant only chosen
+  # photos. If access is refused the app falls back to the system picker.
+  if ! grep -q 'android.permission.READ_MEDIA_IMAGES' "$manifest"; then
+    sed -i '/<application/i\    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />' "$manifest"
+    sed -i '/<application/i\    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' "$manifest"
+    sed -i '/<application/i\    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />' "$manifest"
+  fi
 fi
 
 # The ML Kit plugin references optional Asian-script recognizers even when

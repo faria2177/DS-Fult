@@ -22,6 +22,8 @@ dependencies:
   google_mlkit_barcode_scanning: ^0.16.0
   flutter_tesseract_ocr: ^0.4.31
   path_provider: ^2.1.6
+  # In-app "Select Photo" grid for Import Images.
+  photo_manager: ^3.8.0
   pdf: ^3.13.1
   printing: ^5.15.1
   share_plus: ^13.3.1

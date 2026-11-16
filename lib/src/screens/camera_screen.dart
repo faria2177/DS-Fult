@@ -10,11 +10,11 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/camera_crop_review_decision.dart';
 import '../services/document_edges.dart';
+import '../services/gallery_import_flow.dart';
 import '../services/image_processor.dart';
 import '../services/online_auto_crop_service.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
-import 'gallery_import_review_screen.dart';
 import 'batch_crop_screen.dart';
 import 'manual_camera_screen.dart';
 import 'id_card_templates.dart';
@@ -485,25 +485,18 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       await _suspendCamera();
       if (!mounted) return;
-      final files = await _picker.pickMultiImage(
+      // CamScanner-style Import Images: one in-app "Select Photo" grid with
+      // Import(n), Enhance and Auto Crop, then straight to the document.
+      // Auto Crop starts ticked even if live-capture cropping was disabled.
+      final reviewed = await pickAndImportFromGallery(context,
+        picker: _picker,
         limit: _cardLimit,
-        requestFullMetadata: false,
-      );
-      if (files.isEmpty || !mounted) return;
-      final reviewed = await Navigator.of(context).push<GalleryImportResult>(
-        MaterialPageRoute(builder: (_) => GalleryImportReviewScreen(
-          imagePaths: files.map((file) => file.path).toList(),
-          // Import Images is a separate CamScanner-style entry point: always
-          // offer four-corner detection on the imported still, even if the
-          // user previously disabled automatic cropping for live captures.
-          // They can explicitly uncheck Auto Crop in the review screen.
-          initialAutoCrop: true,
-          // Honour an explicit Original preset: auto-crop must not imply
-          // colour/face/text enhancement of the user's source image.
-          initialFilter: widget.cardMode ? ScanFilter.original :
-              _selectedFilter,
-          preferIdCardBounds: _detectCardBounds,
-        )),
+        initialAutoCrop: true,
+        // Honour an explicit Original preset: auto-crop must not imply
+        // colour/face/text enhancement of the user's source image.
+        initialFilter: widget.cardMode ? ScanFilter.original :
+            _selectedFilter,
+        preferIdCardBounds: _detectCardBounds,
       );
       if (reviewed == null || !mounted) return;
       if (widget.cardMode) {
