@@ -46,6 +46,12 @@ fi
 # this app only requests the bundled Latin model. R8 needs to know these
 # optional, unused classes are intentionally absent from the APK.
 gradle_file='android/app/build.gradle.kts'
+# ML Kit Subject Segmentation requires API 24. The Android host is generated
+# from Flutter's template every build; pin the app minimum here as well as
+# in the doclens plugin so manifest merging never rejects the AI dependency.
+if [ -f "$gradle_file" ]; then
+  sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' "$gradle_file"
+fi
 cp tool/mlkit-proguard-rules.pro android/app/proguard-rules.pro
 if ! grep -q 'proguardFiles("proguard-rules.pro")' "$gradle_file"; then
   sed -i '/signingConfig = signingConfigs.getByName("debug")/a\            proguardFiles("proguard-rules.pro")' "$gradle_file"
