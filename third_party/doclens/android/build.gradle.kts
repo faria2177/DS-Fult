@@ -65,7 +65,8 @@ android {
     }
 
     defaultConfig {
-        minSdk = 21
+        // Subject Segmentation requires Android 7.0 (API 24).
+        minSdk = 24
     }
 
     // Compile an independently authored document-contour engine. AGP
@@ -112,6 +113,9 @@ dependencies {
     // Bundling also enables offline native orientation recognition.
     // https://developers.google.com/ml-kit/vision/text-recognition/v2/android
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // On-device background removal for portraits and general foreground
+    // subjects. The unbundled model may download once via Play services.
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
