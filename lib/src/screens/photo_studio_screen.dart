@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/ai_background_removal.dart';
 import '../services/photo_studio_operations.dart';
 import '../storage/document_store.dart';
 import '../theme.dart';
@@ -41,6 +42,10 @@ class _PhotoStudioScreenState extends State<PhotoStudioScreen> {
   bool _showOriginal = false;
   int _quality = 90;
   int _tolerance = 45;
+  // On-device ML Kit Subject Segmentation is available on Android.
+  // Other platforms keep the explicit classic pixel-based alternative.
+  bool _useAiRemoval = !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.android;
   int _copies = 4;
   double _zoom = 1;
   double _horizontal = 0;
@@ -68,7 +73,7 @@ class _PhotoStudioScreenState extends State<PhotoStudioScreen> {
   String get _subtitle => switch (widget.mode) {
     PhotoStudioMode.passport => 'Photo sizes, backgrounds and 4×6 print sheets',
     PhotoStudioMode.backgroundRemover =>
-      'Remove a simple photo background entirely offline',
+      'AI subject cutout on your device · transparent or solid background',
     PhotoStudioMode.resizer => 'Custom size, aspect ratio and image quality',
   };
 
@@ -225,7 +230,10 @@ class _PhotoStudioScreenState extends State<PhotoStudioScreen> {
         'quality': _quality,
         'png': _png,
       };
-      var output = await compute(PhotoStudioOperations.process, args);
+      var output = mode == PhotoStudioMode.backgroundRemover && _useAiRemoval
+          ? await AiBackgroundRemoval.remove(
+              source, backgroundArgb: _backdrop.argb)
+          : await compute(PhotoStudioOperations.process, args);
       if (mode == PhotoStudioMode.passport && _printSheet) {
         output = await compute(PhotoStudioOperations.makeSheet,
           <String, Object?>{'bytes': output, 'copies': _copies});
@@ -378,18 +386,48 @@ class _PhotoStudioScreenState extends State<PhotoStudioScreen> {
   Widget _backgroundOptions() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      _section('Removal method', Wrap(spacing: 10, children: [
+        ChoiceChip(
+          key: const Key('bg-ai-mode'),
+          label: const Text('AI Subject (recommended)'),
+          avatar: const Icon(Icons.auto_awesome_outlined, size: 17),
+          selected: _useAiRemoval,
+          onSelected: _busy || kIsWeb ||
+              defaultTargetPlatform != TargetPlatform.android ? null : (_) {
+            _useAiRemoval = true;
+            _invalidate();
+          },
+        ),
+        ChoiceChip(
+          key: const Key('bg-color-mode'),
+          label: const Text('Color-based (simple)'),
+          selected: !_useAiRemoval,
+          onSelected: _busy ? null : (_) {
+            _useAiRemoval = false;
+            _invalidate();
+          },
+        ),
+      ])),
       _section('Output background', _backdrops(allowOriginal: false)),
-      _section('Background sensitivity', _slider(
-        'Color tolerance: $_tolerance', _tolerance.toDouble(), 8, 120, (value) {
-          _tolerance = value.round();
-          _invalidate();
-        },
-      )),
-      const Padding(
-        padding: EdgeInsets.only(top: 8),
-        child: Text('Offline color-based removal works best with a uniform '
-          'wall or studio background. It is not AI person segmentation.',
-          style: TextStyle(fontSize: 12, color: dsMuted)),
+      if (!_useAiRemoval)
+        _section('Background sensitivity', _slider(
+          'Color tolerance: $_tolerance',
+          _tolerance.toDouble(), 8, 120, (value) {
+            _tolerance = value.round();
+            _invalidate();
+          },
+        )),
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(_useAiRemoval
+          ? 'Google ML Kit recognizes the foreground subject and softens '
+            'hair/edge transparency. The model may need to download once '
+            'through Google Play services. Your photo is processed on-device; '
+            'no AI API key or photo upload is required.'
+          : 'Simple offline color removal suits plain walls and studio '
+            'backdrops. Select AI Subject on supported Android phones '
+            'for photos with more complex backgrounds.',
+          style: const TextStyle(fontSize: 12, color: dsMuted)),
       ),
     ],
   );
