@@ -260,6 +260,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - BG Remover now defaults to Android ML Kit Subject Segmentation (API 24+, Google Play services model may download once). On-device confidence mask produces feathered transparent or chosen solid-color PNG; the legacy uniform-color flood-fill remains an explicit fallback mode. There is no automatic document upload or AI API-key requirement. Model errors are surfaced instead of silently falling back.
 - Added unit/widget tests for theme switching, exact Medium/High estimates, native mask feathering, Flutter method-channel routing and missing-model error. Native CI and physical Android 16 photo/size acceptance remain required.
 
+## 2026-11-16 — Green box: no phantom flashes, steadier corners
+
+- **Phantom box on an empty scene:** `QuadSmoother` drew the very first detector quad, so any one- or two-frame false rectangle flashed on screen and vanished. A first sighting is now drawn only after 3 mutually agreeing frames (corners within 5% of the frame, similar area); one dropped frame in between is tolerated.
+- **Blinking on a real page:** the outline is held through 4 missed frames (was 2), and a page lost for up to ~1 s returns immediately if it reappears in the same place, without a new confirmation run.
+- **Restless corners:** a single frame that jumps away while the previous frame still agreed is ignored until a second frame confirms it, and the movement test leaves out the one wildest of the last four frames. Previously one bad contour let ordinary noise through for the next few frames.
+- **Accuracy:** the first outline is the median of the confirming frames, and a held outline moves once onto the median of a full, tightly agreeing window instead of staying on the single frame that first locked.
+- Only `quad_smoother.dart` and its tests changed; native detection, shutter crop and ID Card flows are untouched. Logic was checked in an offline simulation only. **`flutter test` and a physical-phone retest have not been run.**
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
