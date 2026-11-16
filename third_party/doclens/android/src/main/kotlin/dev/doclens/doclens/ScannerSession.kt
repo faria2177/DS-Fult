@@ -56,6 +56,7 @@ class ScannerSession(
     @Volatile private var lastFrameWidth: Int = 0
     @Volatile private var lastFrameHeight: Int = 0
     @Volatile private var lastDetectionMs: Long = 0L
+    private var lastClosePageRetryMs: Long = 0L
     @Volatile private var previewSurfaceWidth: Int = 0
     @Volatile private var previewSurfaceHeight: Int = 0
     @Volatile private var lastEmittedPreviewW: Int = 0
@@ -299,15 +300,38 @@ class ScannerSession(
             // sides with the SAME safety gate as the OpenCV live detector.
             val selected = if (config.preferIdCardBounds) detected else
                 LiveBoundarySelector.choose(detected, null, width, height)
-            // When moving close to densely written A4 paper, the printed
-            // region can form an apparently convincing rectangle. The
-            // outside margins still show WHITE PAPER on 3-4 sides. Never
-            // draw this as a green document border: capture must use the
-            // exactly displayed corners, so incorrect green is destructive.
-            val quad = if (!config.preferIdCardBounds && selected != null &&
-                rgba != null &&
+            // At close range the 384px analysis image can resolve sharply
+            // printed letters but lose a faint outside A4 sheet boundary.
+            // If a candidate has bright PAPER on at least three sides,
+            // do one higher-resolution retry at most twice per second. This
+            // only accepts another real four-corner candidate enclosing the
+            // text block; it NEVER extrapolates/expands guessed corners.
+            val printedInterior = !config.preferIdCardBounds &&
+                rgba != null && selected != null &&
                 LivePaperInteriorGuard.isPrintedInterior(
-                    selected, rgba, width, height)) null else selected
+                    selected, rgba, width, height)
+            val quad = if (printedInterior && selected != null) {
+                var recovered: Quad? = null
+                if (now - lastClosePageRetryMs >= 550L) {
+                    lastClosePageRetryMs = now
+                    val high = YuvUtils.extractLuma(image, 576, crop)
+                    val highRgba = YuvUtils.extractRgba(
+                        image, high, 576, crop)
+                    if (highRgba != null) {
+                        val suggested = openCvDetector.detectRgba(
+                            highRgba, high.width, high.height, false)
+                        val candidate = LivePaperInteriorGuard.recoveredOuterPage(
+                            selected, suggested, high.width, high.height)
+                        recovered = candidate?.takeUnless {
+                            LivePaperInteriorGuard.isPrintedInterior(
+                                it, highRgba, high.width, high.height)
+                        }
+                    }
+                }
+                // Better to show no green than to permanently crop only
+                // the inside text rectangle. The raw capture stays editable.
+                recovered
+            } else selected
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
