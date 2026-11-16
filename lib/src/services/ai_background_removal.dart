@@ -30,7 +30,7 @@ abstract final class AiBackgroundRemoval {
       },
     );
     if (response == null || response.isEmpty) {
-      throw const PlatformException(
+      throw PlatformException(
         code: 'no_foreground',
         message: 'AI did not return a foreground image. '
             'Retry or use Color-based removal.',
