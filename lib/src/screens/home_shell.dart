@@ -415,14 +415,18 @@ class _HomeShellState extends State<HomeShell> {
     };
     const iconColors = [Color(0xFF20C7B0), Color(0xFF3D91FA),
       Color(0xFF4EC4D7), Color(0xFFF08058)];
-    return Theme(data: VideoToolStyle.dark,
-      child: ColoredBox(color: VideoToolStyle.background,
+    // Respect app-wide Light/Dark preferences instead of a forced dark tab.
+    final palette = Theme.of(context);
+    final colors = palette.colorScheme;
+    return ColoredBox(
+      key: const Key('tools-tab-background'),
+      color: palette.scaffoldBackgroundColor,
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 18, 16, 25),
           children: [
       Row(children: [
-        const Expanded(child: Text('Tools', style: TextStyle(
+        Expanded(child: Text('Tools', style: TextStyle(
           fontWeight: FontWeight.bold, fontSize: 29,
-          color: Colors.white))),
+          color: colors.onSurface))),
         TextButton.icon(onPressed: () => showDialog<void>(context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('What\'s New in DS'),
@@ -437,7 +441,7 @@ class _HomeShellState extends State<HomeShell> {
           onPressed: () => setState(() {
             _toolSearchOpen = !_toolSearchOpen;
             if (!_toolSearchOpen) _toolQuery = '';
-          }), icon: const Icon(Icons.search, color: Colors.white)),
+          }), icon: Icon(Icons.search, color: colors.onSurface)),
       ]),
       if (_toolSearchOpen) ...[
         const SizedBox(height: 8),
@@ -448,7 +452,7 @@ class _HomeShellState extends State<HomeShell> {
             hintText: 'Search all tools',
             prefixIcon: const Icon(Icons.search),
             filled: true,
-            fillColor: VideoToolStyle.panel,
+            fillColor: colors.surfaceContainerHighest,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none),
           ),
@@ -490,7 +494,7 @@ class _HomeShellState extends State<HomeShell> {
       for (final group in groups.entries) ...[
         if (group.value.any((tool) => tool.title.toLowerCase().contains(_toolQuery)))
           Padding(padding: const EdgeInsets.fromLTRB(9, 13, 9, 12),
-            child: Text(group.key, style: const TextStyle(color: Colors.white,
+            child: Text(group.key, style: TextStyle(color: colors.onSurface,
               fontSize: 17, fontWeight: FontWeight.bold))),
         if (group.value.any((tool) => tool.title.toLowerCase().contains(_toolQuery)))
         GridView.builder(
@@ -518,14 +522,14 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 const SizedBox(height: 7),
                 Text(tool.title, textAlign: TextAlign.center, maxLines: 2,
-                    style: const TextStyle(fontSize: 11,
-                      color: Colors.white, fontWeight: FontWeight.w500)),
+                    style: TextStyle(fontSize: 11,
+                      color: colors.onSurface, fontWeight: FontWeight.w500)),
               ]),
             );
           },
         ),
       ],
-    ])));
+    ]));
   }
 
   Widget _meTab() => ListView(padding: const EdgeInsets.all(18), children: [
