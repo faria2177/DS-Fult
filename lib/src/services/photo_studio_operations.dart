@@ -50,6 +50,23 @@ class PhotoStudioOperations {
     return img.bakeOrientation(decoded);
   }
 
+  /// Normalize EXIF orientation and limit image dimensions before an
+  /// on-device AI call. This avoids sending enormous camera bitmaps over
+  /// the Flutter platform channel while preserving enough subject detail
+  /// for ML Kit's >=512px recommended input dimensions.
+  @visibleForTesting
+  static Uint8List prepareAiImage(Uint8List bytes) {
+    var source = _decode(bytes);
+    final longest = math.max(source.width, source.height);
+    if (longest > 1600) {
+      source = img.copyResize(source,
+        width: source.width >= source.height ? 1600 : null,
+        height: source.height > source.width ? 1600 : null,
+        interpolation: img.Interpolation.cubic);
+    }
+    return Uint8List.fromList(img.encodeJpg(source, quality: 95));
+  }
+
   @visibleForTesting
   static Uint8List resizeBytes(
     Uint8List bytes, {
