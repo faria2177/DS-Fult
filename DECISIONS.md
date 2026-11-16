@@ -260,6 +260,18 @@ The `381709.mp4` CamScanner reference informs the DS AI banner, transition indic
 
 **Related:** `home_shell.dart`, `compress_screen.dart`, `photo_studio_screen.dart`, `ai_background_removal.dart`, `SubjectBackgroundRemover.kt`, `BUGS.md` B-016.
 
+## ADR-032 — Close-camera green box must follow the physical paper, not internal print
+
+**Status:** 2026-11-16 candidate; CI and real HONOR device verification pending.
+
+**Context:** Photo `383047.jpg` shows strong edges around a dense printed text rectangle while a larger white A4 page remains visible. A 1.60× area threshold could reject credible outer sheet proposals.
+
+**Decision:** In live non-ID preview only, allow strongly evidenced enclosing outer-page candidates from 1.30× relative area. Validate colour pixels OUTSIDE all four candidate edges: pale paper on at least three sides indicates a potentially dangerous internal text quad. On suspicious frames, retry OpenCV at 576px with at least 550ms spacing. Only show a genuinely detected, larger containing page; never expand the text rectangle by guessing corners. If no verified outer candidate exists, hide the unsafe green box and retain the raw source for manual corner review. Keep CameraX ViewPort, flutter shutter snapshot, ID-card and import paths unchanged.
+
+**Risks:** Similar-white backgrounds, overlapping sheets and reflections can still prevent certain outer corner detection; the correct fallback is manual adjustment, not an irreversible crop. More detailed analysis may reduce frame rate. Validate actual capture on HONOR Android 16.
+
+**Files:** `StillCapturePagePreference.kt`, `DocumentBoundaryDetector.kt`, `OpenCvBoundaryAdapter.kt`, `LivePaperInteriorGuard.kt`, `ScannerSession.kt`, regression tests and `BUGS.md` B-017.
+
 ## How to change a decision
 
 For a meaningful reversal, append a new `ADR-011+` entry with the proposed alternative, user approval when scope changes, migration/backward-compatibility behavior, tests and rollback. Mark the old ADR `Superseded by ADR-XXX`; preserve the historical rationale.
