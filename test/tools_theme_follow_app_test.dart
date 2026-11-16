@@ -29,7 +29,7 @@ void main() {
       find.byKey(const Key('tools-tab-background')),
     );
     expect(light.color, dsPaper);
-    expect(find.text('BG Remover'), findsOneWidget);
+    expect(find.text("What's New"), findsOneWidget);
 
     await tester.pumpWidget(shell(true));
     await tester.pump();
