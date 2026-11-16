@@ -135,7 +135,8 @@ class _CompressScreenState extends State<CompressScreen> {
   @override
   Widget build(BuildContext context) {
     final result = _result;
-    return VideoToolStyle.wrapDark(Scaffold(
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
       appBar: AppBar(title: const Text('Compress')),
       body: SafeArea(child: Column(children: [
         if (_busy) const LinearProgressIndicator(),
@@ -143,10 +144,13 @@ class _CompressScreenState extends State<CompressScreen> {
           ? ListView(padding: EdgeInsets.zero, children: [
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 36, 16, 29),
-                decoration: const BoxDecoration(gradient: LinearGradient(
+                decoration: BoxDecoration(gradient: LinearGradient(
                   begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  colors: [Color(0xFF27333D), Color(0xFF1C2D2D),
-                    VideoToolStyle.background],
+                  colors: [
+                    colors.primary.withValues(alpha: .13),
+                    colors.surfaceContainerHigh,
+                    colors.surface,
+                  ],
                 )),
                 child: Column(children: [
                   const CircleAvatar(radius: 51,
@@ -155,33 +159,34 @@ class _CompressScreenState extends State<CompressScreen> {
                   const SizedBox(height: 18),
                   Text(widget.document.name, textAlign: TextAlign.center,
                     maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 21, color: Colors.white)),
+                    style: TextStyle(fontSize: 21, color: colors.onSurface)),
                   const SizedBox(height: 6),
                   Text(_originalBytes == null ? 'Calculating PDF size…' :
                       _formatBytes(_originalBytes!),
-                      style: const TextStyle(fontSize: 14, color: Colors.white70)),
+                      style: TextStyle(fontSize: 14,
+                          color: colors.onSurfaceVariant)),
                 ]),
               ),
-              const Padding(padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+              Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                 child: Text('Select compression level:',
-                  style: TextStyle(fontSize: 16, color: Colors.white))),
+                  style: TextStyle(fontSize: 16, color: colors.onSurface))),
               for (final level in CompressionLevel.values)
                 Card(margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   color: _level == level
                       ? VideoToolStyle.teal.withValues(alpha: .10)
-                      : VideoToolStyle.background,
+                      : colors.surface,
                   shape: RoundedRectangleBorder(
                     side: BorderSide(color: _level == level
-                        ? VideoToolStyle.teal : const Color(0xFF55555A)),
+                        ? VideoToolStyle.teal : colors.outlineVariant)),
                     borderRadius: BorderRadius.circular(5)),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
                     title: Text(level.label, style: TextStyle(fontSize: 19,
                       color: _level == level
-                          ? VideoToolStyle.teal : Colors.white)),
+                          ? VideoToolStyle.teal : colors.onSurface)),
                     subtitle: Padding(padding: const EdgeInsets.only(top: 5),
                       child: Text(level.description,
-                        style: const TextStyle(color: VideoToolStyle.muted))),
+                        style: TextStyle(color: colors.onSurfaceVariant))),
                     trailing: _level == level ?
                         const Icon(Icons.check, color: VideoToolStyle.teal) : null,
                     onTap: _busy ? null : () => _selectLevel(level),
@@ -200,7 +205,7 @@ class _CompressScreenState extends State<CompressScreen> {
                     : 'Calculating compressed size…'),
               )),
             ])),
-        Container(color: VideoToolStyle.header,
+        Container(color: colors.surfaceContainerLow,
           padding: const EdgeInsets.fromLTRB(16, 9, 16, 12),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             if (result == null && _estimateError != null)
@@ -229,10 +234,11 @@ class _CompressScreenState extends State<CompressScreen> {
                   _selectedSize! < _originalBytes!
                       ? '${((_originalBytes! - _selectedSize!) * 100 / _originalBytes!).round()}% smaller than original PDF'
                       : 'This setting may not reduce the original PDF size',
-                  style: const TextStyle(fontSize: 11, color: VideoToolStyle.muted),
+                  style: TextStyle(fontSize: 11,
+                      color: colors.onSurfaceVariant),
                 )),
           ])),
       ])),
-    ));
+    );
   }
 }
