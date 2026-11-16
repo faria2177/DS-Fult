@@ -64,6 +64,17 @@ class LivePaperInteriorGuardTest {
     }
 
     @Test
+    fun shadedWhitePaperStillCountsAsOutsideMargin() {
+        // Reproduces the close screenshot's greyish white bottom margin,
+        // where brightness is around 153–167 rather than paper-white 220.
+        val shaded = frame(384, 512, paperColor = 156)
+        assertTrue(LivePaperInteriorGuard.isPrintedInterior(
+            rectangle(.23f, .18f, .77f, .84f),
+            shaded, 384, 512,
+        ))
+    }
+
+    @Test
     fun actualWhitePageAgainstDarkAndBusyBackgroundIsNotHidden() {
         val width = 384
         val height = 512
