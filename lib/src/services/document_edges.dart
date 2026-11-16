@@ -6,6 +6,7 @@ import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'background_contrast_contour.dart';
 import 'image_processor.dart';
 import 'offline_document_contour.dart';
 import 'online_auto_crop_service.dart';
@@ -685,7 +686,19 @@ class DocumentEdges {
           'card=${cardArea?.toStringAsFixed(3) ?? 'none'}, '
           'offline=${offlineArea?.toStringAsFixed(3) ?? 'none'})');
     }
-    return normalIsSafe ? normal : null;
+    if (normalIsSafe) return normal;
+    // Every rectangle-based path declined. A small card or photo lying on a
+    // table or cloth is exactly what those size gates refuse, so finally ask
+    // whether one object clearly stands apart from the surface it lies on.
+    // ID Card mode keeps its own dedicated card logic.
+    if (!preferIdCardBounds) {
+      final separated = await BackgroundContrastContour.detectFile(imagePath);
+      if (separated != null) {
+        _log(imagePath, 'accepted object separated from its background');
+        return separated;
+      }
+    }
+    return null;
   }
 
   /// Run at most two still-image scans concurrently. The previous serial

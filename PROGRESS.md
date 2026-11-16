@@ -260,6 +260,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - BG Remover now defaults to Android ML Kit Subject Segmentation (API 24+, Google Play services model may download once). On-device confidence mask produces feathered transparent or chosen solid-color PNG; the legacy uniform-color flood-fill remains an explicit fallback mode. There is no automatic document upload or AI API-key requirement. Model errors are surfaced instead of silently falling back.
 - Added unit/widget tests for theme switching, exact Medium/High estimates, native mask feathering, Flutter method-channel routing and missing-model error. Native CI and physical Android 16 photo/size acceptance remain required.
 
+## 2026-11-16 — Gallery import: auto crop for small cards and photos
+
+- Imported photos of a passport photo on a textured table, a bank card on a bed sheet and a visiting card on patterned cloth stayed uncropped. Each document covers only ~12–30% of the photo, and every existing still detector deliberately refuses rectangles that small (they are usually printed boxes inside a page).
+- New `BackgroundContrastContour` runs only after all existing paths decline, for normal Scan imports (and Adjust corners → Auto Detect). It learns the surface colours from a thin band around the photo frame, marks pixels that differ (hue fully, brightness when brighter, shadows tolerated), takes the largest separate object, fills it and fits four corners by straight-line fits on each side (rounded card corners are handled).
+- The object may touch at most one photo edge. It is rejected unless it is solid, four-sided (50–130° corners), surrounded by the surface on every free side and not ringed by plain white paper. A printed box can't be chosen: if its page reaches the photo edge the paper is learnt as surface, otherwise the page itself is the bigger object.
+- Checked offline in a Python prototype on the three user photos (correct outer corners, including the photo's white border and a card touching the left edge) and on synthetic scenes (≤0.5% corner error; no crop on a full page with printed blocks, plain cloth, or a page cut by two edges). Dart unit tests mirror these scenes. **Physical-phone import retest still needed.** ID Card mode and the live camera are unchanged.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
