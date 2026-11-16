@@ -297,8 +297,17 @@ class ScannerSession(
             // The last-resort luma detector can also follow a sharp printed
             // line or a coloured half of a notebook. Validate its four outer
             // sides with the SAME safety gate as the OpenCV live detector.
-            val quad = if (config.preferIdCardBounds) detected else
+            val selected = if (config.preferIdCardBounds) detected else
                 LiveBoundarySelector.choose(detected, null, width, height)
+            // When moving close to densely written A4 paper, the printed
+            // region can form an apparently convincing rectangle. The
+            // outside margins still show WHITE PAPER on 3-4 sides. Never
+            // draw this as a green document border: capture must use the
+            // exactly displayed corners, so incorrect green is destructive.
+            val quad = if (!config.preferIdCardBounds && selected != null &&
+                rgba != null &&
+                LivePaperInteriorGuard.isPrintedInterior(
+                    selected, rgba, width, height)) null else selected
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
