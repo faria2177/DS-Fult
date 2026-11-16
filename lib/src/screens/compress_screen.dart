@@ -21,10 +21,21 @@ extension CompressionLevelDetails on CompressionLevel {
 }
 
 /// Compressed PDF is created locally and shared only after user confirmation.
+typedef PdfCompressionBytesBuilder =
+    Future<Uint8List> Function(CompressionLevel? level);
+
 class CompressScreen extends StatefulWidget {
-  const CompressScreen({super.key, required this.document});
+  const CompressScreen({
+    super.key,
+    required this.document,
+    this.pdfBytesBuilder,
+  });
 
   final ScanDocument document;
+
+  /// Optional deterministic encoder seam for widget tests; production uses
+  /// DocumentExport's actual PDF encoder for exact output byte counts.
+  final PdfCompressionBytesBuilder? pdfBytesBuilder;
 
   @override
   State<CompressScreen> createState() => _CompressScreenState();
@@ -47,8 +58,9 @@ class _CompressScreenState extends State<CompressScreen> {
     if (cached != null) return Future<Uint8List>.value(cached);
     final existing = _pending[level];
     if (existing != null) return existing;
-    final future = DocumentExport.toPdf(widget.document,
-        imageQuality: level.imageQuality);
+    final future = widget.pdfBytesBuilder?.call(level) ??
+        DocumentExport.toPdf(widget.document,
+            imageQuality: level.imageQuality);
     _pending[level] = future;
     if (mounted) setState(() => _estimateError = null);
     future.then((bytes) {
@@ -83,7 +95,8 @@ class _CompressScreenState extends State<CompressScreen> {
 
   Future<void> _measureOriginal() async {
     try {
-      final bytes = await DocumentExport.toPdf(widget.document);
+      final bytes = await (widget.pdfBytesBuilder?.call(null) ??
+          DocumentExport.toPdf(widget.document));
       if (mounted) {
         setState(() => _originalBytes = bytes.length);
         _prepare(_level).ignore();
