@@ -35,34 +35,6 @@ class StillCapturePagePreferenceTest {
     }
 
     @Test
-    fun closeCameraPromotesActualPageEvenWhenOnlyFortyPercentLargerThanTextBlock() {
-        // 383047.jpg: the inward green rectangle follows the long lines of
-        // printed banking text, not the four outside A4 paper edges.
-        val printedBlock = candidate(240.0, 200.0, 780.0, 890.0, .71)
-        val realSheet = candidate(205.0, 60.0, 810.0, 925.0,
-            .57, contrast = 13.0)
-        val candidates = listOf(printedBlock, realSheet)
-        // Still-only behaviour remains conservative.
-        assertSame(printedBlock, StillCapturePagePreference.select(
-            candidates, printedBlock, 1_000_000.0))
-        // Close live preview explicitly searches this highly credible
-        // paper boundary instead of accepting a smaller printed rectangle.
-        assertSame(realSheet, StillCapturePagePreference.select(
-            candidates, printedBlock, 1_000_000.0,
-            closePagePreview = true))
-    }
-
-    @Test
-    fun closePreviewDoesNotExpandInnerTextToWeakLargeDeskBorder() {
-        val printedText = candidate(245.0, 255.0, 770.0, 835.0, .72)
-        val desk = candidate(140.0, 100.0, 880.0, 920.0,
-            .49, contrast = 2.0)
-        assertSame(printedText, StillCapturePagePreference.select(
-            listOf(printedText, desk), printedText, 1_000_000.0,
-            closePagePreview = true))
-    }
-
-    @Test
     fun smallCardNeverExpandsToWeakDesktopRectangle() {
         val card = candidate(360.0, 400.0, 660.0, 590.0, .72)
         val tableEdge = candidate(140.0, 170.0, 880.0, 830.0,

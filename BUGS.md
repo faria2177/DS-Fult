@@ -25,8 +25,6 @@
 
 | B-016 | 16 Nov 2026 Tools screenshot `382991.jpg` | Tools tab remains black even while app-wide Dark theme is disabled | FIX IN CODE — device pending: removed forced VideoToolStyle.dark and hard-coded white labels; Tools palette follows Theme.of(context). Widget regression added | Toggle Me → Dark theme OFF/ON; verify Tools background and all labels have correct contrast, no black screen in Light mode |
 
-| B-017 | User photo `383047.jpg`, HONOR Android 16 close-range white A4 with dense Bengali/English text | Green quad encloses the printed text block instead of the outer four sheet corners | FIX IN CODE — device pending (16 Nov 2026): live close-paper outer-candidate ranking; white external-margin check; throttled 576px detection retry that only accepts a verified enclosing paper candidate, never invented corners. CI/HONOR validation pending | With all four paper corners visible, test far/near distances and verify letterhead and last printed line survive Capture; do not show inner-text green when true perimeter is unverified |
-
 ## Historical fixes requiring targeted hardware retest
 
 | ID | Original symptom | Fix introduced | Status | Required confirmation |

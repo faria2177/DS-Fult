@@ -260,13 +260,6 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - BG Remover now defaults to Android ML Kit Subject Segmentation (API 24+, Google Play services model may download once). On-device confidence mask produces feathered transparent or chosen solid-color PNG; the legacy uniform-color flood-fill remains an explicit fallback mode. There is no automatic document upload or AI API-key requirement. Model errors are surfaced instead of silently falling back.
 - Added unit/widget tests for theme switching, exact Medium/High estimates, native mask feathering, Flutter method-channel routing and missing-model error. Native CI and physical Android 16 photo/size acceptance remain required.
 
-## 2026-11-16 — Close-range outer paper detection improvement
-
-- Photo `383047.jpg` shows green corners around the inner printed paragraph, with all four actual A4 paper edges beyond it.
-- Existing still/preview outer-page preference required the physical page to cover at least 1.60× the inner candidate. Live-only close-paper ranking now admits independently evidenced outer candidates starting at 1.30×, subject to strong geometry, edge support, contrast, aspect and enclosure requirements. ID-card and still-image rankings are unchanged.
-- A separate RGBA check samples five points beyond each contour side. When at least three sides still show pale paper, the quad is probably interior text; attempt a throttled 576px second detection pass once per 550 ms. Promote only a genuinely detected larger containing paper border. Otherwise show no misleading green rather than inventing corners.
-- Native regression tests cover the user's close-range area ratio, unrelated desk contours, pale paper beyond printed text and safe outer-page selection. Flutter steady-state smoothing and shutter-time corner mapping remain unchanged. Real HONOR capture and FPS verification remain pending.
-
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
