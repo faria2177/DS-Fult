@@ -99,6 +99,7 @@ class DocumentBoundaryDetector(
         stabilityScoreBonus: Double = 0.0,
         preferOuterPageInStill: Boolean = false,
         preferIdCardBounds: Boolean = false,
+        closePagePreview: Boolean = false,
     ): DocumentDetectionResult {
         val width = rgbaMat.width()
         val height = rgbaMat.height()
@@ -293,7 +294,10 @@ class DocumentBoundaryDetector(
             CardBoundaryPreference.select(candidates, width, height)
                 ?: return DocumentDetectionResult.EMPTY
         } else if (preferOuterPageInStill) {
-            StillCapturePagePreference.select(candidates, scoredBest, totalImageArea)
+            StillCapturePagePreference.select(
+                candidates, scoredBest, totalImageArea,
+                closePagePreview = closePagePreview,
+            )
         } else scoredBest
 
         // STAGE 4: Corner Refinement to Subpixel Accuracy
