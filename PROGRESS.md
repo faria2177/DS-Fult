@@ -253,6 +253,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - `DoclensController` no longer re-emits unchanged quad geometry to the Flutter painter; previously painted corners are cleared on camera session resets so the shutter never reuses a stale screen polygon.
 - Three synthetic regressions exercise dozens of alternating asymmetric corner-jitter frames, one-frame false contour movement, and sustained intentional movement. Actual HONOR Android 16 jitter, frame rate and shutter alignment **must** be rechecked with a successful new APK build.
 
+## 2026-11-16 — Tools theme, actual Compress PDF size, AI BG Remover
+
+- Tools main tab followed a forced dark `Theme(data: VideoToolStyle.dark)`, contrary to Me → Dark theme. The Tools tab now uses the active colorScheme, theme-based background, text, labels, icon contrast and search field. Compress PDF now also respects the active app theme.
+- Compress PDF Medium/High output size is calculated by generating that quality's **actual PDF bytes** in memory. The bottom button shows `Compress · N KB/MB` after selection and saves those same bytes; measured original comparison warns when compression does not reduce output. No guessed reduction ratios.
+- BG Remover now defaults to Android ML Kit Subject Segmentation (API 24+, Google Play services model may download once). On-device confidence mask produces feathered transparent or chosen solid-color PNG; the legacy uniform-color flood-fill remains an explicit fallback mode. There is no automatic document upload or AI API-key requirement. Model errors are surfaced instead of silently falling back.
+- Added unit/widget tests for theme switching, exact Medium/High estimates, native mask feathering, Flutter method-channel routing and missing-model error. Native CI and physical Android 16 photo/size acceptance remain required.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
