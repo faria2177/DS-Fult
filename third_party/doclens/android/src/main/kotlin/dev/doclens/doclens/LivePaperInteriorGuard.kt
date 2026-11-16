@@ -16,6 +16,27 @@ import kotlin.math.min
  * It never expands/invents corners and never edits the JPEG.
  */
 internal object LivePaperInteriorGuard {
+    /**
+     * Only a fully enclosed, substantially larger frame-supported page may
+     * supersede the printed rectangle. Never fabricate corner offsets from
+     * a text block or select a desk/background covering most of the view.
+     */
+    fun recoveredOuterPage(
+        printed: Quad, alternative: Quad?, width: Int, height: Int,
+    ): Quad? {
+        val candidate = alternative ?: return null
+        val smallArea = StillCaptureCropSafety.area(printed)
+        val largeArea = StillCaptureCropSafety.area(candidate)
+        if (smallArea <= 0.0 ||
+            largeArea < smallArea * 1.27 ||
+            largeArea > smallArea * 2.65) return null
+        if (!StillCaptureCropSafety.isCrediblePage(candidate, width, height) ||
+            !LiveBoundarySelector.hasFourPageLikeSides(
+                candidate, width, height)) return null
+        if (!StillCaptureCropSafety.encloses(candidate, printed)) return null
+        return candidate
+    }
+
     fun isPrintedInterior(quad: Quad, rgba: ByteArray, width: Int, height: Int): Boolean {
         if (width < 64 || height < 64 || rgba.size != width * height * 4) return false
         val area = StillCaptureCropSafety.area(quad)
