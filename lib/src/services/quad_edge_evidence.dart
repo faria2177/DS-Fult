@@ -59,29 +59,61 @@ class QuadEdgeEvidence {
         lines.add([a, b]);
         continue;
       }
-      final base = _support(rgb, width, height, a, b, inward, 24).share;
+      final baseScore = _support(rgb, width, height, a, b, inward, 24);
+      final base = baseScore.share;
       var best = base;
+      var bestStep = baseScore.step;
       var bestA = 0, bestB = 0;
       for (var shiftA = -reach; shiftA <= reach; shiftA += 2) {
         for (var shiftB = -reach; shiftB <= reach; shiftB += 2) {
-          final score = _support(rgb, width, height, a + inward * shiftA.toDouble(),
+          final score = _support(rgb, width, height,
+              a + inward * shiftA.toDouble(),
               b + inward * shiftB.toDouble(), inward, 24);
           if (score.samples < 12) continue;
-          // Better, or as good and further out: a page's true edge is its
-          // outermost straight line, never a printed rule inside it.
-          if (score.share > best + .03 ||
-              ((score.share - best).abs() <= .03 &&
-                  shiftA + shiftB < bestA + bestB)) {
+          var take = score.share > best + .03;
+          if (!take && (score.share - best).abs() <= .03) {
+            // Same edge (within ~8 px): keep the sharpest position.
+            // A different line: keep the outer one, because a page's true
+            // edge is its outermost straight line, never a printed rule.
+            final sameEdge = (shiftA + shiftB - bestA - bestB).abs() <= 16;
+            take = sameEdge
+                ? score.step > bestStep
+                : shiftA + shiftB < bestA + bestB;
+          }
+          if (take) {
             best = score.share;
+            bestStep = score.step;
             bestA = shiftA;
             bestB = shiftB;
           }
         }
       }
+      // Fine pass: the coarse search finds which edge; centre the side on
+      // it by taking the position with the strongest colour step.
+      var fineA = 0, fineB = 0;
       if (best >= _minimumToMove && best >= base + .15) {
-        a = a + inward * bestA.toDouble();
-        b = b + inward * bestB.toDouble();
+        fineA = bestA;
+        fineB = bestB;
       }
+      var fineScore = _support(rgb, width, height, a + inward * fineA.toDouble(),
+          b + inward * fineB.toDouble(), inward, 24);
+      final keepAtLeast = fineScore.share - .03;
+      final centreA = fineA, centreB = fineB;
+      for (var dA = -3; dA <= 3; dA++) {
+        for (var dB = -3; dB <= 3; dB++) {
+          final score = _support(rgb, width, height,
+              a + inward * (centreA + dA).toDouble(),
+              b + inward * (centreB + dB).toDouble(), inward, 24);
+          if (score.samples < 12 || score.share < keepAtLeast) continue;
+          if (score.step > fineScore.step) {
+            fineScore = score;
+            fineA = centreA + dA;
+            fineB = centreB + dB;
+          }
+        }
+      }
+      a = a + inward * fineA.toDouble();
+      b = b + inward * fineB.toDouble();
       weakest = math.min(weakest,
           _support(rgb, width, height, a, b, inward, 48).share);
       lines.add([a, b]);
@@ -110,9 +142,10 @@ class QuadEdgeEvidence {
 
   /// Share of points along a..b where the colour 2–6 px inside clearly
   /// differs from the colour 2–6 px outside.
-  static ({double share, int samples}) _support(Uint8List rgb, int width,
+  static ({double share, int samples, double step}) _support(Uint8List rgb, int width,
       int height, Offset a, Offset b, Offset inward, int count) {
     var hits = 0, samples = 0;
+    var stepSum = 0.0;
     for (var i = 0; i < count; i++) {
       final t = .08 + .84 * i / (count - 1);
       final px = a.dx + (b.dx - a.dx) * t, py = a.dy + (b.dy - a.dy) * t;
@@ -142,8 +175,13 @@ class QuadEdgeEvidence {
           (ig / inCount - og / outCount).abs() +
           (ib / inCount - ob / outCount).abs();
       if (step > _colourStep) hits++;
+      stepSum += step;
     }
-    return (share: samples == 0 ? 0.0 : hits / samples, samples: samples);
+    return (
+      share: samples == 0 ? 0.0 : hits / samples,
+      samples: samples,
+      step: samples == 0 ? 0.0 : stepSum / samples,
+    );
   }
 
   static Offset? _intersect(List<Offset> first, List<Offset> second) {
