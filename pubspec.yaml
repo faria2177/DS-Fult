@@ -44,3 +44,4 @@ flutter:
     - assets/tessdata_config.json
     - assets/tessdata/
     - assets/pptx/blank_template.pptx
+    - assets/models/u2netp.onnx

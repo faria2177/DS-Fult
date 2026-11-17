@@ -283,6 +283,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - The import pipeline was extracted to `processGalleryImport` and is shared by both screens.
 - Not replicated: CamScanner shows the document immediately with per-page "processing" placeholders; DocScanner still shows a progress overlay until all pages are ready. **Phone retest needed (permission prompt, large libraries, HEIC photos).**
 
+## 2026-11-17 — Segmentation model locates the document before corner fitting
+
+- Imported stills now go through a neural "where is the document" stage first, the same overall design commercial scanners use (model finds the region, classical geometry fits and validates corners). No third-party proprietary code or model is used.
+- Model: U²-Net small (`assets/models/u2netp.onnx`, 4.6 MB, Apache-2.0, unmodified; provenance and hash in `assets/models/README.md`). It runs on-device through the OpenCV DNN module already shipped in the doclens plugin (`SalientMaskEngine.kt`, method `salientMask`).
+- Flutter (`SalientDocumentDetector` → `BackgroundContrastContour.quadFromSalientMask`) fits four corners with per-side line fits and rejects the answer unless it is one confident, solid, four-sided object touching at most one photo edge and not ringed by white paper. On rejection or any model error the previous detector chain runs unchanged. ID Card mode is not routed through the model.
+- Python check with the same OpenCV version (4.10) and the same steps: the user's three photos crop correctly; synthetic pages/cards ≤0.3% corner error; full page with printed blocks, plain cloth and a page cut by two edges give no model crop. About 0.3 s per photo on a desktop CPU. **Phone retest still needed (speed, memory, real A4 pages).**
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

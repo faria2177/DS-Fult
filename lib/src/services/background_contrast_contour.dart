@@ -116,6 +116,116 @@ class BackgroundContrastContour {
     );
   }
 
+  /// Four corners from a neural foreground map (see `SalientDocumentDetector`).
+  ///
+  /// [probability] is a [width]x[height] map (0..255) of "this pixel belongs
+  /// to the main object" and [rgb] the matching thumbnail. The same corner
+  /// fitting and safety checks as the colour-contrast path are applied, plus
+  /// a confidence test, so a vague or non-rectangular answer is discarded.
+  static Quad? quadFromSalientMask({
+    required Uint8List probability,
+    required Uint8List rgb,
+    required int width,
+    required int height,
+    required double imageWidth,
+    required double imageHeight,
+  }) {
+    final w = width, h = height, n = w * h;
+    if (n == 0 || probability.length != n || rgb.length != n * 3) return null;
+    var mask = Uint8List(n);
+    for (var i = 0; i < n; i++) {
+      mask[i] = probability[i] > 127 ? 1 : 0;
+    }
+    mask = _dilate(_erode(mask, w, h), w, h);
+
+    // Largest object touching no photo edge, or exactly one.
+    Uint8List? component;
+    var componentCount = 0;
+    for (final skip in <int?>[null, 0, 1, 2, 3]) {
+      final candidate = _largestComponent(mask, w, h, skip);
+      if (candidate == null) continue;
+      var count = 0;
+      for (final v in candidate) {
+        count += v;
+      }
+      if (count > componentCount) {
+        componentCount = count;
+        component = candidate;
+      }
+    }
+    if (component == null) {
+      _log('model: no separate object');
+      return null;
+    }
+    final filled = _fillHoles(component, w, h);
+    final points = _fitQuad(filled, w, h);
+    if (points == null) return null;
+    var filledCount = 0;
+    for (final v in filled) {
+      filledCount += v;
+    }
+    final quadArea = _polygonArea(points);
+    final area = quadArea / n;
+    final solidity = filledCount / math.max(quadArea, 1);
+    if (area < .03 || area > .92) {
+      _log('model: coverage ${area.toStringAsFixed(3)}');
+      return null;
+    }
+    if (solidity < .93 || solidity > 1.08) {
+      _log('model: solidity ${solidity.toStringAsFixed(2)}');
+      return null;
+    }
+    // The network must be sure about the object's interior, and must not
+    // see much else in the photo.
+    var core = filled;
+    var grown = filled;
+    for (var i = 0; i < 3; i++) {
+      core = _erode(core, w, h);
+      grown = _dilate(grown, w, h);
+    }
+    var coreCount = 0, coreSum = 0, stray = 0;
+    for (var i = 0; i < n; i++) {
+      if (core[i] != 0) {
+        coreCount++;
+        coreSum += probability[i];
+      } else if (grown[i] == 0 && probability[i] > 127) {
+        stray++;
+      }
+    }
+    final confidence = coreCount == 0 ? 0.0 : coreSum / (coreCount * 255);
+    if (confidence < .90) {
+      _log('model: unsure (${confidence.toStringAsFixed(2)})');
+      return null;
+    }
+    if (stray / math.max(filledCount, 1) > .25) {
+      _log('model: several objects');
+      return null;
+    }
+    // Angles are judged in real image proportions, not the square map.
+    final sx = imageWidth / w, sy = imageHeight / h;
+    if (!_documentLike(
+        [for (final p in points) math.Point(p.x * sx, p.y * sy)])) {
+      _log('model: not a four-sided document shape');
+      return null;
+    }
+    final r = Float32List(n), g = Float32List(n), b = Float32List(n);
+    for (var i = 0; i < n; i++) {
+      r[i] = rgb[i * 3].toDouble();
+      g[i] = rgb[i * 3 + 1].toDouble();
+      b[i] = rgb[i * 3 + 2].toDouble();
+    }
+    if (_paperAround(points, _Frame(w, h, r, g, b), w, h) > .55) {
+      _log('model: object is enclosed by white paper (printed box)');
+      return null;
+    }
+    return Quad(
+      topLeft: Offset(points[0].x / w, points[0].y / h),
+      topRight: Offset(points[1].x / w, points[1].y / h),
+      bottomRight: Offset(points[2].x / w, points[2].y / h),
+      bottomLeft: Offset(points[3].x / w, points[3].y / h),
+    );
+  }
+
   static _Candidate? _pass(_Frame rgb, int w, int h, int band, int? skip) {
     final n = w * h;
     bool inBand(int x, int y, int side) {

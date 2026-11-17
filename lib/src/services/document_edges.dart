@@ -10,6 +10,7 @@ import 'background_contrast_contour.dart';
 import 'image_processor.dart';
 import 'offline_document_contour.dart';
 import 'online_auto_crop_service.dart';
+import 'salient_document_detector.dart';
 import 'quad_edge_refiner.dart';
 
 /// The same on-device document contour detector is used by camera capture,
@@ -564,6 +565,17 @@ class DocumentEdges {
       }
     } catch (error) {
       _log(imagePath, 'online unavailable; offline fallback: $error');
+    }
+    // First ask the on-device segmentation model where the document is
+    // (the approach modern scanner apps use). It answers only when it sees
+    // one clear, four-sided object; otherwise the rectangle detectors below
+    // run exactly as before. ID Card mode keeps its dedicated card logic.
+    if (!preferIdCardBounds) {
+      final salient = await SalientDocumentDetector.detectFile(imagePath);
+      if (salient != null) {
+        _log(imagePath, 'accepted segmentation-model outline');
+        return salient;
+      }
     }
     final found = await _detectSafeStillOutlineCoarse(imagePath,
         preferIdCardBounds: preferIdCardBounds);
