@@ -381,7 +381,9 @@ class _CameraScreenState extends State<CameraScreen> {
       // fallback remains available for legacy/system camera behavior.
       if (raw.isNotEmpty && await OnlineAutoCropConfig.canUpload()) {
         final first = await DocumentEdges.autoCropFiles([raw],
-            preferIdCardBounds: _detectCardBounds);
+            preferIdCardBounds: _detectCardBounds,
+            // Camera photos keep the detector chain they had before.
+            galleryDetectors: false);
         if (first.croppedCount > 0) {
           outputs.add(first.paths.single);
           rawPathsForOutputs.add(raw);
@@ -398,7 +400,9 @@ class _CameraScreenState extends State<CameraScreen> {
       if (raw.isEmpty) continue;
       if (_settings.autoCrop || widget.cardMode) {
         final recovered = await DocumentEdges.autoCropFiles([raw],
-            preferIdCardBounds: _detectCardBounds);
+            preferIdCardBounds: _detectCardBounds,
+            // Camera photos keep the detector chain they had before.
+            galleryDetectors: false);
         final path = recovered.paths.single;
         outputs.add(path);
         rawPathsForOutputs.add(raw);
@@ -532,7 +536,9 @@ class _CameraScreenState extends State<CameraScreen> {
       );
       if (image == null || !mounted) return;
       final cropped = await DocumentEdges.autoCropFiles([image.path],
-          preferIdCardBounds: _detectCardBounds);
+          preferIdCardBounds: _detectCardBounds,
+          // Camera photos keep the detector chain they had before.
+          galleryDetectors: false);
       if (widget.cardMode) widget.onCardSourcePaths?.call([image.path]);
       final outputs = List<String>.of(cropped.paths);
       final confirmed = cropped.croppedCount == 0

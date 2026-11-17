@@ -1,7 +1,4 @@
-## DocScanner v0.5.41
+## DocScanner v0.5.42
 
-- ✨ New in-app updates: DocScanner checks GitHub for new releases, shows what changed and installs the update (Me → Updates)
-- 🖼️ Import Images now opens a CamScanner-style Select Photo screen with numbered selection, preview, Enhance and Auto Crop
-- 📐 Better auto crop for imported photos: an on-device model finds the document, including small cards and photos on cloth or tables
-- 🟩 Steadier green box in the live camera, with no flashes on an empty scene
-- 💾 Safer document storage: saves are atomic with a backup, and one damaged entry no longer hides the others
+- 🟩 Live camera: the green four-corner box is back to the earlier, faster behaviour. It appears as soon as a document is seen again, without the extra confirmation frames added in v0.5.41
+- 📷 Camera photos use the same proven crop detectors as before; the new segmentation model is now used only for imported gallery photos

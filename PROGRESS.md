@@ -303,6 +303,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - **To ship an update:** bump `version:` in `pubspec.yaml`, rewrite `RELEASE_NOTES.md`, merge to `main`.
 - Differences from Ever Dialer: the APK goes to the app's private cache, not the public Downloads folder. Not yet tested on a phone.
 
+## 2026-11-17 — v0.5.42: camera corner detection restored
+
+- User report on v0.5.41: in Scan the live four-corner box no longer finds the document properly; it worked before.
+- The only live-camera change in v0.5.41 was the `QuadSmoother` rewrite (3-frame first-sighting confirmation, outlier hold, settle). It is reverted to the pre-v0.5.41 version (from `c5c31d2`) together with its tests.
+- Camera still fallbacks (`camera_screen.dart`: no green outline at shutter, system camera) now call `autoCropFiles(..., galleryDetectors: false)`, so the segmentation model and background-contrast fallback run only for gallery imports. Camera capture is therefore back to its pre-v0.5.41 behaviour.
+- Lesson: live-camera tuning must be checked on a phone before release; the offline simulation was not representative.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

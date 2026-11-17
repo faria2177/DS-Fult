@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:doclens/doclens.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,101 +10,11 @@ Quad rectangle(double x, double y, {double width = .42, double height = .55}) {
   );
 }
 
-/// Feeds [quad] until the tracker has confirmed it as a first sighting.
-Quad lock(QuadSmoother tracker, Quad quad) {
-  Quad? shown;
-  for (var i = 0; i < tracker.acquireConfirmationFrames; i++) {
-    shown = tracker.add(quad);
-  }
-  expect(shown, quad);
-  return shown!;
-}
-
 void main() {
-  test('a first sighting is drawn only after three agreeing frames', () {
+  test('first detected document immediately gets its four-corner outline', () {
     final tracker = QuadSmoother(windowSize: 7);
     final document = rectangle(.20, .18);
-    expect(tracker.add(document), isNull);
-    expect(tracker.add(document), isNull);
     expect(tracker.add(document), document);
-  });
-
-  test('phantom rectangles on an empty desk never flash a green box', () {
-    final tracker = QuadSmoother(windowSize: 7);
-    final random = math.Random(1);
-    for (var i = 0; i < 300; i++) {
-      final Quad? detection = random.nextDouble() < .55
-          ? null
-          : rectangle(
-              .02 + random.nextDouble() * .48,
-              .02 + random.nextDouble() * .38,
-              width: .20 + random.nextDouble() * .25,
-              height: .20 + random.nextDouble() * .30,
-            );
-      expect(tracker.add(detection), isNull, reason: 'frame $i');
-    }
-  });
-
-  test('a phantom seen twice and then gone is never drawn', () {
-    final tracker = QuadSmoother(windowSize: 7);
-    final phantom = rectangle(.30, .30);
-    for (var i = 0; i < 20; i++) {
-      expect(tracker.add(phantom), isNull);
-      expect(tracker.add(phantom), isNull);
-      expect(tracker.add(null), isNull);
-      expect(tracker.add(null), isNull);
-    }
-  });
-
-  test('one dropped frame does not restart first-sighting confirmation', () {
-    final tracker = QuadSmoother(windowSize: 7);
-    final document = rectangle(.20, .18);
-    expect(tracker.add(document), isNull);
-    expect(tracker.add(null), isNull);
-    expect(tracker.add(document), isNull);
-    expect(tracker.add(document), document);
-  });
-
-  test('a briefly lost document returns at once in the same place', () {
-    final tracker = QuadSmoother(windowSize: 7);
-    final document = rectangle(.20, .20);
-    lock(tracker, document);
-    for (var i = 0; i < 4; i++) {
-      expect(tracker.add(null), document, reason: 'held through miss $i');
-    }
-    expect(tracker.add(null), isNull);
-    expect(tracker.add(null), isNull);
-    expect(tracker.add(document), document);
-  });
-
-  test('one large same-document outlier cannot kick the outline', () {
-    final tracker = QuadSmoother(windowSize: 7);
-    final paper = rectangle(.20, .19);
-    for (var i = 0; i < 8; i++) {
-      tracker.add(paper);
-    }
-    for (var round = 0; round < 5; round++) {
-      expect(tracker.add(rectangle(.28, .19)), paper);
-      for (var i = 0; i < 3; i++) {
-        expect(tracker.add(paper), paper);
-      }
-    }
-  });
-
-  test('held outline settles once onto a tight multi-frame consensus', () {
-    final tracker = QuadSmoother(windowSize: 7);
-    final firstGuess = rectangle(.20, .18);
-    final consensus = rectangle(.209, .186);
-    lock(tracker, firstGuess);
-    var previous = firstGuess;
-    var changes = 0;
-    for (var i = 0; i < 12; i++) {
-      final shown = tracker.add(consensus)!;
-      if (shown != previous) changes++;
-      previous = shown;
-    }
-    expect(previous, consensus);
-    expect(changes, 1);
   });
 
   test('small detector jitter stays on the document', () {
@@ -135,7 +43,7 @@ void main() {
     final tracker = QuadSmoother(windowSize: 7);
     final oldPage = rectangle(.08, .10);
     final newPage = rectangle(.43, .34);
-    lock(tracker, oldPage);
+    tracker.add(oldPage);
     expect(tracker.add(newPage), oldPage);
     expect(tracker.add(rectangle(.434, .343)), oldPage);
     expect(tracker.add(rectangle(.431, .341)), oldPage);
@@ -146,7 +54,7 @@ void main() {
 
   test('gradual document motion continues to follow camera movement', () {
     final tracker = QuadSmoother(windowSize: 5);
-    lock(tracker, rectangle(.10, .12));
+    tracker.add(rectangle(.10, .12));
     Quad? result;
     for (var i = 1; i <= 7; i++) {
       result = tracker.add(rectangle(.10 + i * .025, .12));
@@ -159,18 +67,17 @@ void main() {
   test('transient misses retain quad, consecutive misses clear it', () {
     final tracker = QuadSmoother(windowSize: 5, missesBeforeReset: 3);
     final doc = rectangle(.2, .2);
-    lock(tracker, doc);
+    tracker.add(doc);
     expect(tracker.add(null), doc);
     expect(tracker.add(null), doc);
     expect(tracker.add(null), isNull);
-    // A rectangle somewhere else is a new sighting and must be confirmed.
-    expect(tracker.add(rectangle(.41, .1)), isNull);
+    expect(tracker.add(rectangle(.41, .1)), rectangle(.41, .1));
   });
 
   test('persistent inconsistent frames hide a stale document outline', () {
     final tracker = QuadSmoother(windowSize: 5, maxUnmatchedFrames: 6);
     final original = rectangle(.1, .1);
-    lock(tracker, original);
+    tracker.add(original);
     // Alternating distant detections must not confirm either challenger.
     for (var i = 0; i < 5; i++) {
       expect(tracker.add(rectangle(i.isEven ? .55 : .32, .32)), original);
@@ -184,7 +91,7 @@ void main() {
   test('rejects crossed corners and impossible geometry', () {
     final tracker = QuadSmoother();
     final doc = rectangle(.2, .2);
-    lock(tracker, doc);
+    tracker.add(doc);
     final crossed = Quad(
       topLeft: const Offset(.2, .2),
       topRight: const Offset(.6, .7),
@@ -200,7 +107,7 @@ void main() {
       switchConfirmationFrames: 4, maxUnmatchedFrames: 12,
     );
     final doc = rectangle(.15, .15);
-    lock(tracker, doc);
+    tracker.add(doc);
     for (var i = 0; i < 8; i++) {
       final output = tracker.add(rectangle(
         .45 + (i % 3) * .075, .29, width: .30,
@@ -211,7 +118,7 @@ void main() {
 
   test('small vibration is damped but deliberate movement follows promptly', () {
     final tracker = QuadSmoother(windowSize: 7);
-    lock(tracker, rectangle(.15, .14));
+    tracker.add(rectangle(.15, .14));
     for (var i = 0; i < 10; i++) {
       final q = tracker.add(rectangle(.15 + (i.isEven ? .004 : -.004), .14))!;
       expect((q.topLeft.dx - .15).abs(), lessThan(.012));
@@ -226,7 +133,7 @@ void main() {
   test('micro-jitter inside display deadband does not shift the border', () {
     final tracker = QuadSmoother(windowSize: 7);
     final document = rectangle(.20, .18);
-    lock(tracker, document);
+    tracker.add(document);
     for (var i = 0; i < 12; i++) {
       final result = tracker.add(
           rectangle(.20 + (i.isEven ? .003 : -.003), .18));
@@ -238,7 +145,7 @@ void main() {
   test('stationary green corners remain pixel-stable through alternating noise', () {
     final tracker = QuadSmoother(windowSize: 7);
     final paper = rectangle(.21, .18, width: .52, height: .65);
-    lock(tracker, paper);
+    expect(tracker.add(paper), paper);
     // Tiny, alternating and asymmetric corner proposals are normal for
     // OpenCV on a stationary sheet. None may move the visible green outline.
     for (var i = 0; i < 64; i++) {
@@ -293,14 +200,14 @@ void main() {
     expect(tracker.add(rectangle(.001, .001, width: .998, height: .81)),
         isNull);
     final document = rectangle(.23, .18);
-    lock(tracker, document);
+    expect(tracker.add(document), document);
   });
 
   test('sudden near-edge background takeover requires extra confirmation', () {
     final tracker = QuadSmoother(windowSize: 7, maxUnmatchedFrames: 12);
     final cloth = rectangle(.20, .20, width: .35, height: .40);
     final chair = rectangle(.015, .10, width: .65, height: .73);
-    lock(tracker, cloth);
+    tracker.add(cloth);
     for (var i = 0; i < 7; i++) {
       expect(tracker.add(chair), cloth);
     }
@@ -311,7 +218,7 @@ void main() {
     final tracker = QuadSmoother(windowSize: 7);
     final cloth = rectangle(.20, .20, width: .35, height: .40);
     final nearBorder = rectangle(.015, .10, width: .65, height: .73);
-    lock(tracker, cloth);
+    expect(tracker.add(cloth), cloth);
     // With the default six-frame stale-outline limit and an eight-frame
     // border confirmation, the older implementation hid the green outline
     // for frames 6 and 7 even though the new candidate was consistent.
@@ -327,7 +234,7 @@ void main() {
   test('null observations interrupt an incompatible contender streak', () {
     final tracker = QuadSmoother(windowSize: 7);
     final cloth = rectangle(.16, .15, width: .30, height: .40);
-    lock(tracker, cloth);
+    tracker.add(cloth);
     for (var i = 0; i < 4; i++) {
       expect(tracker.add(rectangle(.55, .38, width: .35)), cloth);
       expect(tracker.add(rectangle(.32, .38, width: .35)), cloth);
