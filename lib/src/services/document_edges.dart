@@ -574,17 +574,26 @@ class DocumentEdges {
     // (the approach modern scanner apps use). It answers only when it sees
     // one clear, four-sided object; otherwise the rectangle detectors below
     // run exactly as before. ID Card mode keeps its dedicated card logic.
+    SalientResult? salient;
     if (!preferIdCardBounds && galleryDetectors) {
-      final salient = await SalientDocumentDetector.detectFile(imagePath);
-      if (salient != null) {
-        _log(imagePath, 'accepted segmentation-model outline');
-        return salient;
+      salient = await SalientDocumentDetector.detectFile(imagePath);
+      if (salient != null && salient.edgesConfirmed) {
+        _log(imagePath, 'accepted segmentation-model outline (edges confirmed)');
+        return salient.detection;
       }
     }
     final found = await _detectSafeStillOutlineCoarse(imagePath,
         preferIdCardBounds: preferIdCardBounds,
         galleryDetectors: galleryDetectors);
-    if (found == null) return null;
+    if (found == null) {
+      // Nothing else found a document; the model's outline, even with one
+      // unconfirmed side, is closer than leaving the whole photo.
+      if (salient != null) {
+        _log(imagePath, 'using unconfirmed segmentation-model outline');
+        return salient.detection;
+      }
+      return null;
+    }
     // Every detector path (native OpenCV, native colour masks, offline Dart)
     // tends to land a few percent inside the real paper edge. Snap the
     // accepted outline onto the actual edge pixels; on any doubt this returns

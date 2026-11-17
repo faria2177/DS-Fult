@@ -7,12 +7,14 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'background_contrast_contour.dart';
+import 'quad_edge_evidence.dart';
 
 /// Raw answer of the segmentation model for one photo.
 class SalientMask {
   const SalientMask({required this.width, required this.height,
       required this.probability, required this.rgb,
-      required this.imageWidth, required this.imageHeight});
+      required this.imageWidth, required this.imageHeight,
+      this.edgeRgb, this.edgeWidth = 0, this.edgeHeight = 0});
 
   final int width, height;
   /// Foreground probability per pixel, 0..255.
@@ -20,6 +22,21 @@ class SalientMask {
   /// Matching thumbnail, 3 bytes (R, G, B) per pixel.
   final Uint8List rgb;
   final int imageWidth, imageHeight;
+  /// Sharper aspect-correct colour copy used to check the outline's sides.
+  final Uint8List? edgeRgb;
+  final int edgeWidth, edgeHeight;
+}
+
+/// A model outline and whether the photo's own edges confirm it.
+class SalientResult {
+  const SalientResult(this.detection, {required this.edgesConfirmed});
+
+  final ImageDetection detection;
+
+  /// Every free side lies on a visible edge. When false (for example the
+  /// model merged a page with the papers under it) the caller should prefer
+  /// another detector and use this outline only as a last resort.
+  final bool edgesConfirmed;
 }
 
 /// Finds the document in an imported photo with a bundled open-source
@@ -37,7 +54,7 @@ class SalientDocumentDetector {
   @visibleForTesting
   static Future<SalientMask?> Function(String imagePath)? maskProviderForTesting;
 
-  static Future<ImageDetection?> detectFile(String imagePath) async {
+  static Future<SalientResult?> detectFile(String imagePath) async {
     try {
       final provider = maskProviderForTesting;
       final mask = provider != null
@@ -53,10 +70,27 @@ class SalientDocumentDetector {
         imageHeight: mask.imageHeight.toDouble(),
       );
       if (quad == null) return null;
-      return ImageDetection(
-        quad: quad,
-        imageSize: Size(
-            mask.imageWidth.toDouble(), mask.imageHeight.toDouble()),
+      var finalQuad = quad;
+      var confirmed = false;
+      final edges = mask.edgeRgb;
+      if (edges != null) {
+        final evidence = await compute(_checkEdges, (
+          quad: quad, rgb: edges, width: mask.edgeWidth,
+          height: mask.edgeHeight));
+        if (evidence != null) {
+          finalQuad = evidence.quad;
+          confirmed = evidence.confirmed;
+          debugPrint('[AutoCrop] model outline edge support '
+              '${evidence.weakestSide.toStringAsFixed(2)}');
+        }
+      }
+      return SalientResult(
+        ImageDetection(
+          quad: finalQuad,
+          imageSize: Size(
+              mask.imageWidth.toDouble(), mask.imageHeight.toDouble()),
+        ),
+        edgesConfirmed: confirmed,
       );
     } catch (error) {
       debugPrint('Segmentation model unavailable: $error');
@@ -77,6 +111,10 @@ class SalientDocumentDetector {
     final width = raw['width'], height = raw['height'];
     final probability = raw['probability'], rgb = raw['rgb'];
     final imageWidth = raw['imageWidth'], imageHeight = raw['imageHeight'];
+    final edgeRgb = raw['edgeRgb'];
+    final edgeWidth = raw['edgeWidth'], edgeHeight = raw['edgeHeight'];
+    final edgesValid = edgeRgb is Uint8List && edgeWidth is int &&
+        edgeHeight is int && edgeRgb.length == edgeWidth * edgeHeight * 3;
     if (width is! int || height is! int || probability is! Uint8List ||
         rgb is! Uint8List || imageWidth is! int || imageHeight is! int ||
         imageWidth <= 0 || imageHeight <= 0) {
@@ -84,7 +122,10 @@ class SalientDocumentDetector {
     }
     return SalientMask(width: width, height: height,
         probability: probability, rgb: rgb,
-        imageWidth: imageWidth, imageHeight: imageHeight);
+        imageWidth: imageWidth, imageHeight: imageHeight,
+        edgeRgb: edgesValid ? edgeRgb : null,
+        edgeWidth: edgesValid ? edgeWidth : 0,
+        edgeHeight: edgesValid ? edgeHeight : 0);
   }
 
   /// OpenCV reads the network from a real file, so the bundled asset is
@@ -107,3 +148,7 @@ class SalientDocumentDetector {
     }
   }
 }
+
+EdgeEvidence? _checkEdges(
+        ({Quad quad, Uint8List rgb, int width, int height}) input) =>
+    QuadEdgeEvidence.check(input.quad, input.rgb, input.width, input.height);
