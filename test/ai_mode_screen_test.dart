@@ -103,6 +103,9 @@ void main() {
     expect(prefs.getString('ai_mode_active_provider'), 'gemini');
     expect(prefs.getKeys().where((k) => k.contains('key')), isEmpty);
     expect(prefs.getBool('ai_mode_enabled'), isNull);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('ai-mode-switch')), -200);
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(find.byKey(const Key('ai-mode-switch')))
         .onChanged, isNotNull);
 
