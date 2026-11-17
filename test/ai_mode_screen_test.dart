@@ -85,6 +85,10 @@ void main() {
     expect(tester.widget<SwitchListTile>(find.byKey(const Key('ai-mode-switch')))
         .onChanged, isNull);
 
+    // The provider list starts below the key-file import card.
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('ai-provider-gemini')), 200);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('ai-provider-gemini')));
     await tester.pumpAndSettle();
     final field = find.byKey(const Key('ai-key-input-gemini'));
