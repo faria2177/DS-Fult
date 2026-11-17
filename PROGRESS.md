@@ -318,6 +318,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - `PhotoLibrarySource`: grid ordered newest first (`createDate` descending); the video showed old photos at the top, forcing the user into Browse.
 - Python mirror: unchanged results on the earlier user photos and synthetic scenes; the video-frame page is flagged unconfirmed. Camera capture untouched. **Needs a phone check with the original photo.**
 
+## 2026-11-17 — v0.5.44: true-shape perspective correction
+
+- Both warps (`ImageWarper.kt` for native camera crops, `_perspectiveCrop` in `image_processor.dart` for imports/editor) sized the output from side lengths seen in the photo, so a tilted page came out squeezed (simulated mean 4.7%, worst ~20%).
+- New `PerspectiveAspect` (Dart + identical Kotlin) recovers the real width:height with Zhang & He's method (Whiteboard scanning and image enhancement, 2007), using a typical phone focal length (0.75 x long side, because the focal length cannot be estimated reliably from four corners), keeps the output area, limits the change to ±25% of the old shape, and snaps within 3% to A-series, US Letter and ID-1.
+- Simulation over random tilts and focal lengths 0.65–0.88 x: mean error 0.4–1.4% (old 4.7%); 66–86% of pages exact. Written from the published method; no third-party code used.
+- Only the output proportions change; corner detection is untouched. **Phone check needed before merging.**
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

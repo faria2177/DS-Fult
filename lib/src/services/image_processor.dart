@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import 'perspective_aspect.dart';
+
 enum ScanFilter {
   original, auto, enhance, shadowFree, magicColor, grayscale, blackWhite,
   lighten, noWatermark, noHandwriting, eco, invert,
@@ -515,16 +517,16 @@ img.Image _perspectiveCrop(img.Image source, List<List<double>> normalized) {
           ))
       .toList(growable: false);
   double distance(Offset a, Offset b) => (a - b).distance;
-  int width = ((distance(points[0], points[1]) +
-              distance(points[3], points[2])) /
-          2)
-      .round()
-      .clamp(80, 4096).toInt();
-  int height = ((distance(points[0], points[3]) +
-              distance(points[1], points[2])) /
-          2)
-      .round()
-      .clamp(80, 4096).toInt();
+  // Real page proportions (see PerspectiveAspect), at the same resolution
+  // the averaged side lengths would give.
+  final size = PerspectiveAspect.outputSize(
+    points,
+    Size(source.width.toDouble(), source.height.toDouble()),
+    (distance(points[0], points[1]) + distance(points[3], points[2])) / 2,
+    (distance(points[0], points[3]) + distance(points[1], points[2])) / 2,
+  );
+  int width = size.width.round().clamp(80, 4096).toInt();
+  int height = size.height.round().clamp(80, 4096).toInt();
   final scale = math.min(1.0, 4096.0 / math.max(width, height));
   width = (width * scale).round().clamp(80, 4096).toInt();
   height = (height * scale).round().clamp(80, 4096).toInt();
