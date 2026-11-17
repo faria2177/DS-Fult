@@ -1,6 +1,5 @@
 package dev.doclens.doclens
 
-import android.graphics.PointF
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
