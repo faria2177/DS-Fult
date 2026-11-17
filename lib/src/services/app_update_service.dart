@@ -130,9 +130,8 @@ class UpdateException implements Exception {
 /// user's confirmation in the system installer.
 class AppUpdateService {
   AppUpdateService({HttpClient Function()? httpClient,
-      Future<Map<String, String>?> Function()? installedVersion})
-      : _httpClient = httpClient ?? HttpClient.new,
-        _installedVersion = installedVersion;
+      this.installedVersionProvider})
+      : _httpClient = httpClient ?? HttpClient.new;
 
   static const repository = 'faria2177/DS-Fult';
   static const _channel = MethodChannel('doclens/methods');
@@ -144,7 +143,8 @@ class AppUpdateService {
   static const promptPause = Duration(hours: 20);
 
   final HttpClient Function() _httpClient;
-  final Future<Map<String, String>?> Function()? _installedVersion;
+  /// Replaces the platform version lookup (tests).
+  final Future<Map<String, String>?> Function()? installedVersionProvider;
 
   static Future<bool> autoCheckEnabled() async =>
       (await SharedPreferences.getInstance()).getBool(_autoCheckKey) ?? true;
@@ -171,7 +171,7 @@ class AppUpdateService {
   Future<AppVersion> installedVersion() async {
     Map<String, String>? raw;
     try {
-      final provider = _installedVersion;
+      final provider = installedVersionProvider;
       if (provider != null) {
         raw = await provider();
       } else {
