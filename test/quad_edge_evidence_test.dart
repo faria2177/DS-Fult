@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:doclens/doclens.dart';
 import 'package:docscanner/src/services/document_edges.dart';
