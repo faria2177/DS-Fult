@@ -114,4 +114,42 @@ void main() {
     expect(returned?.paths,
         ['/nonexistent/photo3.jpg', '/nonexistent/photo1.jpg']);
   });
+
+  testWidgets('limited photo access is explained and Browse imports others',
+      (tester) async {
+    var allowAll = 0;
+    GalleryImportResult? returned;
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) =>
+      Scaffold(body: TextButton(onPressed: () async {
+        returned = await Navigator.of(context).push<GalleryImportResult>(
+          MaterialPageRoute(builder: (_) => GalleryPickerScreen(
+            source: _FakeLibrary(2),
+            initialAutoCrop: false,
+            initialFilter: ScanFilter.original,
+            limitedAccess: true,
+            onAllowAll: () async => allowAll++,
+            onBrowse: () async => ['/nonexistent/other.jpg'],
+          )),
+        );
+      }, child: const Text('Open')),
+    ))));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('gallery-limited-notice')), findsOneWidget);
+    await tester.tap(find.text('Allow all'));
+    await tester.pump();
+    expect(allowAll, 1);
+
+    await tester.tap(find.byKey(const Key('gallery-browse')));
+    await tester.pumpAndSettle();
+    expect(returned?.paths, ['/nonexistent/other.jpg']);
+  });
+
+  testWidgets('full photo access shows no notice', (tester) async {
+    await tester.pumpWidget(_host(GalleryPickerScreen(
+      source: _FakeLibrary(2), initialFilter: ScanFilter.original)));
+    await tester.pump();
+    expect(find.byKey(const Key('gallery-limited-notice')), findsNothing);
+    expect(find.byKey(const Key('gallery-browse')), findsNothing);
+  });
 }

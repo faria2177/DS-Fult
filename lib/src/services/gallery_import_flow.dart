@@ -20,7 +20,17 @@ Future<GalleryImportResult?> pickAndImportFromGallery(
   ScanFilter initialFilter = ScanFilter.enhance,
   bool preferIdCardBounds = false,
 }) async {
-  GalleryAssetSource? source;
+  Future<List<String>> pickWithSystem() async {
+    if (limit == 1) {
+      final photo = await picker.pickImage(source: ImageSource.gallery);
+      return [if (photo != null) photo.path];
+    }
+    final photos = await picker.pickMultiImage(
+        limit: limit, requestFullMetadata: false);
+    return [for (final photo in photos) photo.path];
+  }
+
+  PhotoLibrarySource? source;
   try {
     source = await PhotoLibrarySource.open();
   } catch (error) {
@@ -37,18 +47,13 @@ Future<GalleryImportResult?> pickAndImportFromGallery(
         initialAutoCrop: initialAutoCrop,
         initialFilter: initialFilter,
         preferIdCardBounds: preferIdCardBounds,
+        limitedAccess: library.limited,
+        onAllowAll: PhotoLibrarySource.openAccessSettings,
+        onBrowse: pickWithSystem,
       ),
     ));
   }
-  final List<String> paths;
-  if (limit == 1) {
-    final photo = await picker.pickImage(source: ImageSource.gallery);
-    paths = [if (photo != null) photo.path];
-  } else {
-    final photos = await picker.pickMultiImage(
-        limit: limit, requestFullMetadata: false);
-    paths = [for (final photo in photos) photo.path];
-  }
+  final paths = await pickWithSystem();
   if (paths.isEmpty || !navigator.mounted) return null;
   return navigator.push<GalleryImportResult>(MaterialPageRoute(
     builder: (_) => GalleryImportReviewScreen(

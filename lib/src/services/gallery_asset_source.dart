@@ -19,7 +19,7 @@ abstract class GalleryAssetSource {
 
 /// The device photo library, read through MediaStore.
 class PhotoLibrarySource implements GalleryAssetSource {
-  PhotoLibrarySource._(this._album, this.count);
+  PhotoLibrarySource._(this._album, this.count, this.limited);
 
   static const _pageSize = 90;
 
@@ -28,6 +28,14 @@ class PhotoLibrarySource implements GalleryAssetSource {
 
   @override
   final int count;
+
+  /// True when Android granted only the photos the user ticked ("Select
+  /// photos" on Android 14+), so the grid cannot show the whole gallery.
+  final bool limited;
+
+  /// Opens this app's system settings page, where photo access can be
+  /// changed to "Allow all".
+  static Future<void> openAccessSettings() => PhotoManager.openSetting();
 
   /// Asks for photo access and opens the "all photos" album. Returns null
   /// when access is refused or the library is empty, so the caller can fall
@@ -49,7 +57,8 @@ class PhotoLibrarySource implements GalleryAssetSource {
     if (albums.isEmpty) return null;
     final total = await albums.first.assetCountAsync;
     if (total <= 0) return null;
-    return PhotoLibrarySource._(albums.first, total);
+    return PhotoLibrarySource._(albums.first, total,
+        permission == PermissionState.limited);
   }
 
   Future<AssetEntity?> _asset(int index) async {

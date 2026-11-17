@@ -20,7 +20,10 @@ class GalleryPickerScreen extends StatefulWidget {
       this.initialAutoCrop = true,
       this.initialFilter = ScanFilter.enhance,
       this.preferIdCardBounds = false,
-      this.maxSelection});
+      this.maxSelection,
+      this.limitedAccess = false,
+      this.onAllowAll,
+      this.onBrowse});
 
   final GalleryAssetSource source;
   final bool initialAutoCrop;
@@ -29,6 +32,15 @@ class GalleryPickerScreen extends StatefulWidget {
 
   /// Largest number of photos that may be imported, or null for no limit.
   final int? maxSelection;
+
+  /// Android granted only some photos; a notice explains why the grid is
+  /// incomplete and offers [onAllowAll].
+  final bool limitedAccess;
+  final Future<void> Function()? onAllowAll;
+
+  /// Opens the system photo picker (albums, cloud and other apps) and
+  /// returns the chosen file paths. Shown as "Browse".
+  final Future<List<String>> Function()? onBrowse;
 
   @override
   State<GalleryPickerScreen> createState() => _GalleryPickerScreenState();
@@ -113,13 +125,31 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
   Future<void> _import() async {
     if (_busy || _picked.isEmpty) return;
     setState(() { _busy = true; _progress = 'Loading selected photos…'; });
-    try {
+    await _process(() async {
       final sourcePaths = <String>[];
       for (final index in List<int>.of(_picked)) {
         final path = await widget.source.filePath(index);
         if (path != null) sourcePaths.add(path);
       }
+      return sourcePaths;
+    });
+  }
+
+  /// Photos missing from the grid can still be imported through the system
+  /// picker; they go through the same crop and enhance settings.
+  Future<void> _browse() async {
+    final browse = widget.onBrowse;
+    if (_busy || browse == null) return;
+    setState(() { _busy = true; _progress = 'Opening photo picker…'; });
+    await _process(browse, emptyIsCancel: true);
+  }
+
+  Future<void> _process(Future<List<String>> Function() loadPaths,
+      {bool emptyIsCancel = false}) async {
+    try {
+      final sourcePaths = await loadPaths();
       if (sourcePaths.isEmpty) {
+        if (emptyIsCancel) return;
         throw const FileSystemException('The selected photos are unreadable');
       }
       final result = await processGalleryImport(
@@ -209,6 +239,11 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
           onPressed: _busy ? null : () => Navigator.maybePop(context)),
         title: const Text('Select Photo', style: TextStyle(fontSize: 17)),
         actions: [
+          if (widget.onBrowse != null) IconButton(
+            key: const Key('gallery-browse'),
+            icon: const Icon(Icons.folder_open_outlined),
+            tooltip: 'Browse albums and other apps',
+            onPressed: _busy ? null : _browse),
           Padding(
             padding: const EdgeInsets.only(right: 10),
             child: Center(child: FilledButton(
@@ -229,6 +264,19 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
       ),
       body: SafeArea(child: Stack(children: [
         Column(children: [
+          if (widget.limitedAccess) Container(
+            key: const Key('gallery-limited-notice'),
+            color: const Color(0xFF3A3220),
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            child: Row(children: [
+              const Expanded(child: Text(
+                'Only the photos you allowed are shown.',
+                style: TextStyle(color: Colors.white, fontSize: 13))),
+              if (widget.onAllowAll != null) TextButton(
+                onPressed: _busy ? null : () => widget.onAllowAll!(),
+                child: const Text('Allow all',
+                    style: TextStyle(color: dsTeal))),
+            ])),
           Expanded(child: GridView.builder(
             padding: const EdgeInsets.all(4),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
