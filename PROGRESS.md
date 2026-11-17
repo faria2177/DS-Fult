@@ -325,6 +325,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Simulation over random tilts and focal lengths 0.65–0.88 x: mean error 0.6–1.6% (old 4.7%); 52–79% of pages exact. Written from the published method; no third-party code used.
 - Only the output proportions change; corner detection is untouched. **Phone check needed before merging.**
 
+## 2026-11-17 — v0.5.45: cast-shadow trim for camera crops
+
+- User video (business card on dark patterned cloth, light from top-left): the live green box sat a few pixels outside the card on the right and bottom, and the crop kept a strip of cloth along those edges. The outline followed the outer border of the card's cast shadow; camera crops use the live outline directly.
+- New `ShadowEdgeTrim.kt`, applied in `ScannerSession` to the camera crop quad before `ImageWarper.warp` (also reported back as the result quad). Per side, 28 samples look just inside the outline for a band that is the surface's colour but darker, followed by the much brighter document; if ≥60% of the side agrees, the side moves inward onto the document edge (line fit, so a tapered shadow works). Moves only inward, ≤5% of the document size, keeps ≥80% of the area; skipped when the document is not brighter than the surface or the band's hue differs from the surface (printed borders).
+- Kotlin tests: shadowed card trimmed to within 2.5 px; exact outline, printed blue border and dark card on a light table unchanged. Live green box and detection are unchanged. Built on v0.5.44 (true-shape perspective). **Phone check needed before merging.**
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
