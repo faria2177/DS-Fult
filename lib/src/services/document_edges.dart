@@ -539,8 +539,12 @@ class DocumentEdges {
   /// Detect. Neither route may promote an interior table/name block to a
   /// complete document. Try the independent card outline even when the
   /// ordinary page detector returned null; otherwise leave the photo whole.
+  ///
+  /// [galleryDetectors] enables the segmentation model and the
+  /// background-contrast fallback, which were tuned for imported photos.
+  /// Camera captures pass false and keep their proven detector chain.
   static Future<ImageDetection?> detectSafeStillOutline(String imagePath,
-      {bool preferIdCardBounds = false}) async {
+      {bool preferIdCardBounds = false, bool galleryDetectors = true}) async {
     // Online First applies to still images only (not live CameraX frames).
     // Explicit opt-in and a private HTTPS endpoint are required; malformed or
     // misleading cloud coordinates never bypass local crop-safety gates.
@@ -570,7 +574,7 @@ class DocumentEdges {
     // (the approach modern scanner apps use). It answers only when it sees
     // one clear, four-sided object; otherwise the rectangle detectors below
     // run exactly as before. ID Card mode keeps its dedicated card logic.
-    if (!preferIdCardBounds) {
+    if (!preferIdCardBounds && galleryDetectors) {
       final salient = await SalientDocumentDetector.detectFile(imagePath);
       if (salient != null) {
         _log(imagePath, 'accepted segmentation-model outline');
@@ -578,7 +582,8 @@ class DocumentEdges {
       }
     }
     final found = await _detectSafeStillOutlineCoarse(imagePath,
-        preferIdCardBounds: preferIdCardBounds);
+        preferIdCardBounds: preferIdCardBounds,
+        galleryDetectors: galleryDetectors);
     if (found == null) return null;
     // Every detector path (native OpenCV, native colour masks, offline Dart)
     // tends to land a few percent inside the real paper edge. Snap the
@@ -590,7 +595,7 @@ class DocumentEdges {
 
   static Future<ImageDetection?> _detectSafeStillOutlineCoarse(
       String imagePath,
-      {bool preferIdCardBounds = false}) async {
+      {bool preferIdCardBounds = false, bool galleryDetectors = true}) async {
     ImageDetection? normal;
     try {
       normal = await detect(imagePath,
@@ -703,7 +708,7 @@ class DocumentEdges {
     // table or cloth is exactly what those size gates refuse, so finally ask
     // whether one object clearly stands apart from the surface it lies on.
     // ID Card mode keeps its own dedicated card logic.
-    if (!preferIdCardBounds) {
+    if (!preferIdCardBounds && galleryDetectors) {
       final separated = await BackgroundContrastContour.detectFile(imagePath);
       if (separated != null) {
         _log(imagePath, 'accepted object separated from its background');
@@ -718,6 +723,7 @@ class DocumentEdges {
   /// This fixed-size pool protects memory and preserves the original order.
   static Future<AutoCropBatch> autoCropFiles(List<String> images,
       {bool preferIdCardBounds = false,
+       bool galleryDetectors = true,
        void Function(int processed, int total)? onProgress}) async {
     if (images.isEmpty) return const AutoCropBatch([], 0);
     final output = List<String>.of(images);
@@ -734,7 +740,8 @@ class DocumentEdges {
         final image = images[index];
         try {
           final detection = await detectSafeStillOutline(image,
-              preferIdCardBounds: preferIdCardBounds);
+              preferIdCardBounds: preferIdCardBounds,
+              galleryDetectors: galleryDetectors);
           if (detection == null) {
             failedFlags[index] = true;
           } else {

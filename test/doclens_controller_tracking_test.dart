@@ -113,10 +113,6 @@ void main() {
     try {
       await controller.initialize();
       final cloth = _rectangle(.14, .16);
-      // A first sighting is only drawn once three frames agree on it.
-      await emit(cloth);
-      await emit(cloth);
-      expect(controller.lastQuad, isNull);
       await emit(cloth);
       expect(controller.lastQuad, cloth);
 

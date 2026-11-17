@@ -86,4 +86,16 @@ void main() {
     expect(detection!.imageSize.width, 900);
     expect(detection.quad!.topLeft.dx, closeTo(card[0][0] / _side, .012));
   });
+
+  test('camera captures never use the gallery segmentation model', () async {
+    var asked = 0;
+    SalientDocumentDetector.maskProviderForTesting = (_) async {
+      asked++;
+      return _mask(card);
+    };
+    addTearDown(() => SalientDocumentDetector.maskProviderForTesting = null);
+    await DocumentEdges.detectSafeStillOutline('/nonexistent/camera.jpg',
+        galleryDetectors: false);
+    expect(asked, 0);
+  });
 }
