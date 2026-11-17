@@ -223,4 +223,51 @@ void main() {
     expect(vault.accounts['cloudflare'], 'test-account');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('imports several keys from one file after confirmation',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final vault = _FakeAiVault();
+    await tester.pumpWidget(MaterialApp(home: AiModeScreen(
+      credentialStore: vault,
+      pickKeyFile: () async => 'GEMINI_API_KEY=AIza${'TESTONLY' * 4}\n'
+          'groq=gsk_${'TESTONLY' * 4}\n'
+          'cloudflare=cf${'TESTONLY' * 3}\n'
+          'nonsense line\n',
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-import-key-file')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('ai-import-preview')), findsOneWidget);
+    expect(find.text('Save 2 API keys?'), findsOneWidget);
+    // Secrets are shown masked only.
+    expect(find.textContaining('TESTONLYTEST'), findsNothing);
+    expect(find.textContaining('CLOUDFLARE_ACCOUNT_ID'), findsOneWidget);
+    expect(vault.keys, isEmpty);
+
+    await tester.tap(find.byKey(const Key('ai-import-save')));
+    await tester.pumpAndSettle();
+    expect(vault.keys.keys, unorderedEquals(['gemini', 'groq']));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('ai_mode_active_provider'), 'gemini');
+    expect(prefs.getBool('ai_mode_enabled') ?? false, isFalse);
+  });
+
+  testWidgets('cancelling the import saves nothing', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 980));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final vault = _FakeAiVault();
+    await tester.pumpWidget(MaterialApp(home: AiModeScreen(
+      credentialStore: vault,
+      pickKeyFile: () async => 'gemini=AIza${'TESTONLY' * 4}',
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-import-key-file')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(vault.keys, isEmpty);
+  });
 }

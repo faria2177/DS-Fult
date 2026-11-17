@@ -336,6 +336,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Modelled on the user's CamScanner recording: the frozen capture stays on screen, a teal line sweeps over the document, and the line's final top-to-bottom pass uncovers the enhanced result before leaving the camera.
 - `ScanRevealOverlay` (camera_screen, single non-card captures only) replaces the "Detecting document edges & auto-cropping…" spinner: dims outside the detected quad, sweeps while `_finishCapturedResults`/`_finishProcessed` work, then reveals the final page (≈0.65 s + 0.18 s). `_finishProcessed` waits for the reveal with a 3 s safety timeout. Visual only: detection, crop and enhancement are unchanged. Batch, ID Card and gallery keep the spinner.
 
+## 2026-11-18 — AI Mode: import all API keys from one file
+
+- AI Mode → "Import API keys from a file": native `pickTextFile` (SAF, ≤64 KB, read straight into memory, never copied to app storage) → `AiKeyFileParser` → preview dialog (provider names + masked keys, "replaces saved key", skipped lines with reasons) → keys saved one by one into the existing encrypted `SecureAiCredentialStore`.
+- Parser accepts `provider=key`, `Provider: key`, `.env` names (`GEMINI_API_KEY`, `HF_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `export …`, quotes, trailing comments), a provider name followed by its key on the next line, bare keys with a recognisable prefix (AIza, gsk_, sk-or-, hf_, sk-ant-, xai-, sk-proj-), and flat or nested JSON. Unknown or unlabelled keys are reported, never guessed. Cloudflare needs an account ID in the file or already saved.
+- If no usable provider was selected, the first imported AI-capable provider is selected; AI Mode stays off until the user enables it. The success message asks the user to delete the plain-text key file.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
