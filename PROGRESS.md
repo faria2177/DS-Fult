@@ -321,8 +321,8 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 ## 2026-11-17 — v0.5.44: true-shape perspective correction
 
 - Both warps (`ImageWarper.kt` for native camera crops, `_perspectiveCrop` in `image_processor.dart` for imports/editor) sized the output from side lengths seen in the photo, so a tilted page came out squeezed (simulated mean 4.7%, worst ~20%).
-- New `PerspectiveAspect` (Dart + identical Kotlin) recovers the real width:height with Zhang & He's method (Whiteboard scanning and image enhancement, 2007), using a typical phone focal length (0.75 x long side, because the focal length cannot be estimated reliably from four corners), keeps the output area, limits the change to ±25% of the old shape, and snaps within 3% to A-series, US Letter and ID-1.
-- Simulation over random tilts and focal lengths 0.65–0.88 x: mean error 0.4–1.4% (old 4.7%); 66–86% of pages exact. Written from the published method; no third-party code used.
+- New `PerspectiveAspect` (Dart + identical Kotlin) recovers the real width:height with Zhang & He's method (Whiteboard scanning and image enhancement, 2007), using a typical phone focal length (0.75 x long side, because the focal length cannot be estimated reliably from four corners), keeps the output area, limits the change to ±25% of the old shape, and snaps within 2% to A-series, US Letter and ID-1.
+- Simulation over random tilts and focal lengths 0.65–0.88 x: mean error 0.6–1.6% (old 4.7%); 52–79% of pages exact. Written from the published method; no third-party code used.
 - Only the output proportions change; corner detection is untouched. **Phone check needed before merging.**
 
 ## Recent CI note

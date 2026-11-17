@@ -13,7 +13,7 @@ import kotlin.math.sqrt
  */
 internal object PerspectiveAspect {
     private const val FOCAL_SCALE = 0.75
-    private const val SNAP_TOLERANCE = 0.03
+    private const val SNAP_TOLERANCE = 0.02
     private const val MAX_CHANGE = 1.25
     private val STANDARD = doubleArrayOf(1.41421, 1.29412, 1.58577)
 

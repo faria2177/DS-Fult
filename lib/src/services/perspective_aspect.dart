@@ -23,7 +23,7 @@ class PerspectiveAspect {
 
   /// A4/A-series, US Letter and ID-1 (bank and ID cards), width:height.
   static const standardRatios = <double>[1.41421, 1.29412, 1.58577];
-  static const snapTolerance = .03;
+  static const snapTolerance = .02;
 
   /// The correction never changes the naive shape by more than this factor,
   /// which keeps an odd outline (cropped screenshot, wrong camera guess)
