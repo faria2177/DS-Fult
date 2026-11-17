@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
