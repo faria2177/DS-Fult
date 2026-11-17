@@ -77,6 +77,10 @@ void main() {
     expect(find.text('AI Mode'), findsOneWidget);
     expect(find.text('Google AI Studio (Gemini)'), findsOneWidget);
     expect(find.text('Groq Cloud'), findsOneWidget);
+    // The provider list continues below the key-file import card.
+    await tester.dragUntilVisible(find.text('OpenRouter'),
+        find.byKey(const Key('ai-import-key-file')), const Offset(0, -200));
+    await tester.pumpAndSettle();
     expect(find.text('OpenRouter'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

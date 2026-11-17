@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/ai_credential_store.dart';
+import '../services/ai_key_file_parser.dart';
 import '../services/ai_provider_catalog.dart';
 import '../theme.dart';
 
@@ -12,9 +13,12 @@ import '../theme.dart';
 typedef AiLinkOpener = Future<bool> Function(Uri uri);
 
 class AiModeScreen extends StatefulWidget {
-  const AiModeScreen({super.key, this.credentialStore, this.openExternalLink});
+  const AiModeScreen({super.key, this.credentialStore, this.openExternalLink,
+      this.pickKeyFile});
 
   final AiCredentialStore? credentialStore;
+  /// Test seam: returns the chosen key file's text, or null if cancelled.
+  final Future<String?> Function()? pickKeyFile;
   /// Test seam; production always uses the system browser for official sites.
   final AiLinkOpener? openExternalLink;
 
@@ -315,6 +319,17 @@ class _AiModeScreenState extends State<AiModeScreen> {
                   ),
                 ],
               )),
+              Card(child: ListTile(
+                key: const Key('ai-import-key-file'),
+                leading: const Icon(Icons.upload_file_outlined, color: dsTeal),
+                title: const Text('Import API keys from a file'),
+                subtitle: const Text('Pick a .txt, .env or .json file with all '
+                    'your keys, for example gemini=AIza… on each line'),
+                isThreeLine: true,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _importKeyFile,
+              )),
+              const SizedBox(height: 14),
               _heading('Providers with free-tier options'),
               for (final provider in AiProviderCatalog.providers.where((p) => p.freeTier))
                 _providerTile(provider),
@@ -333,6 +348,127 @@ class _AiModeScreenState extends State<AiModeScreen> {
               ),
             ]),
     );
+  }
+
+  Future<void> _importKeyFile() async {
+    String? text;
+    try {
+      final picker = widget.pickKeyFile;
+      text = picker != null
+          ? await picker()
+          : await const MethodChannel('doclens/methods')
+              .invokeMethod<String>('pickTextFile');
+    } on PlatformException catch (error) {
+      _notice(error.message ?? 'Could not read that file.');
+      return;
+    } catch (_) {
+      _notice('Could not open the file picker.');
+      return;
+    }
+    if (text == null || !mounted) return;
+    if (text.length > AiKeyFileParser.maxBytes) {
+      _notice('This file is too large for an API key list.');
+      return;
+    }
+    final contents = AiKeyFileParser.parse(text);
+    final ready = <ImportedAiKey>[];
+    final problems = List<String>.of(contents.problems);
+    for (final key in contents.keys) {
+      final provider = AiProviderCatalog.byId(key.providerId)!;
+      if (provider.needsAccountId && key.accountId == null &&
+          !await _vault.hasAccountId(provider.id)) {
+        problems.add('${provider.name}: add CLOUDFLARE_ACCOUNT_ID=… to the '
+            'file as well.');
+        continue;
+      }
+      ready.add(key);
+    }
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('ai-import-preview'),
+        title: Text(ready.isEmpty ? 'No usable API keys found'
+            : 'Save ${ready.length} API key${ready.length == 1 ? '' : 's'}?'),
+        content: SingleChildScrollView(child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final key in ready) Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                const Icon(Icons.key_outlined, color: dsTeal, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(AiProviderCatalog.byId(key.providerId)!.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('${key.masked}'
+                      '${(_hasKeys[key.providerId] ?? false) ? ' · replaces saved key' : ''}'
+                      '${key.accountId != null ? ' · with account ID' : ''}',
+                      style: const TextStyle(fontSize: 12)),
+                ])),
+              ]),
+            ),
+            if (ready.isEmpty) const Text('Write one key per line, for '
+                'example:\n\ngemini=AIza...\ngroq=gsk_...\n'
+                'openrouter=sk-or-...\nOPENAI_API_KEY=sk-proj-...'),
+            if (problems.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text('Skipped:', style: TextStyle(
+                  fontWeight: FontWeight.w600)),
+              for (final problem in problems.take(12)) Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('• $problem', style: const TextStyle(fontSize: 12)),
+              ),
+              if (problems.length > 12) Text('• and ${problems.length - 12} '
+                  'more', style: const TextStyle(fontSize: 12)),
+            ],
+          ],
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: Text(ready.isEmpty ? 'Close' : 'Cancel')),
+          if (ready.isNotEmpty) FilledButton(
+            key: const Key('ai-import-save'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save securely')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    var saved = 0;
+    for (final key in ready) {
+      try {
+        await _vault.saveKey(key.providerId, key.key, accountId: key.accountId);
+        saved++;
+      } catch (_) {
+        // Keep importing the others; the count below reports the result.
+      }
+    }
+    // With no usable provider chosen yet, pick the first imported one that
+    // has AI features. AI Mode itself stays off until the user turns it on.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getString(_providerPreference);
+      final currentUsable = current != null &&
+          await _vault.hasKey(current) &&
+          AiProviderCatalog.textModels.containsKey(current);
+      if (!currentUsable) {
+        for (final key in ready) {
+          if (AiProviderCatalog.textModels.containsKey(key.providerId)) {
+            await prefs.setString(_providerPreference, key.providerId);
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+    await _refresh();
+    _notice(saved == ready.length
+        ? '$saved API key${saved == 1 ? '' : 's'} saved securely. For safety, '
+            'delete the key file from your phone.'
+        : 'Saved $saved of ${ready.length} keys. Some could not be stored.');
   }
 
   Widget _heading(String title) => Padding(

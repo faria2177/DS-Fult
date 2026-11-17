@@ -32,6 +32,8 @@ import java.util.concurrent.Executors
 
 private const val CAMERA_PERMISSION_REQUEST = 0x4F4E
 private const val PDF_PICK_REQUEST = 0x5044
+private const val KEY_FILE_PICK_REQUEST = 0x4B46
+private const val MAX_KEY_FILE_BYTES = 64 * 1024
 private const val PDF_SAVE_REQUEST = 0x5045
 private const val MAX_PDF_IMPORT_BYTES = 80L * 1024 * 1024
 
@@ -63,6 +65,7 @@ class DoclensPlugin :
     private var nativeUIScanner: NativeUIScanner? = null
     private var levelStream: DeviceLevelStream? = null
     private var pendingPdfPick: MethodChannel.Result? = null
+    private var pendingKeyFilePick: MethodChannel.Result? = null
     private var pendingPdfSave: Pair<MethodChannel.Result, String>? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -195,6 +198,7 @@ class DoclensPlugin :
                 }
             }
             "pickPdfFile" -> pickPdfFile(result)
+            "pickTextFile" -> pickTextFile(result)
             "savePdfFile" -> savePdfFile(call, result)
             "pinDocumentShortcut" -> {
                 val id = call.argument<String>("documentId")
@@ -225,6 +229,38 @@ class DoclensPlugin :
         intent.removeExtra("docscanner_document_id")
         methodChannel.invokeMethod("openPinnedDocument", documentId)
         return true
+    }
+
+    /**
+     * Lets the user choose a small text file (API key list) and returns its
+     * text. The content is read straight into memory and never copied to
+     * app storage, because it holds secrets.
+     */
+    private fun pickTextFile(result: MethodChannel.Result) {
+        val foreground = activity
+        if (foreground == null) {
+            result.error("no_activity", "The file picker needs an active screen", null)
+            return
+        }
+        if (pendingKeyFilePick != null) {
+            result.error("picker_busy", "A file picker is already open", null)
+            return
+        }
+        pendingKeyFilePick = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            // .env and .key files often have no registered MIME type.
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                "text/*", "application/json", "application/octet-stream"))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            foreground.startActivityForResult(intent, KEY_FILE_PICK_REQUEST)
+        } catch (error: Exception) {
+            pendingKeyFilePick = null
+            result.error("picker_unavailable", error.message, null)
+        }
     }
 
     private fun pickPdfFile(result: MethodChannel.Result) {
@@ -313,6 +349,42 @@ class DoclensPlugin :
                 } catch (error: Exception) {
                     mainHandler.post {
                         pending.first.error("pdf_save_failed", error.message, null)
+                    }
+                }
+            }
+            return true
+        }
+        if (requestCode == KEY_FILE_PICK_REQUEST) {
+            val callback = pendingKeyFilePick ?: return true
+            pendingKeyFilePick = null
+            val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
+            if (uri == null) {
+                callback.success(null)
+                return true
+            }
+            backgroundExecutor.execute {
+                try {
+                    val stream = context.contentResolver.openInputStream(uri)
+                        ?: throw IllegalArgumentException("The file cannot be read")
+                    val bytes = stream.use { input ->
+                        val buffer = java.io.ByteArrayOutputStream()
+                        val chunk = ByteArray(4096)
+                        while (true) {
+                            val n = input.read(chunk)
+                            if (n < 0) break
+                            buffer.write(chunk, 0, n)
+                            if (buffer.size() > MAX_KEY_FILE_BYTES) {
+                                throw IllegalArgumentException(
+                                    "This file is too large for an API key list")
+                            }
+                        }
+                        buffer.toByteArray()
+                    }
+                    val text = String(bytes, Charsets.UTF_8)
+                    mainHandler.post { callback.success(text) }
+                } catch (error: Exception) {
+                    mainHandler.post {
+                        callback.error("key_file_unreadable", error.message, null)
                     }
                 }
             }
