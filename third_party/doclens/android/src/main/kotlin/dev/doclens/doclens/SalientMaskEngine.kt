@@ -18,6 +18,7 @@ import org.opencv.imgproc.Imgproc
  */
 internal object SalientMaskEngine {
     private const val SIDE = 320
+    private const val EDGE_SIDE = 640.0
     /** Finest-resolution output of the rembg `u2netp.onnx` export. */
     private const val OUTPUT = "1959"
     private val MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
@@ -105,7 +106,29 @@ internal object SalientMaskEngine {
                 val clamped = if (v < 0f) 0f else if (v > 1f) 1f else v
                 probability[i] = (clamped * 255f + 0.5f).toInt().toByte()
             }
+            // A sharper, aspect-correct colour copy (long side 640) so Flutter
+            // can check that every side of the outline sits on a real edge.
+            val longSide = maxOf(decoded.cols(), decoded.rows()).toDouble()
+            val scale = minOf(1.0, EDGE_SIDE / longSide)
+            val edgeW = maxOf(1, Math.round(decoded.cols() * scale).toInt())
+            val edgeH = maxOf(1, Math.round(decoded.rows() * scale).toInt())
+            val edge = Mat()
+            val edgeRgbMat = Mat()
+            val edgeRgb = ByteArray(edgeW * edgeH * 3)
+            try {
+                Imgproc.resize(decoded, edge, Size(edgeW.toDouble(), edgeH.toDouble()),
+                    0.0, 0.0, Imgproc.INTER_AREA)
+                Imgproc.cvtColor(edge, edgeRgbMat, Imgproc.COLOR_BGR2RGB)
+                Imgproc.GaussianBlur(edgeRgbMat, edgeRgbMat, Size(3.0, 3.0), 0.0)
+                edgeRgbMat.get(0, 0, edgeRgb)
+            } finally {
+                edge.release()
+                edgeRgbMat.release()
+            }
             return mapOf(
+                "edgeWidth" to edgeW,
+                "edgeHeight" to edgeH,
+                "edgeRgb" to edgeRgb,
                 "width" to SIDE,
                 "height" to SIDE,
                 "probability" to probability,

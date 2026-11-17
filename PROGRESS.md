@@ -310,6 +310,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Camera still fallbacks (`camera_screen.dart`: no green outline at shutter, system camera) now call `autoCropFiles(..., galleryDetectors: false)`, so the segmentation model and background-contrast fallback run only for gallery imports. Camera capture is therefore back to its pre-v0.5.41 behaviour.
 - Lesson: live-camera tuning must be checked on a phone before release; the offline simulation was not representative.
 
+## 2026-11-17 — v0.5.43: gallery outline checked against real edges
+
+- User video (CamScanner vs DocScanner, same photo of a bank form lying on other papers): CamScanner cropped the top page exactly; DocScanner's crop was skewed with background at the top-left. Reconstructing the photo from the video showed the segmentation model treated the page plus the sheets beneath it as one object; the outline's left side had no edge under it at all.
+- New `QuadEdgeEvidence` (Dart, in an isolate): each free side of the model outline is moved (≤6% of the photo) onto the straight line with the clearest colour step across it, preferring the outermost of equally good lines so printed rules inside the page are never chosen; the weakest side's support (≥0.45) decides whether the outline is confirmed. Native `salientMask` now also returns a 640 px colour copy for this.
+- `detectSafeStillOutline`: a confirmed model outline is used directly; an unconfirmed one is used only if every other detector finds nothing.
+- `PhotoLibrarySource`: grid ordered newest first (`createDate` descending); the video showed old photos at the top, forcing the user into Browse.
+- Python mirror: unchanged results on the earlier user photos and synthetic scenes; the video-frame page is flagged unconfirmed. Camera capture untouched. **Needs a phone check with the original photo.**
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

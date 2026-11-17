@@ -53,6 +53,14 @@ class PhotoLibrarySource implements GalleryAssetSource {
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.image,
       onlyAll: true,
+      // Newest first, like the system gallery: without an explicit order
+      // some phones list the oldest photos first, hiding the photo the user
+      // has just taken.
+      filterOption: FilterOptionGroup(
+        orders: const [
+          OrderOption(type: OrderOptionType.createDate, asc: false),
+        ],
+      ),
     );
     if (albums.isEmpty) return null;
     final total = await albums.first.assetCountAsync;
