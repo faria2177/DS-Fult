@@ -1,4 +1,5 @@
-## DocScanner v0.5.43
+## DocScanner v0.5.46
 
-- 📐 Import Images: the detected outline is now checked against the photo's real edges. A page lying on other papers is no longer cropped together with the sheets under it, and each side is snapped onto the page edge
-- 🖼️ Select Photo now lists the newest photos first, so a photo you just took is at the top
+- ✨ New scan animation: after the shutter, a glowing line sweeps over the document while it is processed, then uncovers the finished, cropped and enhanced page
+- 🌓 Camera scans no longer keep the document's shadow: when the outline follows a cast shadow, the crop is pulled onto the card or page itself
+- 📐 True-shape perspective correction: pages and cards photographed at an angle now come out in their real proportions (A4 stays A4, cards keep the card shape)

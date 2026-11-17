@@ -42,8 +42,20 @@ object ImageWarper {
                                (quad.bottomLeft.y - quad.topLeft.y).toDouble())
         val heightRight = hypot((quad.bottomRight.x - quad.topRight.x).toDouble(),
                                 (quad.bottomRight.y - quad.topRight.y).toDouble())
-        var outW = max(widthTop, widthBottom).roundToInt().coerceAtLeast(8)
-        var outH = max(heightLeft, heightRight).roundToInt().coerceAtLeast(8)
+        // Real page proportions for a tilted photo (PerspectiveAspect), at
+        // the resolution the longest sides would give.
+        val (correctedW, correctedH) = PerspectiveAspect.outputSize(
+            doubleArrayOf(
+                quad.topLeft.x.toDouble(), quad.topLeft.y.toDouble(),
+                quad.topRight.x.toDouble(), quad.topRight.y.toDouble(),
+                quad.bottomRight.x.toDouble(), quad.bottomRight.y.toDouble(),
+                quad.bottomLeft.x.toDouble(), quad.bottomLeft.y.toDouble(),
+            ),
+            bitmap.width, bitmap.height,
+            max(widthTop, widthBottom), max(heightLeft, heightRight),
+        )
+        var outW = correctedW.roundToInt().coerceAtLeast(8)
+        var outH = correctedH.roundToInt().coerceAtLeast(8)
         val longest = max(outW, outH)
         if (longest > MAX_OUTPUT_SIDE) {
             val scale = MAX_OUTPUT_SIDE.toDouble() / longest

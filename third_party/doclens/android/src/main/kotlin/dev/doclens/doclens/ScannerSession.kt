@@ -579,6 +579,16 @@ class ScannerSession(
                             PointF(it.bottomRight.x * rawSize.width, it.bottomRight.y * rawSize.height),
                             PointF(it.bottomLeft.x * rawSize.width, it.bottomLeft.y * rawSize.height),
                         )
+                    }?.let {
+                        // The live outline often follows a cast shadow's outer
+                        // border; move such sides onto the document itself.
+                        try {
+                            ShadowEdgeTrim.trimQuad(it, photo.width, photo.height) { x, y ->
+                                photo.getPixel(x, y)
+                            }
+                        } catch (_: Exception) {
+                            it
+                        }
                     }
                     var croppedPath: String? = null
                     var warpError: String? = null

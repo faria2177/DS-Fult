@@ -20,6 +20,7 @@ import 'manual_camera_screen.dart';
 import 'id_card_templates.dart';
 import 'id_card_template_screen.dart';
 import 'scan_more_settings_screen.dart';
+import 'scan_reveal_overlay.dart';
 
 /// Live native document contour tracking with manual shutter capture.
 /// Kept behind this screen so callers always receive the same list of paths.
@@ -70,6 +71,10 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   bool _finished = false;
   bool _processingGallery = false;
+  // Post-shutter scan animation (visual only, single camera captures).
+  ScanRevealData? _reveal;
+  String? _revealResult;
+  Completer<void>? _revealDone;
   bool _cameraSuspended = false;
   bool _batchMode = false;
   bool _showIdCards = false;
@@ -273,6 +278,14 @@ class _CameraScreenState extends State<CameraScreen> {
           await ScanSettingsStore.saveImageToGallery(result);
         }
       }
+      if (mounted && _reveal != null && processed.length == 1) {
+        // Let the scan line uncover the finished page before leaving.
+        final done = Completer<void>();
+        _revealDone = done;
+        setState(() => _revealResult = processed.first);
+        await done.future.timeout(const Duration(seconds: 3),
+            onTimeout: () {});
+      }
       if (mounted) {
         widget.onOutputSourcePaths?.call(sources);
         _finish(processed);
@@ -284,7 +297,11 @@ class _CameraScreenState extends State<CameraScreen> {
       }
     } finally {
       if (mounted && !_finished) {
-        setState(() => _processingGallery = false);
+        setState(() {
+          _processingGallery = false;
+          _reveal = null;
+          _revealResult = null;
+        });
       }
     }
   }
@@ -322,7 +339,19 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _finishCapturedResults(List<ScanResult> results) async {
     if (!mounted || _finished || _processingGallery || results.isEmpty) return;
-    setState(() => _processingGallery = true);
+    final only = results.length == 1 ? results.first : null;
+    setState(() {
+      _processingGallery = true;
+      _revealResult = null;
+      _reveal = only != null && !widget.cardMode &&
+              only.rawImagePath.isNotEmpty &&
+              only.rawImageSize.width > 0 && only.rawImageSize.height > 0
+          ? ScanRevealData(
+              rawPath: only.rawImagePath,
+              imageSize: only.rawImageSize,
+              corners: only.detectedQuad.points)
+          : null;
+    });
     try {
     final outputs = <String>[];
     final rawPathsForOutputs = <String>[];
@@ -479,7 +508,11 @@ class _CameraScreenState extends State<CameraScreen> {
     }
     } finally {
       if (mounted && !_finished) {
-        setState(() => _processingGallery = false);
+        setState(() {
+          _processingGallery = false;
+          _reveal = null;
+          _revealResult = null;
+        });
       }
     }
   }
@@ -817,7 +850,18 @@ class _CameraScreenState extends State<CameraScreen> {
                     unawaited(_finishCapturedResults([result]));
                   },
                 )),
-          if (_processingGallery)
+          if (_processingGallery && _reveal != null)
+            Positioned.fill(
+              child: ScanRevealOverlay(
+                data: _reveal!,
+                resultPath: _revealResult,
+                onRevealed: () {
+                  final done = _revealDone;
+                  if (done != null && !done.isCompleted) done.complete();
+                },
+              ),
+            )
+          else if (_processingGallery)
             const Positioned.fill(
               child: ColoredBox(
                 color: Color(0xBB000000),
