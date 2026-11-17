@@ -142,8 +142,16 @@ void main() {
     final autoCheck = find.byKey(const Key('update-auto-check'));
     await tester.scrollUntilVisible(autoCheck, 200,
         scrollable: find.byType(Scrollable).first);
-    await tester.tap(autoCheck);
+    await tester.ensureVisible(autoCheck);
     await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(autoCheck).value, isTrue);
+    await tester.tap(find.descendant(of: autoCheck,
+        matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(autoCheck).value, isFalse);
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    });
     expect(await AppUpdateService.autoCheckEnabled(), isFalse);
   });
 
