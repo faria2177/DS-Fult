@@ -295,6 +295,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - **Index (`document_store.dart`):** saves are queued one at a time and written atomically (temp file → rename) with the previous good index kept as `index.json.bak`. On start the live index is tried first, then the backup; damaged entries are skipped one by one instead of discarding the rest; a damaged file is preserved under `index.unreadable-<time>.json` / `index.partial-<time>.json` and is never overwritten, and never replaces the good backup. Covered by `test/document_store_persistence_test.dart`.
 - **Signing:** `tool/setup_android.sh` now signs release builds with a fixed keystore when CI provides `DS_KEYSTORE_BASE64` and `DS_KEYSTORE_PASSWORD` repository secrets (alias `docscanner`); the workflow prints the APK certificate SHA-256. Without the secrets the old throwaway debug key is used and the workflow warns. **The repository owner must add the two secrets once.** The first APK signed with the fixed key still needs one uninstall of the old app.
 
+## 2026-11-17 — In-app updates from GitHub Releases (v0.5.41+55)
+
+- Modelled on the user's Ever Dialer screenshots: launch pop-up "Update Available" (Installed → Latest, View Update / Later), Me → Updates screen (status banner with "New vX" badge, Installed / Latest Release tiles, Download & Install, What's New with date chip and release notes, Compare Release Notes, Auto Check For Updates switch), "Download Update?" confirmation and "Downloading vX — Installing when ready…" progress dialog.
+- `AppUpdateService` reads `api.github.com/repos/faria2177/DS-Fult/releases`, ignores drafts/pre-releases/releases without an APK, compares versions numerically (name, then build), downloads to the app cache `updates/` folder, rejects incomplete downloads and hands the APK to Android's installer through a plugin-owned `FileProvider` (`REQUEST_INSTALL_PACKAGES`; Android still asks the user to confirm). "Later" pauses the pop-up for that version for 20 h; the pop-up never appears over the camera or another screen.
+- CI publishes a GitHub Release (tag `v<version>`, notes from `RELEASE_NOTES.md`, asset `DocScanner-v<name>-arm64-v8a.apk`) for each new pubspec version pushed to `main`, **only when the fixed signing secrets exist**.
+- **To ship an update:** bump `version:` in `pubspec.yaml`, rewrite `RELEASE_NOTES.md`, merge to `main`.
+- Differences from Ever Dialer: the APK goes to the app's private cache, not the public Downloads folder. Not yet tested on a phone.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

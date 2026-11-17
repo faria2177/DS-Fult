@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models.dart';
 import '../services/ai_credential_store.dart';
+import '../services/app_update_service.dart';
 import '../services/document_export.dart';
 import '../services/gallery_import_flow.dart';
 import '../services/scan_settings_store.dart';
@@ -36,6 +37,7 @@ import 'scan_more_settings_screen.dart';
 import 'smart_erase_screen.dart';
 import 'signature_screen.dart';
 import 'text_to_pdf_screen.dart';
+import 'updates_screen.dart';
 import 'watermark_screen.dart';
 import 'video_tool_source_picker.dart';
 
@@ -59,6 +61,8 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   static const _doclensChannel = MethodChannel('doclens/methods');
+  late final Future<AppVersion> _installedVersion =
+      AppUpdateService().installedVersion();
   int _tab = 0;
   String _query = '';
   String _toolQuery = '';
@@ -88,6 +92,8 @@ class _HomeShellState extends State<HomeShell> {
       } catch (_) {
         // The shortcut bridge is optional on non-Android platforms.
       }
+      // Runs in the background; it only pops up on this home screen.
+      if (mounted) unawaited(checkForUpdateOnLaunch(context));
       final settings = await ScanSettingsStore.load();
       final startCamera = settings.startWithCamera;
       settings.dispose();
@@ -560,10 +566,24 @@ class _HomeShellState extends State<HomeShell> {
           title: Text('Private, on-device storage'),
           subtitle: Text('Scans stay local unless you explicitly share them'),
         )),
-        const Card(child: ListTile(
-          leading: Icon(Icons.info_outline),
-          title: Text('About DocScanner'),
-              subtitle: Text('Version 0.5.32 • Md Jahidul Islam'),
+        Card(child: ListTile(
+          key: const Key('me-updates'),
+          leading: const Icon(Icons.system_update_outlined, color: dsTeal),
+          title: const Text('Updates'),
+          subtitle: const Text('Check for a new DocScanner release'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const UpdatesScreen())),
+        )),
+        Card(child: ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('About DocScanner'),
+          subtitle: FutureBuilder<AppVersion>(
+            future: _installedVersion,
+            builder: (context, snapshot) => Text(
+                'Version ${snapshot.data?.toString() ?? '…'} '
+                '• Md Jahidul Islam'),
+          ),
         )),
       ]);
 

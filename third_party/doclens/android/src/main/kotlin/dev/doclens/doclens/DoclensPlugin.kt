@@ -117,6 +117,22 @@ class DoclensPlugin :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "initialize" -> initialize(call, result)
+            "appVersion" -> result.success(try {
+                AppUpdateInstaller.version(context)
+            } catch (_: Throwable) { null })
+            "canInstallUpdates" -> result.success(AppUpdateInstaller.canInstall(context))
+            "openInstallPermission" -> {
+                try {
+                    AppUpdateInstaller.openInstallPermission(activity, context)
+                    result.success(true)
+                } catch (_: Throwable) { result.success(false) }
+            }
+            "installUpdate" -> {
+                val path = call.argument<String>("path")
+                result.success(try {
+                    path != null && AppUpdateInstaller.install(activity, context, path)
+                } catch (_: Throwable) { false })
+            }
             "dispose" -> { session?.dispose(); session = null; result.success(null) }
             "capture" -> {
                 val s = session
