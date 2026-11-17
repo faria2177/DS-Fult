@@ -290,6 +290,11 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Flutter (`SalientDocumentDetector` → `BackgroundContrastContour.quadFromSalientMask`) fits four corners with per-side line fits and rejects the answer unless it is one confident, solid, four-sided object touching at most one photo edge and not ringed by white paper. On rejection or any model error the previous detector chain runs unchanged. ID Card mode is not routed through the model.
 - Python check with the same OpenCV version (4.10) and the same steps: the user's three photos crop correctly; synthetic pages/cards ≤0.3% corner error; full page with printed blocks, plain cloth and a page cut by two edges give no model crop. About 0.3 s per photo on a desktop CPU. **Phone retest still needed (speed, memory, real A4 pages).**
 
+## 2026-11-17 — Document index safety and stable APK signing
+
+- **Index (`document_store.dart`):** saves are queued one at a time and written atomically (temp file → rename) with the previous good index kept as `index.json.bak`. On start the live index is tried first, then the backup; damaged entries are skipped one by one instead of discarding the rest; a damaged file is preserved under `index.unreadable-<time>.json` / `index.partial-<time>.json` and is never overwritten, and never replaces the good backup. Covered by `test/document_store_persistence_test.dart`.
+- **Signing:** `tool/setup_android.sh` now signs release builds with a fixed keystore when CI provides `DS_KEYSTORE_BASE64` and `DS_KEYSTORE_PASSWORD` repository secrets (alias `docscanner`); the workflow prints the APK certificate SHA-256. Without the secrets the old throwaway debug key is used and the workflow warns. **The repository owner must add the two secrets once.** The first APK signed with the fixed key still needs one uninstall of the old app.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

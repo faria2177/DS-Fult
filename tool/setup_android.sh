@@ -60,6 +60,35 @@ gradle_file='android/app/build.gradle.kts'
 if [ -f "$gradle_file" ]; then
   sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' "$gradle_file"
 fi
+# Stable release signing. Without it every CI run signs with a freshly
+# generated debug key, so a new APK cannot update an installed one and the
+# user has to uninstall (losing all saved documents). When the keystore
+# variables are absent (forks, local builds) the debug key is still used.
+if [ -f "$gradle_file" ] && ! grep -q 'DS_KEYSTORE_PATH' "$gradle_file"; then
+  cat >> "$gradle_file" <<'GRADLE'
+
+val dsKeystorePath: String? = System.getenv("DS_KEYSTORE_PATH")
+val dsKeystorePassword: String? = System.getenv("DS_KEYSTORE_PASSWORD")
+if (!dsKeystorePath.isNullOrBlank() && !dsKeystorePassword.isNullOrBlank() &&
+    file(dsKeystorePath).exists()) {
+    android {
+        signingConfigs {
+            create("dsRelease") {
+                storeFile = file(dsKeystorePath)
+                storePassword = dsKeystorePassword
+                keyAlias = System.getenv("DS_KEY_ALIAS") ?: "docscanner"
+                keyPassword = dsKeystorePassword
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("dsRelease")
+            }
+        }
+    }
+}
+GRADLE
+fi
 cp tool/mlkit-proguard-rules.pro android/app/proguard-rules.pro
 if ! grep -q 'proguardFiles("proguard-rules.pro")' "$gradle_file"; then
   sed -i '/signingConfig = signingConfigs.getByName("debug")/a\            proguardFiles("proguard-rules.pro")' "$gradle_file"

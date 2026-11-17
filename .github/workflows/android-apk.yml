@@ -68,8 +68,25 @@ jobs:
         run: flutter analyze
       - name: Unit tests
         run: flutter test
+      - name: Prepare release signing key
+        env:
+          DS_KEYSTORE_BASE64: ${{ secrets.DS_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DS_KEYSTORE_BASE64" ]; then
+            echo "$DS_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ds-release.jks"
+            echo "DS_KEYSTORE_PATH=$RUNNER_TEMP/ds-release.jks" >> "$GITHUB_ENV"
+            echo "Release keystore installed."
+          else
+            echo "::warning::DS_KEYSTORE_BASE64 secret is not set. This APK is signed with a throwaway debug key and cannot update an installed copy."
+          fi
       - name: Build release APKs
+        env:
+          DS_KEYSTORE_PASSWORD: ${{ secrets.DS_KEYSTORE_PASSWORD }}
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Show APK signing certificate
+        run: |
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -i 'SHA-256'
       - name: Verify ARM64 APK native packaging
         run: python3 tools/verify_arm64_apk.py
       - name: Upload installable APKs
