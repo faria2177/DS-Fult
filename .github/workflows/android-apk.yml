@@ -18,6 +18,9 @@ jobs:
   android:
     name: Analyze, test and build APK
     runs-on: ubuntu-latest
+    # Write access is only used by the release step, which runs on main.
+    permissions:
+      contents: write
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
@@ -68,8 +71,25 @@ jobs:
         run: flutter analyze
       - name: Unit tests
         run: flutter test
+      - name: Prepare release signing key
+        env:
+          DS_KEYSTORE_BASE64: ${{ secrets.DS_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DS_KEYSTORE_BASE64" ]; then
+            echo "$DS_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ds-release.jks"
+            echo "DS_KEYSTORE_PATH=$RUNNER_TEMP/ds-release.jks" >> "$GITHUB_ENV"
+            echo "Release keystore installed."
+          else
+            echo "::warning::DS_KEYSTORE_BASE64 secret is not set. This APK is signed with a throwaway debug key and cannot update an installed copy."
+          fi
       - name: Build release APKs
+        env:
+          DS_KEYSTORE_PASSWORD: ${{ secrets.DS_KEYSTORE_PASSWORD }}
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Show APK signing certificate
+        run: |
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -i 'SHA-256'
       - name: Verify ARM64 APK native packaging
         run: python3 tools/verify_arm64_apk.py
       - name: Upload installable APKs
@@ -79,3 +99,30 @@ jobs:
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
           retention-days: 30
+      # In-app updates read GitHub Releases. Each new `version:` in
+      # pubspec.yaml that reaches main is published once, with
+      # RELEASE_NOTES.md as the "What's New" text. Only APKs signed with the
+      # fixed release key are published, because Android refuses to update
+      # an app from an APK signed with a different key.
+      - name: Publish GitHub release for in-app updates
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "${DS_KEYSTORE_PATH:-}" ]; then
+            echo "::warning::No release published: add the DS_KEYSTORE_BASE64 and DS_KEYSTORE_PASSWORD secrets first."
+            exit 0
+          fi
+          version="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')"
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; bump version in pubspec.yaml to publish a new one."
+            exit 0
+          fi
+          name="${version%%+*}"
+          apk="DocScanner-v${name}-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "$apk"
+          notes=RELEASE_NOTES.md
+          [ -s "$notes" ] || { echo "DocScanner v${name}" > /tmp/notes.md; notes=/tmp/notes.md; }
+          gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
+            --title "DocScanner v${name}" --notes-file "$notes"

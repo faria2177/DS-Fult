@@ -21,19 +21,32 @@ import 'quad.dart';
 /// clear it. If the scene continuously disagrees with the tracked quad, the
 /// old outline is hidden after [maxUnmatchedFrames] so it cannot remain
 /// frozen over a different object indefinitely.
+///
+/// Nothing is drawn for a *first* sighting. A quadrilateral must be seen in
+/// [acquireConfirmationFrames] mutually agreeing frames before the outline
+/// appears, so a one- or two-frame phantom rectangle on an empty desk never
+/// flashes on screen. A document that was being tracked and dropped out for
+/// a moment is restored at once if it comes back in the same place within
+/// [reacquireFrames].
 class QuadSmoother {
   QuadSmoother({
     this.windowSize = 5,
-    this.missesBeforeReset = 3,
+    this.missesBeforeReset = 5,
     this.switchConfirmationFrames = 4,
     this.maxUnmatchedFrames = 6,
     this.switchDistanceThreshold = 0.12,
+    this.acquireConfirmationFrames = 3,
+    this.acquireDistanceThreshold = 0.05,
+    this.reacquireFrames = 12,
   })  : assert(windowSize > 0 && windowSize.isOdd,
             'windowSize should be odd for a true median'),
         assert(missesBeforeReset > 0),
         assert(switchConfirmationFrames > 0),
         assert(maxUnmatchedFrames >= switchConfirmationFrames),
-        assert(switchDistanceThreshold > 0);
+        assert(switchDistanceThreshold > 0),
+        assert(acquireConfirmationFrames > 0),
+        assert(acquireDistanceThreshold > 0),
+        assert(reacquireFrames >= 0);
 
   final int windowSize;
   final int missesBeforeReset;
@@ -44,6 +57,20 @@ class QuadSmoother {
   /// a single frame. Quad coordinates are in the `[0, 1]` camera preview.
   final double switchDistanceThreshold;
 
+  /// Consecutive agreeing detections needed before a new outline is shown.
+  /// `1` restores the old "draw the very first detection" behaviour.
+  final int acquireConfirmationFrames;
+
+  /// Maximum normalized corner displacement between the detections that
+  /// confirm a first sighting. Deliberately tighter than
+  /// [switchDistanceThreshold]: random background rectangles rarely land on
+  /// the same four corners several frames in a row, a real page does.
+  final double acquireDistanceThreshold;
+
+  /// Frames after losing a tracked document during which the same outline
+  /// is restored on its first reappearance, without a new confirmation run.
+  final int reacquireFrames;
+
   final Queue<Quad> _buffer = Queue<Quad>();
   final Queue<Quad> _challenger = Queue<Quad>();
   Quad? _tracked;
@@ -51,19 +78,43 @@ class QuadSmoother {
   int _unmatchedFrames = 0;
   bool _outlineSuppressed = false;
 
+  // First-sighting confirmation and quick re-acquisition state.
+  int _acquireMisses = 0;
+  Quad? _lost;
+  int _lostAge = 0;
+
+  // Frames the displayed outline has been held unchanged; see [_settle].
+  int _heldFrames = 0;
+
   void reset() {
+    _clearTracking();
+    _lost = null;
+    _lostAge = 0;
+  }
+
+  void _clearTracking() {
     _buffer.clear();
     _challenger.clear();
     _tracked = null;
     _consecutiveMisses = 0;
     _unmatchedFrames = 0;
     _outlineSuppressed = false;
+    _acquireMisses = 0;
+    _heldFrames = 0;
   }
 
   /// Add [quad] (or null for a missed frame) and return the smoothed quad.
   /// Returns null when there's not yet any data to smooth.
   Quad? add(Quad? quad) {
     if (quad == null || !_isValid(quad)) {
+      if (_tracked == null) {
+        // Still waiting for a first sighting to be confirmed. One dropped
+        // frame is tolerated; two in a row mean the candidate was not real.
+        _ageLost();
+        _acquireMisses++;
+        if (_acquireMisses >= 2) _challenger.clear();
+        return null;
+      }
       _consecutiveMisses++;
       // A missing/invalid frame breaks a run of incompatible observations.
       // Otherwise several isolated chair detections, separated by genuine
@@ -71,26 +122,28 @@ class QuadSmoother {
       if (!_outlineSuppressed) _unmatchedFrames = 0;
       _challenger.clear();
       if (_consecutiveMisses >= missesBeforeReset) {
-        reset();
+        final last = _outlineSuppressed ? null : _tracked;
+        _clearTracking();
+        _lost = last;
+        _lostAge = 0;
       }
       return _outlineSuppressed ? null : _tracked;
     }
     _consecutiveMisses = 0;
     if (_tracked == null) {
-      _append(quad);
-      _tracked = quad;
-      return quad;
+      return _acquire(quad);
     }
 
     if (_sameDocument(_tracked!, quad)) {
       _challenger.clear();
       _unmatchedFrames = 0;
       _outlineSuppressed = false;
+      final previous = _buffer.isEmpty ? null : _buffer.last;
       _append(quad);
 
       final displayed = _tracked!;
       final median = _median();
-      final mean = _recentMean(4);
+      final mean = _recentMean(4, displayed);
       final rawDelta = displayed.maxCornerDistance(quad);
       final medianDelta = displayed.maxCornerDistance(median);
       final meanDelta = displayed.maxCornerDistance(mean);
@@ -108,8 +161,18 @@ class QuadSmoother {
       // jitter even when an odd-sized median alternates sign.
       if ((meanDelta <= .012 && medianDelta <= .014) ||
           (meanDelta <= .008 && rawDelta <= .036)) {
+        return _settle(displayed, median);
+      }
+
+      // The previous frame still agreed with the outline and this one jumps
+      // away from it: treat it as a detector outlier until a second frame
+      // says the same. Real movement is delayed by one frame only, while a
+      // single bad contour can no longer kick the whole box sideways.
+      if (rawDelta > .030 && previous != null &&
+          displayed.maxCornerDistance(previous) <= .012) {
         return displayed;
       }
+      _heldFrames = 0;
 
       // Once consistent movement exceeds the noise envelope, follow the
       // actual object without the long lag of a full-window median. Smaller
@@ -150,6 +213,7 @@ class QuadSmoother {
       _challenger.clear();
       _unmatchedFrames = 0;
       _outlineSuppressed = false;
+      _heldFrames = 0;
       return _tracked;
     }
 
@@ -164,6 +228,75 @@ class QuadSmoother {
       return null;
     }
     return _outlineSuppressed ? null : _tracked;
+  }
+
+  /// Handles a valid detection while nothing is displayed.
+  Quad? _acquire(Quad quad) {
+    _acquireMisses = 0;
+    final lost = _lost;
+    if (lost != null && _lostAge <= reacquireFrames && _agrees(lost, quad)) {
+      // The page we were just tracking blinked out and is back in place.
+      _lost = null;
+      _challenger.clear();
+      _append(quad);
+      _tracked = lost.maxCornerDistance(quad) <= .014 ? lost : quad;
+      _heldFrames = 0;
+      return _tracked;
+    }
+    _ageLost();
+    if (_challenger.isNotEmpty &&
+        (!_agrees(_challenger.first, quad) ||
+            !_agrees(_challenger.last, quad))) {
+      _challenger.clear();
+    }
+    _challenger.addLast(quad);
+    if (_challenger.length < acquireConfirmationFrames) return null;
+    for (final candidate in _challenger) {
+      _append(candidate);
+    }
+    _challenger.clear();
+    _lost = null;
+    // The median of the confirming frames is a better first outline than
+    // whichever single frame happened to arrive last.
+    _tracked = _median();
+    _heldFrames = 0;
+    return _tracked;
+  }
+
+  void _ageLost() {
+    if (_lost == null) return;
+    _lostAge++;
+    if (_lostAge > reacquireFrames) _lost = null;
+  }
+
+  bool _agrees(Quad a, Quad b) {
+    final smallerArea = math.min(a.area, b.area);
+    final largerArea = math.max(a.area, b.area);
+    if (smallerArea < 0.001 || largerArea / smallerArea > 1.35) {
+      return false;
+    }
+    return a.maxCornerDistance(b) <= acquireDistanceThreshold;
+  }
+
+  /// Called while the outline is being held still. If a whole window of
+  /// tightly agreeing detections sits a little away from the held corners,
+  /// move onto their median once. The corners then rest on the consensus of
+  /// several frames instead of on the single frame that first locked, which
+  /// is more accurate and still does not vibrate: noisy windows never pass
+  /// the spread test, and a settled outline has nothing left to correct.
+  Quad _settle(Quad displayed, Quad median) {
+    _heldFrames++;
+    if (_heldFrames < windowSize || _buffer.length < windowSize) {
+      return displayed;
+    }
+    final offset = displayed.maxCornerDistance(median);
+    if (offset <= .004) return displayed;
+    for (final observation in _buffer) {
+      if (observation.maxCornerDistance(median) > .008) return displayed;
+    }
+    _heldFrames = 0;
+    _tracked = median;
+    return median;
   }
 
   bool _isValid(Quad quad) {
@@ -222,9 +355,26 @@ class QuadSmoother {
   /// persistent movement (not as the visible corner coordinates). This
   /// keeps the output quiet even if a 7-sample median flips back/forth
   /// between two equally plausible subpixel paper edges.
-  Quad _recentMean(int count) {
+  ///
+  /// With a full set of [count] samples the one farthest from [displayed]
+  /// is left out. A single wild contour would otherwise drag the average
+  /// for the next few frames and let ordinary noise through; real movement
+  /// shifts every sample, so it is still noticed.
+  Quad _recentMean(int count, Quad displayed) {
     final recent = _buffer.toList().reversed.take(count).toList();
     assert(recent.isNotEmpty);
+    if (recent.length >= 4) {
+      var farthest = 0;
+      var farthestDistance = -1.0;
+      for (var i = 0; i < recent.length; i++) {
+        final distance = displayed.maxCornerDistance(recent[i]);
+        if (distance > farthestDistance) {
+          farthestDistance = distance;
+          farthest = i;
+        }
+      }
+      recent.removeAt(farthest);
+    }
     Offset mean(Offset Function(Quad) corner) {
       var x = 0.0;
       var y = 0.0;

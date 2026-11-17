@@ -24,6 +24,85 @@ class GalleryImportResult {
   final List<int> failedIndexes;
 }
 
+/// Shared gallery pipeline: detect corners -> (optional) adjust uncertain
+/// corners -> perspective correction -> enhance. All on-device.
+///
+/// With [reviewUncertain] omitted the import never stops for a corner
+/// dialog: a photo without a trustworthy outline is kept whole and can be
+/// cropped later from the document editor (the CamScanner behaviour).
+Future<GalleryImportResult> processGalleryImport({
+  required List<String> sourcePaths,
+  required bool autoCrop,
+  required ScanFilter filter,
+  bool preferIdCardBounds = false,
+  void Function(String message)? onProgress,
+  Future<Map<int, Uint8List>?> Function(List<String> unresolvedPaths)?
+      reviewUncertain,
+}) async {
+  onProgress?.call('Detecting document edges…');
+  final crop = autoCrop
+      ? await DocumentEdges.autoCropFiles(sourcePaths,
+          preferIdCardBounds: preferIdCardBounds,
+          onProgress: (processed, total) => onProgress
+              ?.call('Detecting document edges $processed / $total…'))
+      : AutoCropBatch(sourcePaths, 0);
+  var workflow = ScanWorkflowBatch.fromCropResult(
+    sourcePaths, crop, autoCropEnabled: autoCrop,
+  );
+  if (workflow.needsReview && reviewUncertain != null) {
+    final unresolved = workflow.reviewIndexes;
+    onProgress?.call('Review missing document corners…');
+    final edits = await reviewUncertain(
+        [for (final index in unresolved) sourcePaths[index]]);
+    if (edits != null && edits.isNotEmpty) {
+      final dir = await getTemporaryDirectory();
+      for (final entry in edits.entries) {
+        if (entry.key < 0 || entry.key >= unresolved.length) continue;
+        final sourceIndex = unresolved[entry.key];
+        final file = File(p.join(dir.path,
+            'ds_review_${DateTime.now().microsecondsSinceEpoch}_'
+            '$sourceIndex.jpg'));
+        await file.writeAsBytes(entry.value, flush: true);
+        workflow = workflow.withManualCrop(sourceIndex, file.path);
+      }
+    }
+  }
+  // "Cancel" or a page without a valid adjustment leaves the untouched
+  // original, never a fabricated 5%-inset crop.
+  final adjustedPaths = workflow.outputPaths;
+  final needsManualReview = workflow.reviewIndexes;
+  final paths = <String>[];
+  final folder = filter == ScanFilter.original
+      ? null : await getTemporaryDirectory();
+  for (var index = 0; index < adjustedPaths.length; index++) {
+    onProgress?.call(
+        'Processing image ${index + 1} of ${adjustedPaths.length}…');
+    var result = adjustedPaths[index];
+    if (folder != null) {
+      try {
+        final enhanced = await ImageProcessor.process(
+          await File(result).readAsBytes(), filter: filter,
+          // Strong document enhancement only applies after a reliable
+          // crop, avoiding bleaching the untouched background.
+          documentMode: adjustedPaths[index] != sourcePaths[index]);
+        final target = File(p.join(folder.path,
+            'ds_import_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
+        await target.writeAsBytes(enhanced, flush: true);
+        result = target.path;
+      } catch (_) {
+        // A failed effect must not discard this page or its source.
+      }
+    }
+    paths.add(result);
+  }
+  return GalleryImportResult(
+    paths: paths,
+    sourcePaths: sourcePaths,
+    needsReview: needsManualReview.length,
+    failedIndexes: needsManualReview,
+  );
+}
+
 class GalleryImportReviewScreen extends StatefulWidget {
   const GalleryImportReviewScreen({super.key, required this.imagePaths,
       this.initialAutoCrop = true,
@@ -106,84 +185,27 @@ class _GalleryImportReviewScreenState extends State<GalleryImportReviewScreen> {
     final sourcePaths = [for (final i in _orderedSelection) widget.imagePaths[i]];
     setState(() { _busy = true; _progress = 'Detecting document edges…'; });
     try {
-      final crop = _autoCrop
-          ? await DocumentEdges.autoCropFiles(sourcePaths,
+      final result = await processGalleryImport(
+        sourcePaths: sourcePaths,
+        autoCrop: _autoCrop,
+        filter: _filter,
+        preferIdCardBounds: widget.preferIdCardBounds,
+        onProgress: (message) {
+          if (mounted) setState(() => _progress = message);
+        },
+        // A missed outer boundary opens the existing interactive four-handle
+        // editor, rather than silently accepting the background as a scan.
+        reviewUncertain: (unresolved) async {
+          if (!mounted) return null;
+          return Navigator.of(context).push<Map<int, Uint8List>>(
+            MaterialPageRoute(builder: (_) => BatchCropScreen(
+              imagePaths: unresolved,
               preferIdCardBounds: widget.preferIdCardBounds,
-              onProgress: (processed, total) {
-                if (!mounted) return;
-                setState(() => _progress =
-                    'Detecting document edges $processed / $total…');
-              })
-          : AutoCropBatch(sourcePaths, 0);
-      // CamScanner-style sequence: acquire -> detect -> adjust uncertain
-      // corners -> perspective correction -> enhance -> document preview.
-      // Confident crops continue without interruption. A missed outer
-      // boundary opens the existing interactive four-handle editor, rather
-      // than silently accepting the background as a finished scan.
-      var workflow = ScanWorkflowBatch.fromCropResult(
-        sourcePaths, crop, autoCropEnabled: _autoCrop,
+            )),
+          );
+        },
       );
-      if (workflow.needsReview && mounted) {
-        final unresolved = workflow.reviewIndexes;
-        setState(() => _progress = 'Review missing document corners…');
-        final edits = await Navigator.of(context).push<Map<int, Uint8List>>(
-          MaterialPageRoute(builder: (_) => BatchCropScreen(
-            imagePaths: [for (final index in unresolved) sourcePaths[index]],
-            preferIdCardBounds: widget.preferIdCardBounds,
-          )),
-        );
-        if (!mounted) return;
-        if (edits != null && edits.isNotEmpty) {
-          final dir = await getTemporaryDirectory();
-          for (final entry in edits.entries) {
-            if (entry.key < 0 || entry.key >= unresolved.length) continue;
-            final sourceIndex = unresolved[entry.key];
-            final file = File(p.join(dir.path,
-                'ds_review_${DateTime.now().microsecondsSinceEpoch}_'
-                '$sourceIndex.jpg'));
-            await file.writeAsBytes(entry.value, flush: true);
-            workflow = workflow.withManualCrop(sourceIndex, file.path);
-          }
-        }
-      }
-      // "Cancel" or a page without a valid adjustment leaves the untouched
-      // original, never a fabricated 5%-inset crop.
-      final adjustedPaths = workflow.outputPaths;
-      final needsManualReview = workflow.reviewIndexes;
-      final paths = <String>[];
-      final folder = _filter == ScanFilter.original
-          ? null : await getTemporaryDirectory();
-      for (var index = 0; index < adjustedPaths.length; index++) {
-        if (mounted) {
-          setState(() => _progress =
-              'Processing image ${index + 1} of ${adjustedPaths.length}…');
-        }
-        var result = adjustedPaths[index];
-        if (folder != null) {
-          try {
-            final enhanced = await ImageProcessor.process(
-              await File(result).readAsBytes(), filter: _filter,
-              // Strong document enhancement only applies after a reliable
-              // crop, avoiding bleaching the untouched background.
-              documentMode: adjustedPaths[index] != sourcePaths[index]);
-            final target = File(p.join(folder.path,
-                'ds_import_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
-            await target.writeAsBytes(enhanced, flush: true);
-            result = target.path;
-          } catch (_) {
-            // A failed effect must not discard this page or its source.
-          }
-        }
-        paths.add(result);
-      }
-      if (mounted) {
-        Navigator.pop(context, GalleryImportResult(
-          paths: paths,
-          sourcePaths: sourcePaths,
-          needsReview: needsManualReview.length,
-          failedIndexes: needsManualReview,
-        ));
-      }
+      if (mounted) Navigator.pop(context, result);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

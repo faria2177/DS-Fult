@@ -6,9 +6,11 @@ import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'background_contrast_contour.dart';
 import 'image_processor.dart';
 import 'offline_document_contour.dart';
 import 'online_auto_crop_service.dart';
+import 'salient_document_detector.dart';
 import 'quad_edge_refiner.dart';
 
 /// The same on-device document contour detector is used by camera capture,
@@ -564,6 +566,17 @@ class DocumentEdges {
     } catch (error) {
       _log(imagePath, 'online unavailable; offline fallback: $error');
     }
+    // First ask the on-device segmentation model where the document is
+    // (the approach modern scanner apps use). It answers only when it sees
+    // one clear, four-sided object; otherwise the rectangle detectors below
+    // run exactly as before. ID Card mode keeps its dedicated card logic.
+    if (!preferIdCardBounds) {
+      final salient = await SalientDocumentDetector.detectFile(imagePath);
+      if (salient != null) {
+        _log(imagePath, 'accepted segmentation-model outline');
+        return salient;
+      }
+    }
     final found = await _detectSafeStillOutlineCoarse(imagePath,
         preferIdCardBounds: preferIdCardBounds);
     if (found == null) return null;
@@ -685,7 +698,19 @@ class DocumentEdges {
           'card=${cardArea?.toStringAsFixed(3) ?? 'none'}, '
           'offline=${offlineArea?.toStringAsFixed(3) ?? 'none'})');
     }
-    return normalIsSafe ? normal : null;
+    if (normalIsSafe) return normal;
+    // Every rectangle-based path declined. A small card or photo lying on a
+    // table or cloth is exactly what those size gates refuse, so finally ask
+    // whether one object clearly stands apart from the surface it lies on.
+    // ID Card mode keeps its own dedicated card logic.
+    if (!preferIdCardBounds) {
+      final separated = await BackgroundContrastContour.detectFile(imagePath);
+      if (separated != null) {
+        _log(imagePath, 'accepted object separated from its background');
+        return separated;
+      }
+    }
+    return null;
   }
 
   /// Run at most two still-image scans concurrently. The previous serial

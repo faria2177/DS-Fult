@@ -15,6 +15,11 @@ class DocumentStore extends ChangeNotifier {
   late Directory _root;
   late Directory _images;
   late File _index;
+  late File _backup;
+  Future<void> _writes = Future.value();
+  /// False while `index.json` on disk is damaged; such a file must never
+  /// replace the good backup.
+  bool _liveIndexTrusted = false;
 
   final List<ScanDocument> _documents = [];
   final List<DocumentFolder> _folders = [];
@@ -22,25 +27,85 @@ class DocumentStore extends ChangeNotifier {
   List<ScanDocument> get documents => List.unmodifiable(_documents);
   List<DocumentFolder> get folders => List.unmodifiable(_folders);
 
-  Future<void> initialize() async {
-    final directory = await getApplicationSupportDirectory();
+  /// [baseDirectory] replaces the app-support folder in tests.
+  Future<void> initialize({Directory? baseDirectory}) async {
+    final directory = baseDirectory ?? await getApplicationSupportDirectory();
     _root = Directory(p.join(directory.path, 'docscanner'));
     _images = Directory(p.join(_root.path, 'images'));
     await _images.create(recursive: true);
     _index = File(p.join(_root.path, 'index.json'));
-    if (!await _index.exists()) return;
-    try {
-      final data = jsonDecode(await _index.readAsString()) as Map<String, dynamic>;
-      _documents.addAll((data['documents'] as List<dynamic>? ?? [])
-          .map((value) => ScanDocument.fromJson(value as Map<String, dynamic>)));
-      _folders.addAll((data['folders'] as List<dynamic>? ?? [])
-          .map((value) => DocumentFolder.fromJson(value as Map<String, dynamic>)));
-    } catch (error) {
-      debugPrint('Document index could not be read: $error');
-      // Preserve the unreadable index for recovery rather than overwriting it.
-      await _index.copy('${_index.path}.recovery');
+    _backup = File('${_index.path}.bak');
+    // Newest good copy first: the live index, then the copy kept from the
+    // save before it. A torn or damaged live file therefore costs at most
+    // the very last change instead of the whole library.
+    var loaded = false;
+    for (final candidate in [_index, _backup]) {
+      if (!await candidate.exists()) continue;
+      final skipped = await _load(candidate);
+      if (skipped == null) {
+        await _preserve(candidate, 'unreadable');
+        continue;
+      }
+      if (skipped > 0) await _preserve(candidate, 'partial');
+      _liveIndexTrusted = identical(candidate, _index) && skipped == 0;
+      loaded = true;
+      break;
+    }
+    if (!loaded) {
+      _documents.clear();
+      _folders.clear();
     }
     notifyListeners();
+  }
+
+  /// Reads [file] into memory. Returns how many damaged entries were left
+  /// out, or null when the file as a whole cannot be understood. One bad
+  /// entry never discards the entries around it.
+  Future<int?> _load(File file) async {
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is! Map<String, dynamic>) return null;
+      final documents = <ScanDocument>[];
+      final folders = <DocumentFolder>[];
+      var skipped = 0;
+      for (final value in data['documents'] as List<dynamic>? ?? const []) {
+        try {
+          documents.add(ScanDocument.fromJson(value as Map<String, dynamic>));
+        } catch (error) {
+          skipped++;
+          debugPrint('Skipped a damaged document entry: $error');
+        }
+      }
+      for (final value in data['folders'] as List<dynamic>? ?? const []) {
+        try {
+          folders.add(DocumentFolder.fromJson(value as Map<String, dynamic>));
+        } catch (error) {
+          skipped++;
+          debugPrint('Skipped a damaged folder entry: $error');
+        }
+      }
+      _documents
+        ..clear()
+        ..addAll(documents);
+      _folders
+        ..clear()
+        ..addAll(folders);
+      return skipped;
+    } catch (error) {
+      debugPrint('Document index ${p.basename(file.path)} unreadable: $error');
+      return null;
+    }
+  }
+
+  /// Keeps a damaged index under a unique name so later saves can never
+  /// overwrite the only copy that might still be repaired by hand.
+  Future<void> _preserve(File file, String reason) async {
+    try {
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      await file.copy(p.join(_root.path, 'index.$reason-$stamp.json'));
+    } catch (error) {
+      debugPrint('Could not preserve damaged index: $error');
+    }
   }
 
   ScanDocument? byId(String id) {
@@ -405,14 +470,32 @@ class DocumentStore extends ChangeNotifier {
     return destination;
   }
 
-  Future<void> _persist() async {
+  Future<void> _persist() {
+    // Snapshot now, so each save writes the state it was asked to save.
     final data = jsonEncode({
       'schema': 1,
       'documents': _documents.map((d) => d.toJson()).toList(),
       'folders': _folders.map((f) => f.toJson()).toList(),
     });
-    await _index.writeAsString(data, flush: true);
-    notifyListeners();
+    // One write at a time, in order: overlapping saves used to be able to
+    // interleave inside the same file.
+    final write = _writes.then((_) => _writeIndex(data));
+    _writes = write.catchError((Object _) {});
+    return write.then((_) => notifyListeners());
+  }
+
+  /// Atomic replace: the new index is fully written and flushed to a
+  /// temporary file, the current one is kept as `.bak`, then the temporary
+  /// file is renamed into place. A crash at any point leaves a complete
+  /// index or a complete backup on disk.
+  Future<void> _writeIndex(String data) async {
+    final temporary = File('${_index.path}.tmp');
+    await temporary.writeAsString(data, flush: true);
+    if (_liveIndexTrusted && await _index.exists()) {
+      await _index.copy(_backup.path);
+    }
+    await temporary.rename(_index.path);
+    _liveIndexTrusted = true;
   }
 
   static String _two(int value) => value.toString().padLeft(2, '0');

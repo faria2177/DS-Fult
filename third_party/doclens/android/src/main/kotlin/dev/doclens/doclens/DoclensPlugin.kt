@@ -117,6 +117,22 @@ class DoclensPlugin :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "initialize" -> initialize(call, result)
+            "appVersion" -> result.success(try {
+                AppUpdateInstaller.version(context)
+            } catch (_: Throwable) { null })
+            "canInstallUpdates" -> result.success(AppUpdateInstaller.canInstall(context))
+            "openInstallPermission" -> {
+                try {
+                    AppUpdateInstaller.openInstallPermission(activity, context)
+                    result.success(true)
+                } catch (_: Throwable) { result.success(false) }
+            }
+            "installUpdate" -> {
+                val path = call.argument<String>("path")
+                result.success(try {
+                    path != null && AppUpdateInstaller.install(activity, context, path)
+                } catch (_: Throwable) { false })
+            }
             "dispose" -> { session?.dispose(); session = null; result.success(null) }
             "capture" -> {
                 val s = session
@@ -197,6 +213,7 @@ class DoclensPlugin :
             }
             "scanWithNativeUI" -> handleNativeUIScan(call, result)
             "detectInImage" -> handleDetectInImage(call, result)
+            "salientMask" -> handleSalientMask(call, result)
             "getNativeLibraryStatus" -> result.success(NativeLibraryDiagnostics.status(context))
             else -> result.notImplemented()
         }
@@ -434,6 +451,25 @@ class DoclensPlugin :
             } catch (e: Exception) {
                 mainHandler.post { result.error("capture_failed", e.message, null) }
             }
+        }
+    }
+
+    /** Open-source U²-Net foreground map for an imported still. Any failure
+     * (model, decode, native library) answers null so Flutter simply uses
+     * its existing detectors. */
+    private fun handleSalientMask(call: MethodCall, result: MethodChannel.Result) {
+        val imagePath = call.argument<String>("imagePath")
+        val modelPath = call.argument<String>("modelPath")
+        if (imagePath == null || modelPath == null) {
+            result.success(null); return
+        }
+        stillImageExecutor.execute {
+            val out = try {
+                SalientMaskEngine.run(modelPath, imagePath)
+            } catch (_: Throwable) {
+                null
+            }
+            mainHandler.post { result.success(out) }
         }
     }
 

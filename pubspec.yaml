@@ -1,7 +1,7 @@
 name: docscanner
 description: Local-first document scanner with camera, ID copies, PDF and text tools.
 publish_to: none
-version: 0.5.40+54
+version: 0.5.41+55
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
@@ -22,6 +22,8 @@ dependencies:
   google_mlkit_barcode_scanning: ^0.16.0
   flutter_tesseract_ocr: ^0.4.31
   path_provider: ^2.1.6
+  # In-app "Select Photo" grid for Import Images.
+  photo_manager: ^3.8.0
   pdf: ^3.13.1
   printing: ^5.15.1
   share_plus: ^13.3.1
@@ -42,3 +44,4 @@ flutter:
     - assets/tessdata_config.json
     - assets/tessdata/
     - assets/pptx/blank_template.pptx
+    - assets/models/u2netp.onnx

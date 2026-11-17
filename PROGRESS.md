@@ -260,6 +260,49 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - BG Remover now defaults to Android ML Kit Subject Segmentation (API 24+, Google Play services model may download once). On-device confidence mask produces feathered transparent or chosen solid-color PNG; the legacy uniform-color flood-fill remains an explicit fallback mode. There is no automatic document upload or AI API-key requirement. Model errors are surfaced instead of silently falling back.
 - Added unit/widget tests for theme switching, exact Medium/High estimates, native mask feathering, Flutter method-channel routing and missing-model error. Native CI and physical Android 16 photo/size acceptance remain required.
 
+## 2026-11-16 — Gallery import: auto crop for small cards and photos
+
+- Imported photos of a passport photo on a textured table, a bank card on a bed sheet and a visiting card on patterned cloth stayed uncropped. Each document covers only ~12–30% of the photo, and every existing still detector deliberately refuses rectangles that small (they are usually printed boxes inside a page).
+- New `BackgroundContrastContour` runs only after all existing paths decline, for normal Scan imports (and Adjust corners → Auto Detect). It learns the surface colours from a thin band around the photo frame, marks pixels that differ (hue fully, brightness when brighter, shadows tolerated), takes the largest separate object, fills it and fits four corners by straight-line fits on each side (rounded card corners are handled).
+- The object may touch at most one photo edge. It is rejected unless it is solid, four-sided (50–130° corners), surrounded by the surface on every free side and not ringed by plain white paper. A printed box can't be chosen: if its page reaches the photo edge the paper is learnt as surface, otherwise the page itself is the bigger object.
+- Checked offline in a Python prototype on the three user photos (correct outer corners, including the photo's white border and a card touching the left edge) and on synthetic scenes (≤0.5% corner error; no crop on a full page with printed blocks, plain cloth, or a page cut by two edges). Dart unit tests mirror these scenes. **Physical-phone import retest still needed.** ID Card mode and the live camera are unchanged.
+## 2026-11-16 — Green box: no phantom flashes, steadier corners
+
+- **Phantom box on an empty scene:** `QuadSmoother` drew the very first detector quad, so any one- or two-frame false rectangle flashed on screen and vanished. A first sighting is now drawn only after 3 mutually agreeing frames (corners within 5% of the frame, similar area); one dropped frame in between is tolerated.
+- **Blinking on a real page:** the outline is held through 4 missed frames (was 2), and a page lost for up to ~1 s returns immediately if it reappears in the same place, without a new confirmation run.
+- **Restless corners:** a single frame that jumps away while the previous frame still agreed is ignored until a second frame confirms it, and the movement test leaves out the one wildest of the last four frames. Previously one bad contour let ordinary noise through for the next few frames.
+- **Accuracy:** the first outline is the median of the confirming frames, and a held outline moves once onto the median of a full, tightly agreeing window instead of staying on the single frame that first locked.
+- Only `quad_smoother.dart` and its tests changed; native detection, shutter crop and ID Card flows are untouched. Logic was checked in an offline simulation only. **`flutter test` and a physical-phone retest have not been run.**
+
+## 2026-11-17 — Import Images follows the CamScanner flow
+
+- Analysed the user's screen recording of CamScanner: Scan → Import Images opens one in-app "Select Photo" grid (corner box selects, numbered in pick order; tapping the picture opens an `n/total` preview with Select), bottom bar has Enhance and Auto Crop, `Import(n)` goes straight to the document pages with no corner dialog.
+- DocScanner previously opened the system photo picker and then a second confirmation screen, and stopped on a corner-review screen for uncertain photos.
+- New `GalleryPickerScreen` + `PhotoLibrarySource` (`photo_manager`) reproduce the single-screen flow for Scan, Home import and Add page. Import no longer stops for corner review in this flow; a photo without a trustworthy outline stays whole and can be cropped from the editor.
+- If photo access is refused or the library cannot be read, the old system-picker + confirmation path is used unchanged. `tool/setup_android.sh` now adds the photo read permissions.
+- The import pipeline was extracted to `processGalleryImport` and is shared by both screens.
+- Not replicated: CamScanner shows the document immediately with per-page "processing" placeholders; DocScanner still shows a progress overlay until all pages are ready. **Phone retest needed (permission prompt, large libraries, HEIC photos).**
+
+## 2026-11-17 — Segmentation model locates the document before corner fitting
+
+- Imported stills now go through a neural "where is the document" stage first, the same overall design commercial scanners use (model finds the region, classical geometry fits and validates corners). No third-party proprietary code or model is used.
+- Model: U²-Net small (`assets/models/u2netp.onnx`, 4.6 MB, Apache-2.0, unmodified; provenance and hash in `assets/models/README.md`). It runs on-device through the OpenCV DNN module already shipped in the doclens plugin (`SalientMaskEngine.kt`, method `salientMask`).
+- Flutter (`SalientDocumentDetector` → `BackgroundContrastContour.quadFromSalientMask`) fits four corners with per-side line fits and rejects the answer unless it is one confident, solid, four-sided object touching at most one photo edge and not ringed by white paper. On rejection or any model error the previous detector chain runs unchanged. ID Card mode is not routed through the model.
+- Python check with the same OpenCV version (4.10) and the same steps: the user's three photos crop correctly; synthetic pages/cards ≤0.3% corner error; full page with printed blocks, plain cloth and a page cut by two edges give no model crop. About 0.3 s per photo on a desktop CPU. **Phone retest still needed (speed, memory, real A4 pages).**
+
+## 2026-11-17 — Document index safety and stable APK signing
+
+- **Index (`document_store.dart`):** saves are queued one at a time and written atomically (temp file → rename) with the previous good index kept as `index.json.bak`. On start the live index is tried first, then the backup; damaged entries are skipped one by one instead of discarding the rest; a damaged file is preserved under `index.unreadable-<time>.json` / `index.partial-<time>.json` and is never overwritten, and never replaces the good backup. Covered by `test/document_store_persistence_test.dart`.
+- **Signing:** `tool/setup_android.sh` now signs release builds with a fixed keystore when CI provides `DS_KEYSTORE_BASE64` and `DS_KEYSTORE_PASSWORD` repository secrets (alias `docscanner`); the workflow prints the APK certificate SHA-256. Without the secrets the old throwaway debug key is used and the workflow warns. **The repository owner must add the two secrets once.** The first APK signed with the fixed key still needs one uninstall of the old app.
+
+## 2026-11-17 — In-app updates from GitHub Releases (v0.5.41+55)
+
+- Modelled on the user's Ever Dialer screenshots: launch pop-up "Update Available" (Installed → Latest, View Update / Later), Me → Updates screen (status banner with "New vX" badge, Installed / Latest Release tiles, Download & Install, What's New with date chip and release notes, Compare Release Notes, Auto Check For Updates switch), "Download Update?" confirmation and "Downloading vX — Installing when ready…" progress dialog.
+- `AppUpdateService` reads `api.github.com/repos/faria2177/DS-Fult/releases`, ignores drafts/pre-releases/releases without an APK, compares versions numerically (name, then build), downloads to the app cache `updates/` folder, rejects incomplete downloads and hands the APK to Android's installer through a plugin-owned `FileProvider` (`REQUEST_INSTALL_PACKAGES`; Android still asks the user to confirm). "Later" pauses the pop-up for that version for 20 h; the pop-up never appears over the camera or another screen.
+- CI publishes a GitHub Release (tag `v<version>`, notes from `RELEASE_NOTES.md`, asset `DocScanner-v<name>-arm64-v8a.apk`) for each new pubspec version pushed to `main`, **only when the fixed signing secrets exist**.
+- **To ship an update:** bump `version:` in `pubspec.yaml`, rewrite `RELEASE_NOTES.md`, merge to `main`.
+- Differences from Ever Dialer: the APK goes to the app's private cache, not the public Downloads folder. Not yet tested on a phone.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
