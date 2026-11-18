@@ -12,6 +12,7 @@ import '../quad.dart';
 import 'doclens_view.dart';
 import 'edit_corners_screen.dart';
 import 'quad_overlay.dart';
+import 'scan_frame_overlay.dart';
 
 // =====================================================================
 //  Aesthetic tokens — refined editorial monochrome.
@@ -1210,6 +1211,14 @@ class _DoclensScreenState extends State<DoclensScreen> {
         controller: _controller,
         backgroundColor: widget.backgroundColor,
         overlayBuilder: (context, quad, status) {
+          if (widget.overlayStyle == QuadOverlayStyle.scanFrame) {
+            return ScanFrameOverlay(
+              quad: quad,
+              status: status,
+              accent: _accent,
+              warning: _warning,
+            );
+          }
           if (widget.overlayStyle != null) {
             return quadOverlayFor(
               style: widget.overlayStyle!,

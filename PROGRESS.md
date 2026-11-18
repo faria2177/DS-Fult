@@ -363,6 +363,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - ShutterQuadSelector + `DoclensController.shutterGreenQuad`: manual and auto shutter crop the steady full page when the painted box is a truncated version of it that appeared < 1.5 s ago. Native capture still uses exactly the quad Flutter passes.
 - Tests: `test/truncated_page_guard_test.dart`.
 
+## v0.5.51 — CamScanner-style scan frame overlay
+
+- Reference video 385131: on opening Scan, a thin green frame sits on the visible preview edges; when a page is found its corners glide onto the page (and back out when lost).
+- `ScanFrameOverlay` + `DoclensVisibleRegion` (doclens `widgets/scan_frame_overlay.dart`); `QuadOverlayStyle.scanFrame` used by CameraScreen. DoclensView provides the cover-fit visible region of the buffer.
+- Moves below 0.08 follow the smoother directly (no lag); idle↔found and big jumps glide over 280 ms (easeOutCubic).
+- Capture is unchanged: `recordPaintedGreenQuad` still records the detected quad, never the idle frame or an in-between shape.
+- Tests: `test/scan_frame_overlay_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

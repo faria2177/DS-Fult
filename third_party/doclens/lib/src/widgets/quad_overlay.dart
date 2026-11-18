@@ -222,6 +222,11 @@ enum QuadOverlayStyle {
 
   /// Blurred halo + stroked polygon.
   glow,
+
+  /// CamScanner-style: a thin frame along the screen edges while
+  /// searching, whose corners glide onto the document once it is found.
+  /// Rendered by `ScanFrameOverlay` in [DoclensScreen].
+  scanFrame,
 }
 
 enum _QuadStyle { outline, filled, corners, cornersFilled, dots, dotsLine, glow }
@@ -379,6 +384,7 @@ QuadOverlay quadOverlayFor({
       return QuadOverlay.outline(
           quad: quad, status: status, accent: accent, warning: warning);
     case QuadOverlayStyle.filled:
+    case QuadOverlayStyle.scanFrame:
       return QuadOverlay.filled(
           quad: quad, status: status, accent: accent, warning: warning);
     case QuadOverlayStyle.corners:

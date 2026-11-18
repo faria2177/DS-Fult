@@ -816,7 +816,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   retakeLabel: 'Retake',
                   accentColor: _outlineColor,
                   warningColor: _outlineColor,
-                  overlayStyle: QuadOverlayStyle.filled,
+                  overlayStyle: QuadOverlayStyle.scanFrame,
                   // Manual shutter remains the default, as in video 382016.
                   // Respect an explicit Auto Capture opt-in from Settings.
                   enableAutoCapture: !widget.cardMode && _settings.autoCapture &&

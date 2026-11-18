@@ -1,5 +1,5 @@
-## DocScanner v0.5.50
+## DocScanner v0.5.51
 
-- 📓 Lined notebook pages: the green box no longer jumps from the page border to a ruled line in the middle of the page
-- ✂️ If the box does slip onto a ruled line just before you press the shutter, the photo is still cropped to the full page, so the bottom of the page is no longer cut off
-- 🪪 A smaller document lying on a page (for example an ID card on paper) is still picked up as before
+- 🟩 Scan camera works like CamScanner: as soon as the camera opens, a thin green frame runs along the four edges of the screen
+- ✨ When a document comes into view, the frame's four corners glide onto the document's four corners; when the document leaves, they glide back to the screen edges
+- 📷 Only the drawing changed: the photo is still cropped to the detected document, never to the screen frame
