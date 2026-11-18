@@ -85,6 +85,85 @@ class ImageTextProcessor {
     if (data == null) throw StateError('Could not render image text');
     return data.buffer.asUint8List();
   }
+
+  /// Replace one recognized text line so the new words look like the old
+  /// ones: the ink colour and stroke weight are sampled from the original
+  /// glyphs, the font size follows the line height, and a line that was
+  /// centred on the page stays centred (longer text grows to both sides,
+  /// shorter text shrinks only when it would leave the page).
+  static Future<Uint8List> replaceLine(
+    Uint8List original, {
+    required Rect normalizedArea,
+    required String replacement,
+  }) async {
+    final sampled = await compute(_eraseLineInIsolate, {
+      'bytes': original,
+      'area': [normalizedArea.left, normalizedArea.top,
+        normalizedArea.right, normalizedArea.bottom],
+    });
+    final cleared = sampled['bytes']! as Uint8List;
+    if (replacement.trim().isEmpty) return cleared;
+    final ink = sampled['ink']! as List<int>;
+    final bold = sampled['bold']! as bool;
+
+    final codec = await ui.instantiateImageCodec(cleared);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+    final width = image.width.toDouble();
+    final height = image.height.toDouble();
+    final rect = Rect.fromLTRB(
+      normalizedArea.left * width, normalizedArea.top * height,
+      normalizedArea.right * width, normalizedArea.bottom * height);
+    final layout = lineLayout(rect: rect, imageWidth: width);
+
+    var fontSize = math.max(8.0, rect.height * .86);
+    TextPainter build(double size) => TextPainter(
+      text: TextSpan(text: replacement, style: TextStyle(
+        fontSize: size,
+        color: Color.fromARGB(255, ink[0], ink[1], ink[2]),
+        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+        height: 1.0,
+      )),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    var painter = build(fontSize);
+    while (painter.width > layout.maxWidth && fontSize > 8) {
+      fontSize = math.max(8.0, fontSize * layout.maxWidth / painter.width * .98);
+      painter = build(fontSize);
+    }
+    final left = layout.centered
+        ? rect.center.dx - painter.width / 2
+        : rect.left;
+    final top = rect.center.dy - painter.height / 2;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawImage(image, Offset.zero, Paint());
+    painter.paint(canvas, Offset(left, top));
+    final output = await recorder.endRecording()
+        .toImage(image.width, image.height);
+    final data = await output.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    output.dispose();
+    codec.dispose();
+    if (data == null) throw StateError('Could not render image text');
+    return data.buffer.asUint8List();
+  }
+
+  /// Where a replacement line may be drawn. A line whose centre is close to
+  /// the page centre is treated as centred text.
+  @visibleForTesting
+  static ({bool centered, double maxWidth}) lineLayout({
+    required Rect rect, required double imageWidth}) {
+    final margin = imageWidth * .03;
+    final centered =
+        (rect.center.dx - imageWidth / 2).abs() < imageWidth * .06;
+    final maxWidth = centered
+        ? 2 * (math.min(rect.center.dx, imageWidth - rect.center.dx) - margin)
+        : imageWidth - rect.left - margin;
+    return (centered: centered, maxWidth: math.max(rect.width, maxWidth));
+  }
 }
 
 Uint8List _eraseInIsolate(Map<String, Object> options) {
@@ -193,4 +272,56 @@ Uint8List _eraseBrushInIsolate(Map<String, Object> options) {
     }
   }
   return Uint8List.fromList(img.encodePng(result));
+}
+
+/// Erase a text line and report the colour and weight of its glyphs.
+Map<String, Object> _eraseLineInIsolate(Map<String, Object> options) {
+  final source = img.decodeImage(options['bytes']! as Uint8List);
+  if (source == null) throw const FormatException('Unsupported image');
+  final image = img.bakeOrientation(source);
+  final coords = options['area']! as List<double>;
+  // OCR boxes hug the glyphs; a small pad also removes anti-aliased edges.
+  final pad = math.max(1, ((coords[3] - coords[1]) * image.height * .08).round());
+  final x0 = ((coords[0] * image.width).floor() - pad).clamp(0, image.width - 1);
+  final y0 = ((coords[1] * image.height).floor() - pad).clamp(0, image.height - 1);
+  final x1 = ((coords[2] * image.width).ceil() + pad).clamp(x0 + 1, image.width);
+  final y1 = ((coords[3] * image.height).ceil() + pad).clamp(y0 + 1, image.height);
+
+  double luma(img.Pixel p) => .299 * p.r + .587 * p.g + .114 * p.b;
+  // Background brightness: the brightest quarter of the line box.
+  final lumas = <double>[];
+  for (var y = y0; y < y1; y++) {
+    for (var x = x0; x < x1; x++) {
+      lumas.add(luma(image.getPixel(x, y)));
+    }
+  }
+  lumas.sort();
+  final background = lumas[(lumas.length * .75).floor().clamp(0, lumas.length - 1)];
+  var r = 0.0;
+  var g = 0.0;
+  var b = 0.0;
+  var inkCount = 0;
+  for (var y = y0; y < y1; y++) {
+    for (var x = x0; x < x1; x++) {
+      final p = image.getPixel(x, y);
+      if (luma(p) < background - 60) {
+        r += p.r;
+        g += p.g;
+        b += p.b;
+        inkCount++;
+      }
+    }
+  }
+  final ink = inkCount == 0
+      ? <int>[34, 34, 34]
+      : <int>[(r / inkCount).round(), (g / inkCount).round(),
+          (b / inkCount).round()];
+  final coverage = inkCount / lumas.length;
+
+  final erased = _eraseInIsolate({
+    'bytes': Uint8List.fromList(img.encodePng(image)),
+    'area': [x0 / image.width, y0 / image.height,
+      x1 / image.width, y1 / image.height],
+  });
+  return {'bytes': erased, 'ink': ink, 'bold': coverage > .26};
 }

@@ -371,6 +371,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Capture is unchanged: `recordPaintedGreenQuad` still records the detected quad, never the idle frame or an in-between shape.
 - Tests: `test/scan_frame_overlay_test.dart`.
 
+## v0.5.52 — DS AI Edit Text (CamScanner workflow)
+
+- Reference video 385139. `AiEditTextScreen` (screens/ai_edit_text_screen.dart) replaces the Edit Text tool in DocumentScreen (Extract Text button in the preview still opens ImageTextEditorScreen).
+- Flow: analyzing overlay (min 2.4 s, ML Kit Latin lines) → tap line → menu (Copy, Delete, Select All, DS AI: Edit Text, AI Proofread, AI Polish) → Edit Text sheet → processing overlay (min 1.2 s) → "Processing complete"; undo/redo; character count; edits kept in memory until Save; save confirm with 7-day skip (prefs `ai_edit_text_skip_confirm_until`); discard prompt on close; "Are you satisfied with the text editing?" card after save.
+- `ImageTextProcessor.replaceLine`: erases the padded line box and redraws in the sampled ink colour, weight (ink coverage) and line-height font size; centred lines stay centred.
+- `AiTextTask.polish` added; AI actions reuse AiTextReviewAction (consent + review).
+- Tests: `test/ai_edit_text_screen_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
