@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -129,14 +128,14 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
         }
         _phase = _Phase.analyzing;
       });
-      final results = await Future.wait([
-        (widget.recognize ?? _recognizeWithMlKit)(bytes, _size),
-        Future<void>.delayed(widget.minAnalyzeTime),
-      ]);
+      final minimum = Future<void>.delayed(widget.minAnalyzeTime);
+      final lines = await (widget.recognize ?? _recognizeWithMlKit)(
+          bytes, _size);
+      await minimum;
       if (!mounted) return;
       _sweep.stop();
       setState(() {
-        _lines = results.first! as List<EditableTextLine>;
+        _lines = lines;
         _phase = _Phase.ready;
       });
     } catch (_) {
@@ -270,17 +269,12 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
       final replace = widget.replace ??
           (bytes, area, text) => ImageTextProcessor.replaceLine(bytes,
               normalizedArea: area, replacement: text);
-      final results = await Future.wait([
-        () async {
-          var current = bytes;
-          for (var k = 0; k < indexes.length; k++) {
-            current = await replace(current, _lines[indexes[k]].bounds,
-                texts[k]);
-          }
-          return current;
-        }(),
-        Future<void>.delayed(widget.minProcessTime),
-      ]);
+      final minimum = Future<void>.delayed(widget.minProcessTime);
+      var edited = bytes;
+      for (var k = 0; k < indexes.length; k++) {
+        edited = await replace(edited, _lines[indexes[k]].bounds, texts[k]);
+      }
+      await minimum;
       if (!mounted) return;
       _sweep.stop();
       final updated = <EditableTextLine>[];
@@ -295,7 +289,7 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
       setState(() {
         _undo.add(_Snapshot(bytes, _lines));
         _redo.clear();
-        _bytes = results.first! as Uint8List;
+        _bytes = edited;
         _lines = updated;
         _phase = _Phase.ready;
         _processingArea = null;
@@ -536,8 +530,8 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
   List<Widget> _processingOverlay(Size size, Rect area) => [
     Positioned.fill(child: Container(color: Colors.black45)),
     Positioned(
-      left: (area.center.dx * size.width - 90).clamp(0.0, size.width - 180),
-      top: (area.top * size.height - 40).clamp(0.0, size.height - 32),
+      left: (area.center.dx * size.width - 90).clamp(0.0, math.max(0.0, size.width - 180)),
+      top: (area.top * size.height - 40).clamp(0.0, math.max(0.0, size.height - 32)),
       child: Container(
         width: 180, height: 32,
         decoration: BoxDecoration(color: const Color(0xE61E1E21),
@@ -556,7 +550,7 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
   Widget _toastWidget(Size size) {
     final area = _toastArea;
     final top = area == null ? size.height * .45
-        : (area.bottom * size.height + 10).clamp(0.0, size.height - 40);
+        : (area.bottom * size.height + 10).clamp(0.0, math.max(0.0, size.height - 40));
     return Positioned(left: 0, right: 0, top: top, child: Center(child:
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -594,12 +588,12 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
     const menuWidth = 150.0;
     final menuHeight = single != null ? 236.0 : 84.0;
     final left = (area.center.dx * size.width - menuWidth / 2)
-        .clamp(0.0, math.max(0.0, size.width - menuWidth));
+        .clamp(0.0, math.max(0.0, size.width - menuWidth)).toDouble();
     // Stay inside the page: taps outside the Stack's box are not received.
     final above = area.top * size.height - menuHeight - 6;
     final below = area.bottom * size.height + 6;
     final top = (above >= 0 ? above : below)
-        .clamp(0.0, math.max(0.0, size.height - menuHeight));
+        .clamp(0.0, math.max(0.0, size.height - menuHeight)).toDouble();
     return Positioned(left: left, top: top, width: menuWidth,
       child: Material(
         color: const Color(0xFF2E2E32),
