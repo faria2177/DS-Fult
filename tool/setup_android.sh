@@ -31,6 +31,9 @@ cp assets/branding/android/values/ds_launcher_colors.xml android/app/src/main/re
 # Several Flutter Android plugins still use the pre-AGP-9 DSL. Keep the
 # compatibility switches until those plugins migrate to the new DSL.
 printf '\nandroid.newDsl=false\nandroid.builtInKotlin=false\n' >> android/gradle.properties
+# R8 full mode strips reflection-only constructors that ML Kit needs (see
+# tool/mlkit-proguard-rules.pro); compatibility mode keeps them.
+printf 'android.enableR8.fullMode=false\n' >> android/gradle.properties
 
 manifest='android/app/src/main/AndroidManifest.xml'
 if [ -f "$manifest" ]; then
@@ -92,4 +95,8 @@ fi
 cp tool/mlkit-proguard-rules.pro android/app/proguard-rules.pro
 if ! grep -q 'proguardFiles("proguard-rules.pro")' "$gradle_file"; then
   sed -i '/signingConfig = signingConfigs.getByName("debug")/a\            proguardFiles("proguard-rules.pro")' "$gradle_file"
+fi
+if ! grep -q 'proguardFiles("proguard-rules.pro")' "$gradle_file"; then
+  echo "::error::proguard-rules.pro is not wired into the release build"
+  exit 1
 fi

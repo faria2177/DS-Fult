@@ -385,6 +385,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Size now via `ui.ImageDescriptor` (fallback: image package); ML Kit reads the original page path while unedited; temp file keeps the real extension; errors are shown with their reason and a Retry button re-runs analysis.
 - Tests: retry case in `test/ai_edit_text_screen_test.dart`.
 
+## v0.5.54 — ML Kit release fix, AI health check, auto-switch, models, DeepAI
+
+- User screenshot: Edit Text → "PlatformException(error, Attempt to invoke virtual method 'java.lang.Class java.lang.Object.getClass()' on a null object reference". ML Kit components are created by reflection; R8 (full mode) stripped them. Added keep rules in tool/mlkit-proguard-rules.pro, `android.enableR8.fullMode=false`, and setup_android.sh now fails if the rules are not wired.
+- AiTextGateway: `check()`, `fallbackProviders()`, model lists (`ai_model_<id>` + `ai_models_<id>`), `ai_auto_switch` (default on), `lastUsed`; DeepAI (`api.deepai.org/api/text-generator`, form body, `api-key` header). Consent dialog names fallback providers; review dialog says when it auto-switched.
+- AI Mode: Models sheet (add / use first / remove, OpenRouter free model browser from the public /api/v1/models list), Auto-switch switch, Check APIs dialog.
+- Tests: test/ai_fallback_test.dart.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

@@ -24,8 +24,9 @@ abstract final class AiTextReviewAction {
     if (!context.mounted) return null;
     if (config == null) {
       await _message(context, 'AI Mode is not ready',
-        'In Me → AI Mode, save a key, select Google AI Studio, Groq or '
-        'OpenRouter, and enable AI Mode. Other provider keys are setup-only.');
+        'In Me → AI Mode, save a key, select Google AI Studio, Groq, '
+        'OpenRouter or DeepAI, and enable AI Mode. Other provider keys are '
+        'setup-only.');
       return null;
     }
     final AiTextConfig active = config;
@@ -33,6 +34,16 @@ abstract final class AiTextReviewAction {
       await _message(context, 'Text length',
         'Choose non-empty text of up to 12,000 characters per request.');
       return null;
+    }
+
+    var fallbacks = const <AiTextConfig>[];
+    if (gateway is AiTextGateway) {
+      try {
+        fallbacks = await gateway.fallbackProviders(active);
+      } catch (_) {
+        fallbacks = const [];
+      }
+      if (!context.mounted) return null;
     }
 
     final consent = await showDialog<bool>(context: context,
@@ -45,6 +56,13 @@ abstract final class AiTextReviewAction {
             Text('Provider: ${active.providerName}'),
             Text('Model: ${active.modelId}'),
             Text('Text length: ${text.length} characters'),
+            if (fallbacks.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('If it does not work, the text may be sent to your other '
+                'saved providers instead: '
+                '${fallbacks.map((f) => f.providerName).join(', ')}.',
+                key: const Key('ai-fallback-note')),
+            ],
             const SizedBox(height: 11),
             const Text('The current page\'s editable OCR text will be '
               'sent to this external provider for processing. This may '
@@ -73,12 +91,27 @@ abstract final class AiTextReviewAction {
       final proposal = await gateway.rewrite(config: active, task: task,
         text: text);
       if (!context.mounted) return null;
+      final used = gateway is AiTextGateway ? gateway.lastUsed : null;
+      final switched = used != null && (used.providerId != active.providerId
+          || used.modelId != active.modelId);
       return await showDialog<String>(context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Review AI suggestion'),
           content: SizedBox(width: double.maxFinite,
-            child: SingleChildScrollView(child: SelectableText(proposal,
-              key: const Key('ai-text-result')))),
+            child: SingleChildScrollView(child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (switched) Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Auto-switched to ${used.providerName} '
+                    '(${used.modelId}) because ${active.providerName} '
+                    'did not work.', key: const Key('ai-switched-note'),
+                    style: const TextStyle(fontSize: 12)),
+                ),
+                SelectableText(proposal, key: const Key('ai-text-result')),
+              ],
+            ))),
           actions: [
             TextButton(key: const Key('ai-discard-result'),
               onPressed: () => Navigator.of(dialogContext).pop(),

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/ai_credential_store.dart';
 import '../services/ai_key_file_parser.dart';
 import '../services/ai_provider_catalog.dart';
+import '../services/ai_text_gateway.dart';
 import '../theme.dart';
 
 /// Provider credentials are configured here, but no inference request is sent
@@ -14,9 +15,13 @@ typedef AiLinkOpener = Future<bool> Function(Uri uri);
 
 class AiModeScreen extends StatefulWidget {
   const AiModeScreen({super.key, this.credentialStore, this.openExternalLink,
-      this.pickKeyFile});
+      this.pickKeyFile, this.textSender, this.loadFreeModels});
 
   final AiCredentialStore? credentialStore;
+  /// Test seam for "Check APIs" requests.
+  final AiTextSender? textSender;
+  /// Test seam for "Browse free models" (OpenRouter public model list).
+  final Future<List<String>> Function()? loadFreeModels;
   /// Test seam: returns the chosen key file's text, or null if cancelled.
   final Future<String?> Function()? pickKeyFile;
   /// Test seam; production always uses the system browser for official sites.
@@ -38,6 +43,12 @@ class _AiModeScreenState extends State<AiModeScreen> {
   String? _activeId;
   String? _modelId;
   String? _visionModelId;
+  bool _autoSwitch = true;
+  List<String> _models = const [];
+  bool _checking = false;
+
+  late final AiTextGateway _gateway = AiTextGateway(
+      credentialStore: _vault, sender: widget.textSender);
 
   @override
   void initState() {
@@ -64,8 +75,12 @@ class _AiModeScreenState extends State<AiModeScreen> {
             AiProviderCatalog.textModels[active];
         _visionModelId = prefs.getString('ai_vision_model_$active') ??
             AiProviderCatalog.visionModels[active];
+        _autoSwitch = prefs.getBool(AiTextGateway.autoSwitchPreference) ?? true;
         _loading = false;
       });
+      final models = active == null ? const <String>[]
+          : await AiTextGateway.modelsFor(active, prefs: prefs);
+      if (mounted) setState(() => _models = models);
       if (enabled && (!supported || !(_hasKeys[active] ?? false))) {
         await prefs.setBool(_enabledPreference, false);
       }
@@ -189,6 +204,215 @@ class _AiModeScreenState extends State<AiModeScreen> {
     _notice(vision ? 'Vision model ID saved.' : 'Text model ID saved.');
   }
 
+  Future<void> _setAutoSwitch(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AiTextGateway.autoSwitchPreference, value);
+    if (mounted) setState(() => _autoSwitch = value);
+  }
+
+  /// Sends a tiny "reply OK" prompt to every saved text provider and model.
+  Future<void> _checkApis() async {
+    final prefs = await SharedPreferences.getInstance();
+    final targets = <(String, String)>[];
+    for (final id in AiProviderCatalog.textModels.keys) {
+      if (_hasKeys[id] != true) continue;
+      for (final model in await AiTextGateway.modelsFor(id, prefs: prefs)) {
+        targets.add((id, model));
+      }
+    }
+    if (!mounted) return;
+    if (targets.isEmpty) {
+      _notice('Save an API key for Google AI Studio, Groq, OpenRouter or '
+          'DeepAI first.');
+      return;
+    }
+    setState(() => _checking = true);
+    final results = <AiHealthResult>[];
+    for (final (id, model) in targets) {
+      results.add(await _gateway.check(id, modelId: model));
+      if (!mounted) return;
+    }
+    setState(() => _checking = false);
+    final working = results.where((r) => r.ok).length;
+    await showDialog<void>(context: context, builder: (dialogContext) =>
+      AlertDialog(
+        title: Text('$working of ${results.length} working'),
+        content: SizedBox(width: double.maxFinite, child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final r in results) ListTile(
+              key: Key('ai-check-${r.providerId}-${r.modelId}'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(r.ok ? Icons.check_circle : Icons.error_outline,
+                  color: r.ok ? Colors.green : Colors.redAccent),
+              title: Text('${r.providerName} · ${r.modelId}'),
+              subtitle: Text('${r.message} · '
+                  '${(r.elapsed.inMilliseconds / 1000).toStringAsFixed(1)} s'),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Only a short test message was sent. No document '
+                  'text left the phone.', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        )),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'))],
+      ));
+  }
+
+  Future<void> _saveModels(String providerId, List<String> models) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (models.isEmpty) return;
+    await prefs.setString('ai_model_$providerId', models.first);
+    await prefs.setStringList(AiTextGateway.extraModelsKey(providerId),
+        models.skip(1).toList());
+    await _refresh();
+  }
+
+  Future<String?> _askModelId() async {
+    var draft = '';
+    return showDialog<String>(context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add model'),
+        content: TextField(
+          key: const Key('ai-add-model-field'),
+          autofocus: true,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'Model ID',
+            hintText: 'e.g. meta-llama/llama-3.3-70b-instruct:free'),
+          onChanged: (text) => draft = text,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel')),
+          FilledButton(key: const Key('ai-add-model-save'),
+            onPressed: () => Navigator.pop(dialogContext, draft.trim()),
+            child: const Text('Add')),
+        ],
+      ));
+  }
+
+  Future<List<String>?> _pickFreeModels(List<String> current) async {
+    List<String> free;
+    try {
+      free = await (widget.loadFreeModels ??
+          AiTextGateway.fetchOpenRouterFreeModels)();
+    } catch (error) {
+      _notice(error is AiTextException ? error.message
+          : 'Could not load the OpenRouter model list.');
+      return null;
+    }
+    if (!mounted) return null;
+    final chosen = <String>{};
+    return showDialog<List<String>>(context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: Text('Free OpenRouter models (${free.length})'),
+          content: SizedBox(width: double.maxFinite, height: 380,
+            child: free.isEmpty
+                ? const Center(child: Text('No free models listed right now.'))
+                : ListView(children: [
+                    for (final id in free) CheckboxListTile(
+                      dense: true,
+                      value: current.contains(id) || chosen.contains(id),
+                      onChanged: current.contains(id) ? null : (v) =>
+                          setLocal(() => v == true
+                              ? chosen.add(id) : chosen.remove(id)),
+                      title: Text(id, style: const TextStyle(fontSize: 13)),
+                    ),
+                  ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
+            FilledButton(key: const Key('ai-add-free-models'),
+              onPressed: () => Navigator.pop(dialogContext, chosen.toList()),
+              child: Text('Add ${chosen.length}')),
+          ],
+        )));
+  }
+
+  Future<void> _manageModels() async {
+    final id = _activeId;
+    if (id == null) return;
+    final name = AiProviderCatalog.byId(id)?.name ?? id;
+    await showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setLocal) {
+          Future<void> update(List<String> next) async {
+            await _saveModels(id, next);
+            setLocal(() {});
+          }
+          return SafeArea(child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('$name models', style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              const Text('The first model is used first. If it fails, the '
+                  'next one is tried automatically.',
+                  style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: ListView(shrinkWrap: true, children: [
+                  for (var i = 0; i < _models.length; i++) ListTile(
+                    key: Key('ai-model-row-${_models[i]}'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Text('${i + 1}.'),
+                    title: Text(_models[i]),
+                    subtitle: i == 0 ? const Text('Main model') : null,
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (i > 0) IconButton(tooltip: 'Use first',
+                        icon: const Icon(Icons.vertical_align_top),
+                        onPressed: () => update([_models[i],
+                          for (var k = 0; k < _models.length; k++)
+                            if (k != i) _models[k]])),
+                      if (_models.length > 1) IconButton(tooltip: 'Remove',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => update([
+                          for (var k = 0; k < _models.length; k++)
+                            if (k != i) _models[k]])),
+                    ]),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: [
+                OutlinedButton.icon(
+                  key: const Key('ai-add-model'),
+                  onPressed: () async {
+                    final model = await _askModelId();
+                    if (model == null || model.isEmpty) return;
+                    if (!RegExp(r'^[A-Za-z0-9._:/-]{2,110}$').hasMatch(model)) {
+                      _notice('Invalid model ID.');
+                      return;
+                    }
+                    if (!_models.contains(model)) {
+                      await update([..._models, model]);
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add model')),
+                if (id == 'openrouter') OutlinedButton.icon(
+                  key: const Key('ai-browse-free-models'),
+                  onPressed: () async {
+                    final picked = await _pickFreeModels(_models);
+                    if (picked == null || picked.isEmpty) return;
+                    await update([..._models, ...picked]);
+                  },
+                  icon: const Icon(Icons.travel_explore),
+                  label: const Text('Browse free models')),
+              ]),
+            ]),
+          ));
+        }));
+  }
+
   Future<void> _edit(AiProvider provider) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -289,7 +513,7 @@ class _AiModeScreenState extends State<AiModeScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 10, 4, 12),
                 child: Text(
-                  'Google AI Studio, Groq and OpenRouter support optional '
+                  'Google AI Studio, Groq, OpenRouter and DeepAI support optional '
                   'AI proofreading in text review. Word/Excel may use an '
                   'image-capable model with your separate confirmation for '
                   'each conversion. On-device OCR stays available. '
@@ -310,6 +534,8 @@ class _AiModeScreenState extends State<AiModeScreen> {
                     'Sign in to GroqCloud → API Keys → Create API key.'),
                   _keyHelpRow('openrouter',
                     'Sign in → Keys → Create key. Check free model limits.'),
+                  _keyHelpRow('deepai',
+                    'Sign up → Dashboard → copy the API key shown there.'),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                     child: Text('For the other providers, use the official '
@@ -337,6 +563,40 @@ class _AiModeScreenState extends State<AiModeScreen> {
               _heading('More AI providers'),
               for (final provider in AiProviderCatalog.providers.where((p) => !p.freeTier))
                 _providerTile(provider),
+              const SizedBox(height: 18),
+              _heading('API health & switching'),
+              if (active != null &&
+                  AiProviderCatalog.multiModelProviders.contains(active.id))
+                Card(child: ListTile(
+                  key: const Key('ai-manage-models'),
+                  leading: const Icon(Icons.view_list_outlined, color: dsTeal),
+                  title: const Text('Models'),
+                  subtitle: Text('${_models.length} model'
+                      '${_models.length == 1 ? '' : 's'} · tried in order'
+                      '${active.id == 'openrouter' ? ' · add free models' : ''}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _manageModels,
+                )),
+              Card(child: SwitchListTile.adaptive(
+                key: const Key('ai-auto-switch'),
+                secondary: const Icon(Icons.swap_horiz, color: dsTeal),
+                title: const Text('Auto-switch if an API fails'),
+                subtitle: const Text('Try your other models and saved '
+                    'providers automatically'),
+                value: _autoSwitch,
+                onChanged: _setAutoSwitch,
+              )),
+              Card(child: ListTile(
+                key: const Key('ai-check-apis'),
+                leading: _checking
+                    ? const SizedBox(width: 24, height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5))
+                    : const Icon(Icons.network_check, color: dsTeal),
+                title: const Text('Check APIs'),
+                subtitle: const Text('Test which saved API keys and models '
+                    'are working now'),
+                onTap: _checking ? null : _checkApis,
+              )),
               const SizedBox(height: 16),
               const ListTile(
                 contentPadding: EdgeInsets.symmetric(horizontal: 4),
