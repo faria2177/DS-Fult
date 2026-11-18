@@ -59,6 +59,7 @@ abstract final class AiKeyFileParser {
     'anthropic': ['anthropic', 'claude'],
     'xai': ['xai', 'grok'],
     'together': ['together', 'togetherai'],
+    'deepai': ['deepai', 'deep-ai', 'deep_ai'],
   };
 
   static const _suffixes = ['apikey', 'apitoken', 'accesstoken', 'token',

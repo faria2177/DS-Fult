@@ -14,13 +14,18 @@ class AiProvider {
 }
 
 abstract final class AiProviderCatalog {
-  /// Only these three providers have implemented inference paths.
-  /// Other listed providers currently support secure key storage only.
+  /// Providers with implemented text inference paths, in the order used
+  /// for automatic switching. Other listed providers store keys only.
   static const textModels = <String, String>{
     'gemini': 'gemini-3.5-flash',
     'groq': 'llama-3.3-70b-versatile',
     'openrouter': 'openrouter/free',
+    'deepai': 'text-generator',
   };
+
+  /// Providers whose model list the user can extend (several free models
+  /// tried one after another).
+  static const multiModelProviders = {'openrouter', 'groq', 'gemini'};
 
   /// Separate from text settings: a text-only model must never be silently
   /// sent a scanned image. Users can change each vision model in AI Mode.
@@ -40,6 +45,9 @@ abstract final class AiProviderCatalog {
     AiProvider(id: 'openrouter', name: 'OpenRouter',
       subtitle: 'Multiple AI model providers · limited free models',
       keyPage: 'https://openrouter.ai/settings/keys', freeTier: true),
+    AiProvider(id: 'deepai', name: 'DeepAI',
+      subtitle: 'Text generator API · free starter quota',
+      keyPage: 'https://deepai.org/dashboard', freeTier: true),
     AiProvider(id: 'cloudflare', name: 'Cloudflare Workers AI',
       subtitle: 'Hosted AI models · free daily allocation',
       keyPage: 'https://dash.cloudflare.com/', freeTier: true,
