@@ -70,7 +70,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_authorized) await _verifyPin();
       if (widget.openEditorFirst && mounted && _authorized) {
-        final kept = await _edit(0, true, confirmDiscard: _draft);
+        final kept = await _edit(0, true, _draft);
         if (!mounted || !_draft) return;
         if (kept == false) {
           Navigator.pop(context, true);
@@ -206,7 +206,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   }
 
   Future<bool?> _edit([int pageIndex = 0, bool preview = false,
-      {bool confirmDiscard = false}]) async {
+      bool confirmDiscard = false]) async {
     if (!mounted) return null;
     return Navigator.push<bool>(context, MaterialPageRoute(
       builder: (_) => DocumentScreen(store: widget.store,
