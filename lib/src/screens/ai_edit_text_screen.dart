@@ -550,7 +550,7 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
   Widget _toastWidget(Size size) {
     final area = _toastArea;
     final top = area == null ? size.height * .45
-        : (area.bottom * size.height + 10).clamp(0.0, math.max(0.0, size.height - 40));
+        : (area.bottom * size.height + 10).clamp(0.0, math.max(0.0, size.height - 40)).toDouble();
     return Positioned(left: 0, right: 0, top: top, child: Center(child:
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
