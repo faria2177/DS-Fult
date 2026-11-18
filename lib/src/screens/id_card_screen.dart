@@ -18,6 +18,7 @@ import 'batch_crop_screen.dart';
 import 'crop_screen.dart';
 import 'document_detail_screen.dart';
 import 'id_card_templates.dart';
+import 'scan_dialogs.dart';
 
 class IdCardScreen extends StatefulWidget {
   const IdCardScreen({super.key, required this.store, required this.kind,
@@ -145,8 +146,17 @@ class _IdCardScreenState extends State<IdCardScreen> {
         return;
       }
       setState(() => _importing = true);
-      final cropped = await DocumentEdges.autoCropFiles(paths,
-          preferIdCardBounds: _twoSided);
+      final progress = ValueNotifier(ScanProgress(0, paths.length));
+      final closeProgress = showProcessingDialog(context, progress);
+      final AutoCropBatch cropped;
+      try {
+        cropped = await DocumentEdges.autoCropFiles(paths,
+            preferIdCardBounds: _twoSided,
+            onProgress: (done, total) =>
+                progress.value = ScanProgress(done, total));
+      } finally {
+        closeProgress();
+      }
       if (!mounted) return;
       final workflow = await _reviewCardCorners(paths, cropped);
       if (!mounted) return;
@@ -528,9 +538,20 @@ class _IdCardScreenState extends State<IdCardScreen> {
     });
   }
 
+  /// Leaving with captured but unsaved sides asks first, as CamScanner
+  /// does, instead of silently dropping (or silently keeping) them.
+  Future<void> _onBlockedPop() async {
+    if (_saving) return;
+    final discard = await confirmDiscardScans(context);
+    if (!mounted || !discard) return;
+    Navigator.pop(context);
+  }
+
   Future<void> _finish() async {
     if (!_canSave || _saving) return;
     setState(() => _saving = true);
+    final progress = ValueNotifier(const ScanProgress(0, 1));
+    final closeProgress = showProcessingDialog(context, progress);
     try {
       var paths = List<String>.from(_selected);
       if (_twoSided) {
@@ -562,6 +583,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
       final document = await widget.store.createFromPaths(
         paths, kind: widget.kind, compositeCardPages: _twoSided,
       );
+      progress.value = const ScanProgress(1, 1);
+      closeProgress();
       if (!mounted) return;
       await Navigator.push<void>(context, MaterialPageRoute(
         builder: (_) => DocumentDetailScreen(store: widget.store,
@@ -569,14 +592,21 @@ class _IdCardScreenState extends State<IdCardScreen> {
       ));
       if (mounted) Navigator.pop(context);
     } catch (error) {
+      closeProgress();
       _warn('Could not save card: $error');
     } finally {
+      closeProgress();
       if (mounted) setState(() => _saving = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => PopScope(
+    canPop: _selected.isEmpty,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) unawaited(_onBlockedPop());
+    },
+    child: Scaffold(
     backgroundColor: const Color(0xFF151517),
     appBar: AppBar(
       backgroundColor: Colors.black,
@@ -699,7 +729,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
         ]),
       ),
     ])),
-  );
+  ));
 
   Widget _action(IconData icon, String title, VoidCallback tap) =>
       Expanded(child: InkWell(

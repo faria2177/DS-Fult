@@ -171,17 +171,26 @@ class _HomeShellState extends State<HomeShell> {
       if (!mounted) return;
       // The supplied CamScanner sequence shows a 01/02 document grid after
       // multi-import. Retain direct edit preview for a single captured page.
-      await _open(doc.id, openEditorFirst: paths.length == 1);
+      final discarded = await _open(doc.id,
+          openEditorFirst: paths.length == 1, newScan: true);
+      if (discarded) {
+        await widget.store.discardScan(doc.id);
+        _message('Scan discarded');
+      }
     } catch (error) {
       _message('Could not save document: $error');
     }
   }
 
-  Future<void> _open(String id, {bool openEditorFirst = false}) async {
-    await Navigator.push<void>(context, MaterialPageRoute(
+  /// Returns true when a new scan was discarded by the user.
+  Future<bool> _open(String id, {bool openEditorFirst = false,
+      bool newScan = false}) async {
+    final result = await Navigator.push<bool>(context, MaterialPageRoute(
       builder: (_) => DocumentDetailScreen(store: widget.store,
-          documentId: id, openEditorFirst: openEditorFirst),
+          documentId: id, openEditorFirst: openEditorFirst,
+          newScan: newScan),
     ));
+    return newScan && result == true;
   }
 
   Future<void> _openCard(DocumentKind kind) async {

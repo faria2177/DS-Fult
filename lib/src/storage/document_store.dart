@@ -429,6 +429,45 @@ class DocumentStore extends ChangeNotifier {
     await _persist();
   }
 
+  /// Remove a scan the user discarded before keeping it. Unlike
+  /// [deleteDocument] its copied page images are removed as well, because a
+  /// discarded draft was never a saved document. Only files inside the
+  /// app's own images folder are touched.
+  Future<void> discardScan(String id) async {
+    final doc = byId(id);
+    if (doc == null) return;
+    _documents.removeWhere((item) => item.id == id);
+    await _persist();
+    final imagesRoot = p.normalize(_images.path);
+    final files = <String>{
+      for (final page in doc.pages) ...[
+        page.path, page.originalPath,
+        if (page.rawSourcePath != null) page.rawSourcePath!,
+        if (page.watermarkBackupPath != null) page.watermarkBackupPath!,
+      ],
+    };
+    final stillUsed = <String>{
+      for (final other in _documents)
+        for (final page in other.pages) ...[
+          page.path, page.originalPath,
+          if (page.rawSourcePath != null) page.rawSourcePath!,
+          if (page.watermarkBackupPath != null) page.watermarkBackupPath!,
+        ],
+    };
+    for (final path in files) {
+      if (stillUsed.contains(path) ||
+          !p.isWithin(imagesRoot, p.normalize(path))) {
+        continue;
+      }
+      try {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) {
+        // A leftover image is harmless; the index no longer refers to it.
+      }
+    }
+  }
+
   Future<DocumentFolder> createFolder(String name) async {
     final folder = DocumentFolder(id: _uuid.v4(), name: name.trim());
     _folders.add(folder);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -20,17 +21,23 @@ import 'crop_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'mosaic_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'scan_dialogs.dart';
 import 'signature_screen.dart';
 import 'smart_erase_screen.dart';
 import 'watermark_screen.dart';
 
 class DocumentScreen extends StatefulWidget {
   const DocumentScreen({super.key, required this.store, required this.documentId,
-      this.initialPage = 0, this.initialPreview = false});
+      this.initialPage = 0, this.initialPreview = false,
+      this.confirmDiscard = false});
   final DocumentStore store;
   final String documentId;
   final int initialPage;
   final bool initialPreview;
+
+  /// A freshly scanned document that the user has not kept yet. Back asks
+  /// "Discard Scans"; the screen pops `false` for discard, `true` for Done.
+  final bool confirmDiscard;
 
   @override
   State<DocumentScreen> createState() => _DocumentScreenState();
@@ -50,6 +57,15 @@ class _DocumentScreenState extends State<DocumentScreen> {
   void initState() {
     super.initState();
     _index = widget.initialPage;
+  }
+
+  /// Keep the scan (✓ / Done).
+  void _done() => Navigator.pop(context, true);
+
+  Future<void> _onBlockedPop() async {
+    final discard = await confirmDiscardScans(context);
+    if (!mounted || !discard) return;
+    Navigator.pop(context, false);
   }
 
   void _message(Object error) {
@@ -512,7 +528,12 @@ class _DocumentScreenState extends State<DocumentScreen> {
       if (doc == null || doc.pages.isEmpty) {
         return const Scaffold(body: Center(child: Text('Document not found')));
       }
-      return Scaffold(
+      return PopScope(
+        canPop: !widget.confirmDiscard,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) unawaited(_onBlockedPop());
+        },
+        child: Scaffold(
         backgroundColor: const Color(0xFF1B1B1D),
         appBar: AppBar(
           backgroundColor: const Color(0xFF2C2C2F),
@@ -533,7 +554,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
                       child: const Text('Share',
                           style: TextStyle(color: Colors.white))),
                   Padding(padding: const EdgeInsets.only(right: 8),
-                    child: FilledButton(onPressed: () => Navigator.pop(context),
+                    child: FilledButton(onPressed: _done,
                       style: FilledButton.styleFrom(backgroundColor: dsTeal),
                       child: const Text('Done'))),
                 ],
@@ -577,7 +598,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
                     _process(ScanFilter.original, rotation: -90))),
                 Expanded(child: _editorTool(Icons.crop_rotate, 'Crop', _crop)),
                 Expanded(child: _editorTool(Icons.text_fields, 'Extract Text', _ocr)),
-                Expanded(child: IconButton(onPressed: () => Navigator.pop(context),
+                Expanded(child: IconButton(onPressed: _done,
                   icon: const Icon(Icons.check_box, color: dsTeal, size: 37),
                   tooltip: 'Done')),
               ])),
@@ -596,7 +617,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
             if (_editTab == 3) _filterBar(doc) else _editorTools(),
           ],
         ])),
-      );
+      ));
     },
   );
 }

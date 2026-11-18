@@ -349,6 +349,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Cause 2: `_finishProcessed` skipped the selected scan effect in card mode (`!widget.cardMode`), so cards were never brightened. Card sides now get the selected effect (default Enhance) like other scans; the stored sources remain the unfiltered originals.
 - Perspective: card warps already used `PerspectiveAspect` via `ImageWarper`; the shadow strip was what distorted the visible shape.
 
+## v0.5.49 — Discard Scans confirmation and ID card progress
+
+- New scans (camera / Import Images) are drafts until the user taps ✓/Done. Back on the edit preview (DocumentScreen `confirmDiscard`) or on the document page (DocumentDetailScreen `newScan`) shows the CamScanner "Discard Scans" dialog; Discard pops `true` to HomeShell, which calls `DocumentStore.discardScan` (removes the document and its copied images inside the app images folder only).
+- IdCardScreen: PopScope asks "Discard Scans" when sides are captured but not saved; gallery import and Done show `showProcessingDialog` (Processing… N% x/y) from `scan_dialogs.dart`.
+- Tests: `test/scan_discard_flow_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

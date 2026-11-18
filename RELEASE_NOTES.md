@@ -1,5 +1,6 @@
-## DocScanner v0.5.48
+## DocScanner v0.5.49
 
-- 🪪 ID Cards: front and back now use the same shadow removal as normal scans, so no strip of table or shadow is left along the card edges
-- ☀️ ID Cards: card sides get the chosen scan effect (Enhance by default), so they come out bright and clean instead of grey
-- 📐 ID Cards keep their true shape after perspective correction
+- 🗑️ A new scan is no longer kept behind your back: pressing Back after scanning now asks **Discard Scans — Closing will discard the scans you captured** (Cancel / Discard), just like CamScanner
+- ✅ The scan is kept only when you tap ✓ / Done (or ✓ Save scan on a multi-page scan); Discard removes it and its images
+- 🪪 ID Cards: Back with captured sides asks before discarding them, instead of leaving silently
+- ⏳ ID Cards: importing card photos and saving the A4 page now show a **Processing… N%  x/y** progress window
