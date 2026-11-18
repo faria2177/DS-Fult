@@ -510,38 +510,6 @@ class _AiModeScreenState extends State<AiModeScreen> {
                   trailing: const Icon(Icons.edit_outlined),
                   onTap: () => _editModel(vision: true),
                 )),
-              if (active != null &&
-                  AiProviderCatalog.multiModelProviders.contains(active.id))
-                Card(child: ListTile(
-                  key: const Key('ai-manage-models'),
-                  leading: const Icon(Icons.view_list_outlined, color: dsTeal),
-                  title: const Text('Models'),
-                  subtitle: Text('${_models.length} model'
-                      '${_models.length == 1 ? '' : 's'} · tried in order'
-                      '${active.id == 'openrouter' ? ' · add free models' : ''}'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _manageModels,
-                )),
-              Card(child: SwitchListTile.adaptive(
-                key: const Key('ai-auto-switch'),
-                secondary: const Icon(Icons.swap_horiz, color: dsTeal),
-                title: const Text('Auto-switch if an API fails'),
-                subtitle: const Text('Try your other models and saved '
-                    'providers automatically'),
-                value: _autoSwitch,
-                onChanged: _setAutoSwitch,
-              )),
-              Card(child: ListTile(
-                key: const Key('ai-check-apis'),
-                leading: _checking
-                    ? const SizedBox(width: 24, height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2.5))
-                    : const Icon(Icons.network_check, color: dsTeal),
-                title: const Text('Check APIs'),
-                subtitle: const Text('Test which saved API keys and models '
-                    'are working now'),
-                onTap: _checking ? null : _checkApis,
-              )),
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 10, 4, 12),
                 child: Text(
@@ -595,6 +563,40 @@ class _AiModeScreenState extends State<AiModeScreen> {
               _heading('More AI providers'),
               for (final provider in AiProviderCatalog.providers.where((p) => !p.freeTier))
                 _providerTile(provider),
+              const SizedBox(height: 18),
+              _heading('API health & switching'),
+              if (active != null &&
+                  AiProviderCatalog.multiModelProviders.contains(active.id))
+                Card(child: ListTile(
+                  key: const Key('ai-manage-models'),
+                  leading: const Icon(Icons.view_list_outlined, color: dsTeal),
+                  title: const Text('Models'),
+                  subtitle: Text('${_models.length} model'
+                      '${_models.length == 1 ? '' : 's'} · tried in order'
+                      '${active.id == 'openrouter' ? ' · add free models' : ''}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _manageModels,
+                )),
+              Card(child: SwitchListTile.adaptive(
+                key: const Key('ai-auto-switch'),
+                secondary: const Icon(Icons.swap_horiz, color: dsTeal),
+                title: const Text('Auto-switch if an API fails'),
+                subtitle: const Text('Try your other models and saved '
+                    'providers automatically'),
+                value: _autoSwitch,
+                onChanged: _setAutoSwitch,
+              )),
+              Card(child: ListTile(
+                key: const Key('ai-check-apis'),
+                leading: _checking
+                    ? const SizedBox(width: 24, height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5))
+                    : const Icon(Icons.network_check, color: dsTeal),
+                title: const Text('Check APIs'),
+                subtitle: const Text('Test which saved API keys and models '
+                    'are working now'),
+                onTap: _checking ? null : _checkApis,
+              )),
               const SizedBox(height: 16),
               const ListTile(
                 contentPadding: EdgeInsets.symmetric(horizontal: 4),

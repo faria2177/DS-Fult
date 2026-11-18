@@ -129,6 +129,9 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('ai-check-apis')), 300);
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('ai-auto-switch')), findsOneWidget);
     await tester.tap(find.byKey(const Key('ai-check-apis')));
     await tester.pumpAndSettle();
@@ -137,6 +140,9 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('ai-manage-models')), -200);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('ai-manage-models')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('ai-browse-free-models')));
