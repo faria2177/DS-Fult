@@ -24,6 +24,7 @@ class _StillFakePlatform extends DoclensPlatform {
   int warpCalls = 0;
   Quad? lastWarpedQuad;
   ImageEnhancement? lastWarpEnhancement;
+  bool? lastTrimShadow;
 
   @override
   Future<ImageDetection?> detectInImage({
@@ -41,10 +42,12 @@ class _StillFakePlatform extends DoclensPlatform {
     int jpegQuality = 100,
     ImageEnhancement enhancement = ImageEnhancement.none,
     AutoOrientation autoOrientation = AutoOrientation.none,
+    bool trimShadow = false,
   }) async {
     warpCalls++;
     lastWarpedQuad = quad;
     lastWarpEnhancement = enhancement;
+    lastTrimShadow = trimShadow;
     return '$rawImagePath.cropped';
   }
 
@@ -65,6 +68,7 @@ class _DelayedWarpPlatform extends _StillFakePlatform {
     int jpegQuality = 100,
     ImageEnhancement enhancement = ImageEnhancement.none,
     AutoOrientation autoOrientation = AutoOrientation.none,
+    bool trimShadow = false,
   }) async {
     inFlight++;
     if (inFlight > maxInFlight) maxInFlight = inFlight;
@@ -382,6 +386,25 @@ void main() {
       expect(result.paths, ['id-front.jpg.cropped']);
       expect(result.croppedCount, 1);
       expect(fake.warpCalls, 1);
+    } finally {
+      DoclensPlatform.instance = previous;
+    }
+  });
+
+  test('camera stills ask the warp to trim shadows, imports do not',
+      () async {
+    final previous = DoclensPlatform.instance;
+    final fake = _StillFakePlatform(card: _detection(
+      _rect(.12, .20, .88, .82), size: const Size(1200, 900)));
+    DoclensPlatform.instance = fake;
+    try {
+      await DocumentEdges.autoCropFiles(['id-front.jpg'],
+          preferIdCardBounds: true, galleryDetectors: false);
+      expect(fake.warpCalls, 1);
+      expect(fake.lastTrimShadow, isTrue);
+      await DocumentEdges.autoCropFiles(['id-front.jpg']);
+      expect(fake.warpCalls, 2);
+      expect(fake.lastTrimShadow, isFalse);
     } finally {
       DoclensPlatform.instance = previous;
     }

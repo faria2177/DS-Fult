@@ -76,12 +76,16 @@ abstract class DoclensPlatform extends PlatformInterface {
 
   Future<ScanResult> capture();
 
+  ///
+  /// [trimShadow] first moves sides that follow a cast shadow's outer
+  /// border inward onto the document (camera captures only).
   Future<String> warpImage({
     required String rawImagePath,
     required Quad quad,
     int jpegQuality = 100,
     ImageEnhancement enhancement = ImageEnhancement.none,
     AutoOrientation autoOrientation = AutoOrientation.none,
+    bool trimShadow = false,
   });
 
   /// Rotate the JPEG at [imagePath] by [quarterTurns] clockwise 90° steps and

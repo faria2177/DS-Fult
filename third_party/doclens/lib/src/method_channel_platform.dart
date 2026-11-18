@@ -106,6 +106,7 @@ class MethodChannelDoclens extends DoclensPlatform {
     int jpegQuality = 100,
     ImageEnhancement enhancement = ImageEnhancement.none,
     AutoOrientation autoOrientation = AutoOrientation.none,
+    bool trimShadow = false,
   }) async {
     try {
       final out = await _method.invokeMethod<String>('warpImage', {
@@ -114,6 +115,7 @@ class MethodChannelDoclens extends DoclensPlatform {
         'jpegQuality': jpegQuality,
         'enhancement': enhancement.name,
         'autoOrientation': autoOrientation.name,
+        'trimShadow': trimShadow,
       });
       if (out == null) {
         throw const ScannerCaptureException('Warp returned null path');

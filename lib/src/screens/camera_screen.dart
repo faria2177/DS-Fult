@@ -253,7 +253,9 @@ class _CameraScreenState extends State<CameraScreen> {
     setState(() => _processingGallery = true);
     try {
       final processed = <String>[];
-      final useEffect = applySelectedEffect && !widget.cardMode &&
+      // ID Card sides get the chosen scan effect too (Enhance by default),
+      // so cards come out bright like other scans instead of grey.
+      final useEffect = applySelectedEffect &&
           _selectedFilter != ScanFilter.original;
       final folder = useEffect ? await getTemporaryDirectory() : null;
       for (var i = 0; i < paths.length; i++) {
