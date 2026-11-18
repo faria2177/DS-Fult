@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -23,6 +24,7 @@ import 'edit_text_screen.dart';
 import 'gallery_import_review_screen.dart';
 import 'lock_document_screen.dart';
 import 'pdf_tools_screen.dart';
+import 'scan_dialogs.dart';
 import 'signature_screen.dart';
 
 const _darkBg = Color(0xFF1B1B1D);
@@ -36,11 +38,16 @@ class DocumentDetailScreen extends StatefulWidget {
     required this.store,
     required this.documentId,
     this.openEditorFirst = false,
+    this.newScan = false,
   });
 
   final DocumentStore store;
   final String documentId;
   final bool openEditorFirst;
+
+  /// The document was just created by a scan and is still a draft: back
+  /// asks "Discard Scans" and pops `true` when the user discards it.
+  final bool newScan;
 
   @override
   State<DocumentDetailScreen> createState() => _DocumentDetailScreenState();
@@ -52,6 +59,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   bool _selecting = false;
   bool _busy = false;
   bool _authorized = true;
+  late bool _draft = widget.newScan;
 
   ScanDocument? get _doc => widget.store.byId(widget.documentId);
 
@@ -62,7 +70,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_authorized) await _verifyPin();
       if (widget.openEditorFirst && mounted && _authorized) {
-        await _edit(0, true);
+        final kept = await _edit(0, true, _draft);
+        if (!mounted || !_draft) return;
+        if (kept == false) {
+          Navigator.pop(context, true);
+        } else if (kept == true) {
+          setState(() => _draft = false);
+        }
       }
     });
   }
@@ -191,13 +205,27 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     ));
   }
 
-  Future<void> _edit([int pageIndex = 0, bool preview = false]) async {
-    if (!mounted) return;
-    await Navigator.push<void>(context, MaterialPageRoute(
+  Future<bool?> _edit([int pageIndex = 0, bool preview = false,
+      bool confirmDiscard = false]) async {
+    if (!mounted) return null;
+    return Navigator.push<bool>(context, MaterialPageRoute(
       builder: (_) => DocumentScreen(store: widget.store,
           documentId: widget.documentId, initialPage: pageIndex,
-          initialPreview: preview),
+          initialPreview: preview, confirmDiscard: confirmDiscard),
     ));
+  }
+
+  /// Keep a freshly scanned draft (✓ in the app bar).
+  void _keepDraft() {
+    if (!_draft) return;
+    setState(() => _draft = false);
+    _notice('Saved');
+  }
+
+  Future<void> _onBlockedPop() async {
+    final discard = await confirmDiscardScans(context);
+    if (!mounted || !discard) return;
+    Navigator.pop(context, true);
   }
 
   Future<void> _pdfTools() async {
@@ -765,7 +793,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       if (doc == null) {
         return const Scaffold(body: Center(child: Text('Document not found')));
       }
-      return Scaffold(
+      return PopScope(
+        canPop: !_draft,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) unawaited(_onBlockedPop());
+        },
+        child: Scaffold(
         backgroundColor: _darkBg,
         appBar: AppBar(
           backgroundColor: _darkPanel,
@@ -799,6 +832,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     tooltip: 'Info', iconSize: 20),
                   IconButton(onPressed: _moreSheet,
                     icon: const Icon(Icons.more_vert), tooltip: 'More'),
+                  if (_draft)
+                    IconButton(onPressed: _keepDraft,
+                      icon: const Icon(Icons.check, color: dsTeal),
+                      tooltip: 'Save scan'),
                 ],
         ),
         body: !_authorized
@@ -843,7 +880,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           _bottomAction(Icons.draw_outlined, 'Sign', _sign),
                         ])),
               ])),
-      );
+      ));
     },
   );
 }
