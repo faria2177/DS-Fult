@@ -6,6 +6,7 @@ import '../controller.dart';
 import '../models.dart';
 import '../quad.dart';
 import 'quad_overlay.dart';
+import 'scan_frame_overlay.dart';
 
 typedef QuadOverlayBuilder = Widget Function(
     BuildContext context, Quad? quad, DetectionStatus status);
@@ -215,7 +216,12 @@ class _DoclensViewState extends State<DoclensView>
     if (textureId == null) {
       previewLayer = const Center(child: CircularProgressIndicator());
     } else if (preview != null && preview.width > 0 && preview.height > 0) {
-      previewLayer = ClipRect(
+      previewLayer = LayoutBuilder(builder: (context, box) =>
+          DoclensVisibleRegion(
+        rect: box.hasBoundedWidth && box.hasBoundedHeight
+            ? DoclensVisibleRegion.coverRegion(preview, box.biggest)
+            : DoclensVisibleRegion.full,
+        child: ClipRect(
         child: FittedBox(
           fit: BoxFit.cover,
           clipBehavior: Clip.hardEdge,
@@ -234,7 +240,7 @@ class _DoclensViewState extends State<DoclensView>
             ),
           ),
         ),
-      );
+      )));
     } else {
       // Buffer size not known yet (the native previewSize event hasn't
       // landed). Fill the parent with the texture and the overlay in the
