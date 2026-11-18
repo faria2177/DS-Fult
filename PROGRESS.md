@@ -379,6 +379,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - `AiTextTask.polish` added; AI actions reuse AiTextReviewAction (consent + review).
 - Tests: `test/ai_edit_text_screen_test.dart`.
 
+## v0.5.53 — Edit Text recognition fix
+
+- User screenshot: Edit Text showed "Text recognition is unavailable on this device." with 0 characters on an office-order photo. The whole load path shared one try/catch; the pure-Dart `startDecode` size probe (fragile on large camera JPEGs) or the temp-file OCR could fail it.
+- Size now via `ui.ImageDescriptor` (fallback: image package); ML Kit reads the original page path while unedited; temp file keeps the real extension; errors are shown with their reason and a Retry button re-runs analysis.
+- Tests: retry case in `test/ai_edit_text_screen_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

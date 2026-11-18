@@ -34,14 +34,16 @@ void main() {
   tearDown(() => base.delete(recursive: true));
 
   Widget app({required List<Uint8List> saved,
-      required List<String> replaced}) => MaterialApp(
+      required List<String> replaced, TextLineRecognizer? recognize}) =>
+      MaterialApp(
     home: Builder(builder: (context) => Scaffold(body: Center(
       child: TextButton(
         onPressed: () => Navigator.push(context, MaterialPageRoute(
           builder: (_) => AiEditTextScreen(
             store: store, documentId: documentId, pageId: pageId,
             readBytes: (_) async => page,
-            recognize: (_, _) async => const [
+            measureImage: (_) async => const Size(400, 240),
+            recognize: recognize ?? (_, _) async => const [
               EditableTextLine(Rect.fromLTRB(.30, .40, .70, .48),
                   '(Card Business)'),
               EditableTextLine(Rect.fromLTRB(.10, .60, .50, .66),
@@ -156,5 +158,34 @@ void main() {
         rect: const Rect.fromLTRB(40, 140, 200, 160), imageWidth: 400);
     expect(left.centered, isFalse);
     expect(left.maxWidth, closeTo(348, .01));
+  });
+
+  testWidgets('a failed recognition shows the reason and can be retried',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 2.7;
+    addTearDown(tester.view.reset);
+    var calls = 0;
+    await tester.pumpWidget(app(saved: [], replaced: [],
+      recognize: (_, _) async {
+        calls++;
+        if (calls == 1) throw Exception('model missing');
+        return const [EditableTextLine(Rect.fromLTRB(.1, .1, .5, .2), 'Hello')];
+      }));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.pump();
+    expect(find.textContaining('Text recognition failed'), findsOneWidget);
+    expect(find.textContaining('model missing'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('edit-text-retry')));
+    await tester.pump();
+    expect(find.text('DS AI is analyzing'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.pump();
+    expect(calls, 2);
+    expect(find.text('5 characters'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
   });
 }

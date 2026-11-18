@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,7 @@ class AiEditTextScreen extends StatefulWidget {
     this.recognize,
     this.replace,
     this.save,
+    this.measureImage,
     this.aiEngine,
     this.minAnalyzeTime = const Duration(milliseconds: 2400),
     this.minProcessTime = const Duration(milliseconds: 1200),
@@ -56,6 +58,7 @@ class AiEditTextScreen extends StatefulWidget {
   final TextLineRecognizer? recognize;
   final TextLineReplacer? replace;
   final PageBytesSaver? save;
+  final Future<Size?> Function(Uint8List bytes)? measureImage;
   final AiTextEngine? aiEngine;
   final Duration minAnalyzeTime;
   final Duration minProcessTime;
@@ -109,6 +112,9 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
     super.dispose();
   }
 
+  String? _pagePath;
+  bool _recognitionFailed = false;
+
   Future<void> _load() async {
     final page = widget.store.byId(widget.documentId)?.pages
         .where((page) => page.id == widget.pageId).firstOrNull;
@@ -116,21 +122,64 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
       setState(() => _error = 'Page not found');
       return;
     }
+    final Uint8List bytes;
     try {
-      final bytes = await (widget.readBytes ?? (path) => File(path).readAsBytes())(
+      bytes = await (widget.readBytes ?? (path) => File(path).readAsBytes())(
           page.path);
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Could not open the page: $error');
+      return;
+    }
+    if (!mounted) return;
+    _pagePath = page.path;
+    setState(() {
+      _bytes = bytes;
+      _phase = _Phase.analyzing;
+    });
+    _size = await (widget.measureImage ?? _imageSize)(bytes) ?? _size;
+    await _analyze();
+  }
+
+  /// Pixel size of the page. Decoded by the engine, which handles every
+  /// photo format the camera produces; the pure-Dart decoder is only a
+  /// fallback because it fails on some large camera JPEGs.
+  static Future<Size?> _imageSize(Uint8List bytes) async {
+    try {
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final size = Size(descriptor.width.toDouble(),
+          descriptor.height.toDouble());
+      descriptor.dispose();
+      buffer.dispose();
+      if (size.width > 0 && size.height > 0) return size;
+    } catch (_) {
+      // Fall through to the Dart decoder.
+    }
+    try {
       final info = img.findDecoderForData(bytes)?.startDecode(bytes);
-      if (!mounted) return;
-      setState(() {
-        _bytes = bytes;
-        if (info != null && info.width > 0 && info.height > 0) {
-          _size = Size(info.width.toDouble(), info.height.toDouble());
-        }
-        _phase = _Phase.analyzing;
-      });
-      final minimum = Future<void>.delayed(widget.minAnalyzeTime);
-      final lines = await (widget.recognize ?? _recognizeWithMlKit)(
-          bytes, _size);
+      if (info != null && info.width > 0 && info.height > 0) {
+        return Size(info.width.toDouble(), info.height.toDouble());
+      }
+    } catch (_) {
+      // Unknown size: lines are still listed, boxes may be misplaced.
+    }
+    return null;
+  }
+
+  Future<void> _analyze() async {
+    final bytes = _bytes;
+    if (bytes == null) return;
+    unawaited(_sweep.repeat());
+    setState(() {
+      _phase = _Phase.analyzing;
+      _recognitionFailed = false;
+      _selected.clear();
+    });
+    final minimum = Future<void>.delayed(widget.minAnalyzeTime);
+    try {
+      final lines = await (widget.recognize ??
+          (bytes, size) => _recognizeWithMlKit(bytes, size,
+              sourcePath: _undo.isEmpty ? _pagePath : null))(bytes, _size);
       await minimum;
       if (!mounted) return;
       _sweep.stop();
@@ -138,27 +187,40 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
         _lines = lines;
         _phase = _Phase.ready;
       });
-    } catch (_) {
+      if (lines.isEmpty) _showToast('No text found on this page.');
+    } catch (error) {
+      await minimum;
       if (!mounted) return;
       _sweep.stop();
       setState(() {
         _lines = const [];
         _phase = _Phase.ready;
+        _recognitionFailed = true;
       });
-      _showToast('Text recognition is unavailable on this device.');
+      final detail = error.toString();
+      _showToast('Text recognition failed: '
+          '${detail.length > 90 ? '${detail.substring(0, 90)}…' : detail}');
     }
   }
 
+  /// ML Kit reads the page file itself when it is unchanged (as the other
+  /// text tools do); edited pages are written to a temporary file first.
   static Future<List<EditableTextLine>> _recognizeWithMlKit(
-      Uint8List bytes, Size size) async {
-    final dir = await getTemporaryDirectory();
-    final file = File(p.join(dir.path,
-        'ds_edit_text_${DateTime.now().microsecondsSinceEpoch}.png'));
-    await file.writeAsBytes(bytes, flush: true);
+      Uint8List bytes, Size size, {String? sourcePath}) async {
+    File? temp;
+    var path = sourcePath;
+    if (path == null || !File(path).existsSync()) {
+      final dir = await getTemporaryDirectory();
+      final jpeg = bytes.length > 2 && bytes[0] == 0xFF && bytes[1] == 0xD8;
+      temp = File(p.join(dir.path, 'ds_edit_text_'
+          '${DateTime.now().microsecondsSinceEpoch}${jpeg ? '.jpg' : '.png'}'));
+      await temp.writeAsBytes(bytes, flush: true);
+      path = temp.path;
+    }
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final result = await recognizer.processImage(
-          InputImage.fromFilePath(file.path));
+          InputImage.fromFilePath(path));
       return [
         for (final block in result.blocks)
           for (final line in block.lines)
@@ -171,8 +233,18 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
               ), line.text),
       ];
     } finally {
-      unawaited(recognizer.close().catchError((_) {}));
-      unawaited(file.delete().then((_) {}, onError: (_) {}));
+      try {
+        await recognizer.close();
+      } catch (_) {
+        // Closing an unavailable recognizer must not hide the result.
+      }
+      if (temp != null) {
+        try {
+          await temp.delete();
+        } catch (_) {
+          // A leftover temp file is cleaned by the system.
+        }
+      }
     }
   }
 
@@ -472,7 +544,13 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
               onPressed: _redo.isEmpty ? null : _redoStep,
               icon: const Icon(Icons.redo, size: 20),
               color: Colors.white, disabledColor: Colors.white30),
-        ] else if (ready)
+        ] else if (ready && _recognitionFailed)
+          TextButton.icon(
+            key: const Key('edit-text-retry'),
+            onPressed: _phase == _Phase.ready ? _analyze : null,
+            icon: const Icon(Icons.refresh, size: 16, color: dsTeal),
+            label: const Text('Retry', style: TextStyle(color: dsTeal)))
+        else if (ready)
           const Flexible(child: Text('Tap text or image to edit.',
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Color(0xFFFFA726), fontSize: 12))),
