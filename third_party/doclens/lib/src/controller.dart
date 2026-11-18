@@ -9,6 +9,7 @@ import 'ocr.dart';
 import 'platform_interface.dart';
 import 'quad.dart';
 import 'quad_smoother.dart';
+import 'shutter_quad_selector.dart';
 import 'sharpness_tracker.dart';
 import 'stability_tracker.dart';
 import 'status_classifier.dart';
@@ -111,7 +112,17 @@ class DoclensController extends ChangeNotifier {
     if (_disposed) return;
     _lastPaintedQuad = quad;
     _hasPaintedQuad = true;
+    _shutterQuads.record(quad, DateTime.now());
   }
+
+  final ShutterQuadSelector _shutterQuads = ShutterQuadSelector();
+
+  /// The outline a manual shutter press should crop: the painted green box,
+  /// unless it is a brief jump caused by the tap shaking the phone, in which
+  /// case the box that was held steady just before is used.
+  Quad? get shutterGreenQuad => _hasPaintedQuad
+      ? _shutterQuads.select(DateTime.now())
+      : _lastQuad;
 
   DetectionStatus _status = DetectionStatus.searching;
   DetectionStatus get status => _status;
@@ -327,7 +338,7 @@ class DoclensController extends ChangeNotifier {
     try {
       final platform = DoclensPlatform.instance;
       final result = platform is MethodChannelDoclens
-          ? await platform.captureWithDisplayedQuad(visibleGreenQuad)
+          ? await platform.captureWithDisplayedQuad(shutterGreenQuad)
           : await platform.capture();
       _log('autoCapture: native capture succeeded '
           '(cropped=${result.croppedImagePath != null}, '
@@ -383,7 +394,7 @@ class DoclensController extends ChangeNotifier {
       // retain the original interface unchanged.
       if (platform is MethodChannelDoclens) {
         return await platform.captureWithDisplayedQuad(
-          useTapSnapshot ? displayedQuadAtTap : visibleGreenQuad,
+          useTapSnapshot ? displayedQuadAtTap : shutterGreenQuad,
         );
       }
       return await platform.capture();
