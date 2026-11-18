@@ -473,11 +473,12 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
               icon: const Icon(Icons.redo, size: 20),
               color: Colors.white, disabledColor: Colors.white30),
         ] else if (ready)
-          const Text('Tap text or image to edit.',
-              style: TextStyle(color: Color(0xFFFFA726), fontSize: 12)),
+          const Flexible(child: Text('Tap text or image to edit.',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Color(0xFFFFA726), fontSize: 12))),
         const Spacer(),
         if (ready)
-          Text('$_characters characters',
+          Text('$_characters characters', maxLines: 1,
               style: const TextStyle(color: Colors.white60, fontSize: 12)),
       ]),
     ));
@@ -530,20 +531,23 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
   List<Widget> _processingOverlay(Size size, Rect area) => [
     Positioned.fill(child: Container(color: Colors.black45)),
     Positioned(
-      left: (area.center.dx * size.width - 90).clamp(0.0, math.max(0.0, size.width - 180)),
-      top: (area.top * size.height - 40).clamp(0.0, math.max(0.0, size.height - 32)),
-      child: Container(
-        width: 180, height: 32,
+      left: 0, right: 0,
+      top: (area.top * size.height - 40)
+          .clamp(0.0, math.max(0.0, size.height - 32)).toDouble(),
+      child: Center(child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(color: const Color(0xE61E1E21),
             borderRadius: BorderRadius.circular(16)),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
           RotationTransition(turns: _sweep, child: const Icon(
               Icons.auto_awesome, color: dsTeal, size: 16)),
           const SizedBox(width: 6),
-          const Text('DS AI is processing',
-              style: TextStyle(color: Colors.white, fontSize: 12)),
+          const Flexible(child: Text('DS AI is processing', maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white, fontSize: 12))),
         ]),
-      ),
+      )),
     ),
   ];
 
@@ -585,7 +589,7 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
             () => _aiRewrite(single, AiTextTask.polish)),
       ],
     ];
-    const menuWidth = 150.0;
+    const menuWidth = 170.0;
     final menuHeight = single != null ? 236.0 : 84.0;
     final left = (area.center.dx * size.width - menuWidth / 2)
         .clamp(0.0, math.max(0.0, size.width - menuWidth)).toDouble();
@@ -613,8 +617,9 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
       child: Row(children: [
         Icon(icon, size: 17, color: Colors.white),
         const SizedBox(width: 10),
-        Text(label, style: const TextStyle(color: Colors.white,
-            fontSize: 13)),
+        Flexible(child: Text(label, maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 13))),
       ]),
     )),
   );
@@ -849,8 +854,8 @@ class _SaveConfirmDialogState extends State<_SaveConfirmDialog> {
             Checkbox(value: _dontAsk, activeColor: dsTeal,
                 visualDensity: VisualDensity.compact,
                 onChanged: (v) => setState(() => _dontAsk = v ?? false)),
-            const Text("Don't ask again for 7 days",
-                style: TextStyle(color: Colors.white60, fontSize: 12)),
+            const Flexible(child: Text("Don't ask again for 7 days",
+                style: TextStyle(color: Colors.white60, fontSize: 12))),
           ]),
         ),
       ]),
