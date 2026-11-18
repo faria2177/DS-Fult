@@ -1418,7 +1418,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
     // Freeze the *painted* green outline at the button press, BEFORE optional
     // autofocus awaits 300 ms. Otherwise the photo uses a later detector
     // proposal and crops a different polygon than the visible one.
-    final tappedGreen = _controller.visibleGreenQuad;
+    final tappedGreen = _controller.shutterGreenQuad;
     try {
       if (widget.referenceDoubleFocus) {
         await _controller.focusAt(const Offset(.5, .5));

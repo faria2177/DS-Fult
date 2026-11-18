@@ -355,6 +355,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - IdCardScreen: PopScope asks "Discard Scans" when sides are captured but not saved; gallery import and Done show `showProcessingDialog` (Processing… N% x/y) from `scan_dialogs.dart`.
 - Tests: `test/scan_discard_flow_test.dart`.
 
+## v0.5.50 — Ruled-line truncation guard (live box and shutter)
+
+- Field video (notebook, page 02): the live box moved from the full page to a box cut short by a ruled line (~1.5 s, steady), and the shutter cropped that box, losing the bottom third of the page.
+- `isTruncatedPage(inner, outer)` (doclens `truncated_page.dart`): smaller (<85% area) box inside the page that still runs along one of the page's borders. An ID card on a page shares no border and is not matched.
+- QuadSmoother: such a challenger needs `switchConfirmationFrames × 6` frames (default 24) before it replaces the tracked page.
+- ShutterQuadSelector + `DoclensController.shutterGreenQuad`: manual and auto shutter crop the steady full page when the painted box is a truncated version of it that appeared < 1.5 s ago. Native capture still uses exactly the quad Flutter passes.
+- Tests: `test/truncated_page_guard_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

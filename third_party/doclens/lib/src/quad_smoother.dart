@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'quad.dart';
+import 'truncated_page.dart';
 
 /// Sliding-window median filter with document-identity hysteresis.
 ///
@@ -28,6 +29,7 @@ class QuadSmoother {
     this.switchConfirmationFrames = 4,
     this.maxUnmatchedFrames = 6,
     this.switchDistanceThreshold = 0.12,
+    this.truncatedPageConfirmationFactor = 6,
   })  : assert(windowSize > 0 && windowSize.isOdd,
             'windowSize should be odd for a true median'),
         assert(missesBeforeReset > 0),
@@ -43,6 +45,10 @@ class QuadSmoother {
   /// Maximum normalized corner displacement treated as the same document in
   /// a single frame. Quad coordinates are in the `[0, 1]` camera preview.
   final double switchDistanceThreshold;
+
+  /// How many times longer a truncated-page challenger (see
+  /// [isTruncatedPage]) must persist than an ordinary new page.
+  final int truncatedPageConfirmationFactor;
 
   final Queue<Quad> _buffer = Queue<Quad>();
   final Queue<Quad> _challenger = Queue<Quad>();
@@ -137,7 +143,12 @@ class QuadSmoother {
     // more likely to be the chair/table behind a document than the document
     // itself. It may still become the target if it remains consistent for
     // twice as many frames; legitimate page changes are not blocked forever.
-    final requiredFrames = _borderTakeover(quad)
+    // A smaller box inside the tracked page that still runs along one of
+    // its borders is the page cut short by a ruled line, not a new page.
+    // It must persist much longer before it may replace the full page.
+    final requiredFrames = isTruncatedPage(quad, _tracked!)
+        ? switchConfirmationFrames * truncatedPageConfirmationFactor
+        : _borderTakeover(quad)
         ? switchConfirmationFrames * 2
         : switchConfirmationFrames;
     if (_challenger.length >= requiredFrames) {

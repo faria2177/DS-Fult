@@ -11,6 +11,8 @@ export 'src/ocr.dart';
 export 'src/platform_interface.dart' show DoclensPlatform, DetectionEvent;
 export 'src/quad.dart';
 export 'src/quad_smoother.dart';
+export 'src/shutter_quad_selector.dart';
+export 'src/truncated_page.dart';
 export 'src/stability_tracker.dart';
 export 'src/status_classifier.dart';
 export 'src/large_doc/large_doc_aligner.dart';
