@@ -765,6 +765,9 @@ class DocumentEdges {
                 // Rotate on-device if ML Kit is confident, never force 180.
                 autoOrientation: preferIdCardBounds
                     ? AutoOrientation.auto : AutoOrientation.none,
+                // Camera stills (incl. ID Card mode) often include the
+                // card's cast shadow; imported photos keep their outline.
+                trimShadow: !galleryDetectors,
               );
             } catch (error) {
               _log(image, 'native warp failed, trying Dart: $error');

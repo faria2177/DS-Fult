@@ -342,6 +342,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Parser accepts `provider=key`, `Provider: key`, `.env` names (`GEMINI_API_KEY`, `HF_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `export …`, quotes, trailing comments), a provider name followed by its key on the next line, bare keys with a recognisable prefix (AIza, gsk_, sk-or-, hf_, sk-ant-, xai-, sk-proj-), and flat or nested JSON. Unknown or unlabelled keys are reported, never guessed. Cloudflare needs an account ID in the file or already saved.
 - If no usable provider was selected, the first imported AI-capable provider is selected; AI Mode stays off until the user enables it. The success message asks the user to delete the plain-text key file.
 
+## 2026-11-18 — v0.5.48: ID Card mode gets shadow trim and brightening
+
+- User video (ID Cards, business card on a red-brown table): both sides came out grey, and the back side kept a dark strip on its right edge.
+- Cause 1: ID Card captures never use the native shutter crop; they go through `DocumentEdges.autoCropFiles` → `warpImage` (native `ImageWarper.warpFile`), which had no shadow trim (it was only in `ScannerSession`). `warpImage` now takes `trimShadow`; `autoCropFiles` sets it for camera stills (`galleryDetectors: false`), so ID Card sides and camera fallbacks get `ShadowEdgeTrim`; imports do not.
+- Cause 2: `_finishProcessed` skipped the selected scan effect in card mode (`!widget.cardMode`), so cards were never brightened. Card sides now get the selected effect (default Enhance) like other scans; the stored sources remain the unfiltered originals.
+- Perspective: card warps already used `PerspectiveAspect` via `ImageWarper`; the shadow strip was what distorted the visible shape.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

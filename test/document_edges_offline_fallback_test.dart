@@ -21,6 +21,7 @@ class _UnavailableNativeDetector extends DoclensPlatform {
     int jpegQuality = 100,
     ImageEnhancement enhancement = ImageEnhancement.none,
     AutoOrientation autoOrientation = AutoOrientation.none,
+    bool trimShadow = false,
   }) async => throw UnsupportedError('no native perspective transform');
 
   @override

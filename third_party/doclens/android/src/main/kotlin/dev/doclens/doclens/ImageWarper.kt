@@ -133,11 +133,22 @@ object ImageWarper {
         jpegQuality: Int,
         enhancement: String = "none",
         autoOrientation: String = "none",
+        trimShadow: Boolean = false,
     ): String {
         val upright = ExifRotator.decodeUpright(rawPath)
             ?: throw ScannerException.CaptureFailed("Decode failed: $rawPath")
         try {
-            return warp(upright, quad, jpegQuality, enhancement, autoOrientation)
+            // The quad is in the upright photo's pixels, like the warp.
+            val target = if (trimShadow) {
+                try {
+                    ShadowEdgeTrim.trimQuad(quad, upright.width, upright.height) { x, y ->
+                        upright.getPixel(x, y)
+                    }
+                } catch (_: Exception) {
+                    quad
+                }
+            } else quad
+            return warp(upright, target, jpegQuality, enhancement, autoOrientation)
         } finally {
             upright.recycle()
         }
