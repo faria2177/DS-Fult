@@ -156,4 +156,44 @@ void main() {
     expect(find.byKey(const Key('ai-model-row-meta/llama:free')),
         findsOneWidget);
   });
+
+  testWidgets('OpenRouter free models can be added while Gemini is active',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    SharedPreferences.setMockInitialValues({
+      'ai_mode_enabled': true, 'ai_mode_active_provider': 'gemini',
+    });
+    final vault = _Vault()
+      ..secrets['gemini'] = 'g'
+      ..secrets['openrouter'] = 'o';
+    await tester.pumpWidget(MaterialApp(home: AiModeScreen(
+      credentialStore: vault,
+      loadFreeModels: () async => ['google/gemma:free', 'meta/llama:free'],
+    )));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('ai-manage-models')), 300);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-manage-models')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('ai-model-row-gemini-3.5-flash')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ai-open-openrouter-models')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-browse-free-models')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai-select-all-free')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('ai-add-free-models')));
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('ai_models_openrouter'),
+        ['google/gemma:free', 'meta/llama:free']);
+    expect(prefs.getString('ai_mode_active_provider'), 'gemini');
+    expect(find.byKey(const Key('ai-model-row-meta/llama:free')),
+        findsOneWidget);
+  });
 }

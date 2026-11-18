@@ -399,6 +399,11 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - AiEditTextScreen passes the original line text and other line boxes.
 - Tests: `test/text_style_matcher_test.dart`.
 
+## v0.5.56 — Models sheet for every provider
+
+- User request: in Models, add OpenRouter free models even when Gemini is active. Models sheet now has provider chips (OpenRouter, Gemini, Groq), opens on the active provider, "Add OpenRouter free models" shortcut, and "Select all" in the free-model picker. Models tile always visible.
+- Test: Gemini active → add all OpenRouter free models (test/ai_fallback_test.dart).
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

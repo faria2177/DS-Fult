@@ -325,6 +325,16 @@ class _AiModeScreenState extends State<AiModeScreen> {
                     ),
                   ])),
           actions: [
+            TextButton(key: const Key('ai-select-all-free'),
+              onPressed: () => setLocal(() {
+                final rest = free.where((id) => !current.contains(id));
+                if (chosen.length == rest.length) {
+                  chosen.clear();
+                } else {
+                  chosen.addAll(rest);
+                }
+              }),
+              child: const Text('Select all')),
             TextButton(onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel')),
             FilledButton(key: const Key('ai-add-free-models'),
@@ -334,55 +344,83 @@ class _AiModeScreenState extends State<AiModeScreen> {
         )));
   }
 
+  /// Model lists for every provider that supports several models. Opens on
+  /// the active provider, but OpenRouter (and its free models) can be
+  /// filled in whichever provider is active, so auto-switch can use them.
   Future<void> _manageModels() async {
-    final id = _activeId;
-    if (id == null) return;
-    final name = AiProviderCatalog.byId(id)?.name ?? id;
+    final providers = AiProviderCatalog.multiModelProviders.toList()
+      ..sort((a, b) => a == 'openrouter' ? -1 : b == 'openrouter' ? 1
+          : a.compareTo(b));
+    var selected = providers.contains(_activeId) ? _activeId! : 'openrouter';
+    final prefs = await SharedPreferences.getInstance();
+    var models = await AiTextGateway.modelsFor(selected, prefs: prefs);
+    if (!mounted) return;
     await showModalBottomSheet<void>(context: context, isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setLocal) {
-          Future<void> update(List<String> next) async {
-            await _saveModels(id, next);
-            setLocal(() {});
+          Future<void> reload(String id) async {
+            final next = await AiTextGateway.modelsFor(id, prefs: prefs);
+            setLocal(() {
+              selected = id;
+              models = next;
+            });
           }
+          Future<void> update(List<String> next) async {
+            await _saveModels(selected, next);
+            await reload(selected);
+          }
+          final keySaved = _hasKeys[selected] == true;
           return SafeArea(child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Column(mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('$name models', style: const TextStyle(
+              const Text('Models', style: TextStyle(
                   fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              const Text('The first model is used first. If it fails, the '
-                  'next one is tried automatically.',
-                  style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, children: [
+                for (final id in providers) ChoiceChip(
+                  key: Key('ai-models-provider-$id'),
+                  label: Text(AiProviderCatalog.byId(id)?.name
+                      .replaceAll(' (Gemini)', '') ?? id),
+                  selected: selected == id,
+                  onSelected: (_) => reload(id),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text(keySaved
+                  ? 'The first model is used first. If it fails, the next one '
+                    'is tried automatically, then your other providers.'
+                  : 'Save an API key for this provider to use these models.',
+                  style: TextStyle(fontSize: 12,
+                      color: keySaved ? null : Colors.orange)),
               const SizedBox(height: 8),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 300),
                 child: ListView(shrinkWrap: true, children: [
-                  for (var i = 0; i < _models.length; i++) ListTile(
-                    key: Key('ai-model-row-${_models[i]}'),
+                  for (var i = 0; i < models.length; i++) ListTile(
+                    key: Key('ai-model-row-${models[i]}'),
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Text('${i + 1}.'),
-                    title: Text(_models[i]),
+                    title: Text(models[i]),
                     subtitle: i == 0 ? const Text('Main model') : null,
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                       if (i > 0) IconButton(tooltip: 'Use first',
                         icon: const Icon(Icons.vertical_align_top),
-                        onPressed: () => update([_models[i],
-                          for (var k = 0; k < _models.length; k++)
-                            if (k != i) _models[k]])),
-                      if (_models.length > 1) IconButton(tooltip: 'Remove',
+                        onPressed: () => update([models[i],
+                          for (var k = 0; k < models.length; k++)
+                            if (k != i) models[k]])),
+                      if (models.length > 1) IconButton(tooltip: 'Remove',
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => update([
-                          for (var k = 0; k < _models.length; k++)
-                            if (k != i) _models[k]])),
+                          for (var k = 0; k < models.length; k++)
+                            if (k != i) models[k]])),
                     ]),
                   ),
                 ]),
               ),
               const SizedBox(height: 6),
-              Wrap(spacing: 8, children: [
+              Wrap(spacing: 8, runSpacing: 4, children: [
                 OutlinedButton.icon(
                   key: const Key('ai-add-model'),
                   onPressed: () async {
@@ -392,25 +430,31 @@ class _AiModeScreenState extends State<AiModeScreen> {
                       _notice('Invalid model ID.');
                       return;
                     }
-                    if (!_models.contains(model)) {
-                      await update([..._models, model]);
+                    if (!models.contains(model)) {
+                      await update([...models, model]);
                     }
                   },
                   icon: const Icon(Icons.add),
                   label: const Text('Add model')),
-                if (id == 'openrouter') OutlinedButton.icon(
+                if (selected == 'openrouter') OutlinedButton.icon(
                   key: const Key('ai-browse-free-models'),
                   onPressed: () async {
-                    final picked = await _pickFreeModels(_models);
+                    final picked = await _pickFreeModels(models);
                     if (picked == null || picked.isEmpty) return;
-                    await update([..._models, ...picked]);
+                    await update([...models, ...picked]);
                   },
                   icon: const Icon(Icons.travel_explore),
                   label: const Text('Browse free models')),
+                if (selected != 'openrouter') OutlinedButton.icon(
+                  key: const Key('ai-open-openrouter-models'),
+                  onPressed: () => reload('openrouter'),
+                  icon: const Icon(Icons.travel_explore),
+                  label: const Text('Add OpenRouter free models')),
               ]),
             ]),
           ));
         }));
+    await _refresh();
   }
 
   Future<void> _edit(AiProvider provider) async {
@@ -565,15 +609,18 @@ class _AiModeScreenState extends State<AiModeScreen> {
                 _providerTile(provider),
               const SizedBox(height: 18),
               _heading('API health & switching'),
-              if (active != null &&
-                  AiProviderCatalog.multiModelProviders.contains(active.id))
-                Card(child: ListTile(
+              Card(child: ListTile(
                   key: const Key('ai-manage-models'),
                   leading: const Icon(Icons.view_list_outlined, color: dsTeal),
                   title: const Text('Models'),
-                  subtitle: Text('${_models.length} model'
-                      '${_models.length == 1 ? '' : 's'} · tried in order'
-                      '${active.id == 'openrouter' ? ' · add free models' : ''}'),
+                  subtitle: Text(active != null &&
+                          AiProviderCatalog.multiModelProviders
+                              .contains(active.id)
+                      ? '${_models.length} ${active.name} model'
+                        '${_models.length == 1 ? '' : 's'} · add OpenRouter '
+                        'free models too'
+                      : 'Gemini, Groq and OpenRouter models · add OpenRouter '
+                        'free models'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _manageModels,
                 )),
