@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
+import 'text_style_matcher.dart';
+
 /// Offline, OCR-assisted visual text replacement.
 /// Existing glyphs are removed with a local border-colour estimate before the
 /// user-supplied replacement is drawn in Flutter (supports Bengali glyphs).
@@ -86,61 +88,137 @@ class ImageTextProcessor {
     return data.buffer.asUint8List();
   }
 
-  /// Replace one recognized text line so the new words look like the old
-  /// ones: the ink colour and stroke weight are sampled from the original
-  /// glyphs, the font size follows the line height, and a line that was
-  /// centred on the page stays centred (longer text grows to both sides,
-  /// shorter text shrinks only when it would leave the page).
+  /// Font families tried when matching printed text. On Android these are
+  /// system aliases: Roboto, Noto Serif, condensed Roboto and a monospace
+  /// face (typewriter-style forms).
+  static const _families = <String?>[
+    null, 'serif', 'sans-serif-condensed', 'monospace',
+  ];
+  static const _weights = <FontWeight>[FontWeight.w400, FontWeight.w700];
+
+  /// Replace one recognized text line so that the edit cannot be told
+  /// apart from the print around it:
+  /// * only the glyph pixels are removed, the paper keeps its own grain;
+  /// * the font family, weight, height and letter width are chosen by
+  ///   drawing the *original* words in several fonts and keeping the one
+  ///   whose shape matches the printed glyphs best;
+  /// * the new words sit on the original baseline, in the darkest stroke
+  ///   colour of the old words, softened like the scan;
+  /// * left, centred or right alignment follows the neighbouring lines.
   static Future<Uint8List> replaceLine(
     Uint8List original, {
     required Rect normalizedArea,
     required String replacement,
+    String? originalText,
+    List<Rect> neighbors = const [],
   }) async {
-    final sampled = await compute(_eraseLineInIsolate, {
+    final analysis = LineAnalysis.fromMap(await compute(analyzeAndEraseLine, {
       'bytes': original,
       'area': [normalizedArea.left, normalizedArea.top,
         normalizedArea.right, normalizedArea.bottom],
-    });
-    final cleared = sampled['bytes']! as Uint8List;
-    if (replacement.trim().isEmpty) return cleared;
-    final ink = sampled['ink']! as List<int>;
-    final bold = sampled['bold']! as bool;
+    }));
+    if (replacement.trim().isEmpty) return analysis.cleared;
 
-    final codec = await ui.instantiateImageCodec(cleared);
+    final box = analysis.inkBox;
+    final sourceText = (originalText ?? '').trim();
+    var best = _StyleChoice(family: null, weight: FontWeight.w400,
+        sizeScale: box.height * 1.05 / 64, widthScale: 1, score: -1,
+        descent: box.height * .2);
+    if (sourceText.isNotEmpty && box.width > 2 && box.height > 2) {
+      final r = analysis.region;
+      final localBox = Rect.fromLTRB(box.left - r.x, box.top - r.y,
+          box.right - r.x, box.bottom - r.y);
+      for (final family in _families) {
+        for (final weight in _weights) {
+          final raster = await _rasterize(sourceText, family, weight, 64);
+          if (raster == null) continue;
+          final sy = box.height / raster.inkBox.height;
+          final sx = box.width / raster.inkBox.width;
+          final stretch = (math.log(sx / sy)).abs();
+          if (stretch > .45) continue;
+          final score = maskSimilarity(
+            a: analysis.mask, aStride: r.w, aBox: localBox,
+            b: raster.mask, bStride: raster.width, bBox: raster.inkBox,
+          ) - stretch * .35;
+          if (score > best.score) {
+            best = _StyleChoice(family: family, weight: weight,
+              sizeScale: sy, widthScale: sx / sy, score: score,
+              descent: (raster.inkBox.bottom - raster.baseline) * sy);
+          }
+        }
+      }
+    }
+
+    // Measure the replacement drawn in the chosen style.
+    var fontSize = 64 * best.sizeScale;
+    var widthScale = best.widthScale;
+    final measured = await _rasterize(replacement, best.family, best.weight,
+        fontSize);
+    if (measured == null) return analysis.cleared;
+
+    final pageWidth = analysis.imageWidth.toDouble();
+    final normalizedBox = Rect.fromLTRB(box.left / pageWidth,
+        box.top / analysis.imageHeight, box.right / pageWidth,
+        box.bottom / analysis.imageHeight);
+    final alignment = guessAlignment(normalizedBox, neighbors);
+    final margin = pageWidth * .03;
+    final maxWidth = switch (alignment) {
+      LineAlignment.left => pageWidth - box.left - margin,
+      LineAlignment.right => box.right - margin,
+      LineAlignment.center => 2 * (math.min(box.center.dx,
+          pageWidth - box.center.dx) - margin),
+    };
+    var inkWidth = measured.inkBox.width * widthScale;
+    if (inkWidth > maxWidth && inkWidth > 0) {
+      // Too long for the page: narrow the letters a little first, then
+      // shrink, as a typesetter would.
+      final narrow = math.max(.88, maxWidth / inkWidth);
+      widthScale *= narrow;
+      inkWidth *= narrow;
+      if (inkWidth > maxWidth) {
+        final shrink = maxWidth / inkWidth;
+        fontSize *= shrink;
+        inkWidth = maxWidth;
+      }
+    }
+    final scale = fontSize / measured.fontSize;
+    final inkLeft = switch (alignment) {
+      LineAlignment.left => box.left,
+      LineAlignment.right => box.right - inkWidth,
+      LineAlignment.center => box.center.dx - inkWidth / 2,
+    };
+    // Original baseline: bottom of the ink minus the descent of the words.
+    final baseline = box.bottom - best.descent;
+
+    final codec = await ui.instantiateImageCodec(analysis.cleared);
     final frame = await codec.getNextFrame();
     final image = frame.image;
-    final width = image.width.toDouble();
-    final height = image.height.toDouble();
-    final rect = Rect.fromLTRB(
-      normalizedArea.left * width, normalizedArea.top * height,
-      normalizedArea.right * width, normalizedArea.bottom * height);
-    final layout = lineLayout(rect: rect, imageWidth: width);
-
-    var fontSize = math.max(8.0, rect.height * .86);
-    TextPainter build(double size) => TextPainter(
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawImage(image, Offset.zero, Paint());
+    final painter = TextPainter(
       text: TextSpan(text: replacement, style: TextStyle(
-        fontSize: size,
-        color: Color.fromARGB(255, ink[0], ink[1], ink[2]),
-        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+        fontFamily: best.family,
+        fontWeight: best.weight,
+        fontSize: fontSize,
         height: 1.0,
+        foreground: Paint()
+          ..color = Color.fromARGB(255, analysis.ink[0], analysis.ink[1],
+              analysis.ink[2])
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal,
+              analysis.blurSigma * .6),
       )),
       textDirection: TextDirection.ltr,
       maxLines: 1,
     )..layout();
-    var painter = build(fontSize);
-    while (painter.width > layout.maxWidth && fontSize > 8) {
-      fontSize = math.max(8.0, fontSize * layout.maxWidth / painter.width * .98);
-      painter = build(fontSize);
-    }
-    final left = layout.centered
-        ? rect.center.dx - painter.width / 2
-        : rect.left;
-    final top = rect.center.dy - painter.height / 2;
-
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    canvas.drawImage(image, Offset.zero, Paint());
-    painter.paint(canvas, Offset(left, top));
+    final glyphLeft = measured.inkBox.left * scale;
+    final glyphBaseline = measured.baseline * scale;
+    canvas.save();
+    canvas.translate(inkLeft - glyphLeft * widthScale, baseline - glyphBaseline);
+    canvas.scale(widthScale, 1);
+    // The raster was drawn with a 2 px inset; mirror it here.
+    painter.paint(canvas, Offset(_inset * scale, _inset * scale));
+    canvas.restore();
     final output = await recorder.endRecording()
         .toImage(image.width, image.height);
     final data = await output.toByteData(format: ui.ImageByteFormat.png);
@@ -149,6 +227,56 @@ class ImageTextProcessor {
     codec.dispose();
     if (data == null) throw StateError('Could not render image text');
     return data.buffer.asUint8List();
+  }
+
+  static const double _inset = 2;
+
+  /// Draw [text] off-screen and return its glyph mask and metrics.
+  static Future<_Raster?> _rasterize(String text, String? family,
+      FontWeight weight, double fontSize) async {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: TextStyle(fontFamily: family,
+          fontWeight: weight, fontSize: fontSize, height: 1.0,
+          color: const Color(0xFF000000))),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final width = (painter.width + _inset * 2).ceil();
+    final height = (painter.height + _inset * 2).ceil();
+    if (width <= 0 || height <= 0 || width * height > 12000000) return null;
+    final recorder = ui.PictureRecorder();
+    painter.paint(Canvas(recorder), const Offset(_inset, _inset));
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width, height);
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    image.dispose();
+    picture.dispose();
+    if (data == null) return null;
+    final bytes = data.buffer.asUint8List();
+    final mask = Uint8List(width * height);
+    var minX = width;
+    var minY = height;
+    var maxX = -1;
+    var maxY = -1;
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        if (bytes[(y * width + x) * 4 + 3] > 110) {
+          mask[y * width + x] = 1;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return null;
+    return _Raster(
+      mask: mask, width: width, fontSize: fontSize,
+      inkBox: Rect.fromLTRB(minX.toDouble(), minY.toDouble(),
+          maxX + 1.0, maxY + 1.0),
+      baseline: _inset + painter.computeDistanceToActualBaseline(
+          TextBaseline.alphabetic),
+    );
   }
 
   /// Where a replacement line may be drawn. A line whose centre is close to
@@ -274,54 +402,24 @@ Uint8List _eraseBrushInIsolate(Map<String, Object> options) {
   return Uint8List.fromList(img.encodePng(result));
 }
 
-/// Erase a text line and report the colour and weight of its glyphs.
-Map<String, Object> _eraseLineInIsolate(Map<String, Object> options) {
-  final source = img.decodeImage(options['bytes']! as Uint8List);
-  if (source == null) throw const FormatException('Unsupported image');
-  final image = img.bakeOrientation(source);
-  final coords = options['area']! as List<double>;
-  // OCR boxes hug the glyphs; a small pad also removes anti-aliased edges.
-  final pad = math.max(1, ((coords[3] - coords[1]) * image.height * .08).round());
-  final x0 = ((coords[0] * image.width).floor() - pad).clamp(0, image.width - 1);
-  final y0 = ((coords[1] * image.height).floor() - pad).clamp(0, image.height - 1);
-  final x1 = ((coords[2] * image.width).ceil() + pad).clamp(x0 + 1, image.width);
-  final y1 = ((coords[3] * image.height).ceil() + pad).clamp(y0 + 1, image.height);
+class _Raster {
+  const _Raster({required this.mask, required this.width,
+    required this.inkBox, required this.baseline, required this.fontSize});
+  final Uint8List mask;
+  final int width;
+  final Rect inkBox;
+  final double baseline;
+  final double fontSize;
+}
 
-  double luma(img.Pixel p) => .299 * p.r + .587 * p.g + .114 * p.b;
-  // Background brightness: the brightest quarter of the line box.
-  final lumas = <double>[];
-  for (var y = y0; y < y1; y++) {
-    for (var x = x0; x < x1; x++) {
-      lumas.add(luma(image.getPixel(x, y)));
-    }
-  }
-  lumas.sort();
-  final background = lumas[(lumas.length * .75).floor().clamp(0, lumas.length - 1)];
-  var r = 0.0;
-  var g = 0.0;
-  var b = 0.0;
-  var inkCount = 0;
-  for (var y = y0; y < y1; y++) {
-    for (var x = x0; x < x1; x++) {
-      final p = image.getPixel(x, y);
-      if (luma(p) < background - 60) {
-        r += p.r;
-        g += p.g;
-        b += p.b;
-        inkCount++;
-      }
-    }
-  }
-  final ink = inkCount == 0
-      ? <int>[34, 34, 34]
-      : <int>[(r / inkCount).round(), (g / inkCount).round(),
-          (b / inkCount).round()];
-  final coverage = inkCount / lumas.length;
-
-  final erased = _eraseInIsolate({
-    'bytes': Uint8List.fromList(img.encodePng(image)),
-    'area': [x0 / image.width, y0 / image.height,
-      x1 / image.width, y1 / image.height],
-  });
-  return {'bytes': erased, 'ink': ink, 'bold': coverage > .26};
+class _StyleChoice {
+  const _StyleChoice({required this.family, required this.weight,
+    required this.sizeScale, required this.widthScale, required this.score,
+    required this.descent});
+  final String? family;
+  final FontWeight weight;
+  final double sizeScale;
+  final double widthScale;
+  final double score;
+  final double descent;
 }
