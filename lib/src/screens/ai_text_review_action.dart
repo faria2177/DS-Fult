@@ -102,7 +102,7 @@ abstract final class AiTextReviewAction {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (switched && used != null) Padding(
+                if (switched) Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text('Auto-switched to ${used.providerName} '
                     '(${used.modelId}) because ${active.providerName} '
