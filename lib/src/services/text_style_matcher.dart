@@ -123,16 +123,12 @@ Map<String, Object> analyzeAndEraseLine(Map<String, Object> options) {
   final mask = Uint8List(w * h);
   final soft = Uint8List(w * h);
   final paper = <double>[];
-  var darkest = 255.0;
-  var bgSum = 0.0;
   for (var y = y0; y < y1; y++) {
     for (var x = x0; x < x1; x++) {
       final p = image.getPixel(x, y);
       final l = _luma(p.r, p.g, p.b);
       final bg = background(x, y);
       final bl = _luma(bg[0], bg[1], bg[2]);
-      bgSum += bl;
-      darkest = math.min(darkest, l);
       final i = (y - y0) * w + (x - x0);
       if (l < bl - 45) {
         mask[i] = 1;
