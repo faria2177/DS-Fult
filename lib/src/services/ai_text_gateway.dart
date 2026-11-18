@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ai_credential_store.dart';
 import 'ai_provider_catalog.dart';
 
-enum AiTextTask { proofread, tableCleanup }
+enum AiTextTask { proofread, tableCleanup, polish }
 
 class AiTextConfig {
   const AiTextConfig({required this.providerId, required this.providerName,
@@ -85,7 +85,13 @@ class AiTextGateway implements AiTextEngine {
       throw const AiTextException('API key is missing. Add it in Me → AI Mode.');
     }
 
-    final instruction = task == AiTextTask.tableCleanup
+    final instruction = task == AiTextTask.polish
+        ? 'Polish this short line of document text: fix spelling, grammar, '
+          'capitalisation and punctuation and make the wording read '
+          'naturally. Keep the same language, names, numbers and meaning, '
+          'and keep it about the same length. Return only the polished '
+          'line, without quotes, markdown or commentary.'
+        : task == AiTextTask.tableCleanup
         ? 'Correct obvious OCR mistakes in this spreadsheet text. Preserve '
           'every row, newline, tab-separated column and numeric value unless '
           'the original is clearly a recognition error. Do not add a table '

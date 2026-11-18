@@ -20,6 +20,7 @@ import 'batch_crop_screen.dart';
 import 'crop_screen.dart';
 import 'image_text_editor_screen.dart';
 import 'mosaic_screen.dart';
+import 'ai_edit_text_screen.dart';
 import 'pdf_tools_screen.dart';
 import 'scan_dialogs.dart';
 import 'signature_screen.dart';
@@ -159,6 +160,59 @@ class _DocumentScreenState extends State<DocumentScreen> {
     // ImageTextEditor updates the stored page file, not the transcript.
     // Rebuild the underlying preview as soon as editing closes.
     if (mounted) setState(() {});
+  }
+
+  /// CamScanner-style Edit Text with DS AI. The page changes only when the
+  /// user saves; afterwards a small "satisfied?" card is shown.
+  Future<void> _aiEditText() async {
+    final doc = _document;
+    if (doc == null || doc.pages.isEmpty) return;
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(
+      builder: (_) => AiEditTextScreen(store: widget.store,
+          documentId: doc.id, pageId: doc.pages[_index].id),
+    ));
+    if (!mounted) return;
+    setState(() => _askTextFeedback = saved == true);
+  }
+
+  bool _askTextFeedback = false;
+
+  Widget _textFeedbackCard() => Container(
+    key: const Key('edit-text-feedback'),
+    margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    padding: const EdgeInsets.fromLTRB(16, 6, 6, 12),
+    decoration: BoxDecoration(color: const Color(0xFF2C2C2F),
+        borderRadius: BorderRadius.circular(10)),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(children: [
+        const Expanded(child: Text('Are you satisfied with the text editing?',
+            style: TextStyle(color: Colors.white))),
+        IconButton(visualDensity: VisualDensity.compact, tooltip: 'Close',
+            onPressed: () => setState(() => _askTextFeedback = false),
+            icon: const Icon(Icons.close, color: Colors.white54, size: 18)),
+      ]),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(
+          onPressed: _answerTextFeedback,
+          icon: const Icon(Icons.thumb_up_outlined, size: 17),
+          label: const Text('Yes'),
+          style: OutlinedButton.styleFrom(foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white24)))),
+        const SizedBox(width: 10),
+        Expanded(child: OutlinedButton(
+          onPressed: _answerTextFeedback,
+          style: OutlinedButton.styleFrom(foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white24)),
+          child: const Text('No'))),
+        const SizedBox(width: 10),
+      ]),
+    ]),
+  );
+
+  void _answerTextFeedback() {
+    setState(() => _askTextFeedback = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks for your feedback')));
   }
 
   Future<void> _smartErase() async {
@@ -451,7 +505,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
         _editorTool(Icons.picture_as_pdf_outlined, 'DS PDF', _pdfTools),
         _editorTool(Icons.crop_rotate, 'Crop', _crop),
         _editorTool(Icons.tune, 'Filter', () => setState(() => _editTab = 3)),
-        _editorTool(Icons.text_fields, 'Edit Text', _ocr),
+        _editorTool(Icons.text_fields, 'Edit Text', _aiEditText),
         _editorTool(Icons.auto_fix_high, 'Smart Erase', _smartErase),
         _editorTool(Icons.camera_alt_outlined, 'Retake', _retake),
         _editorTool(Icons.draw_outlined, 'Sign', _sign),
@@ -578,6 +632,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
               ),
             ),
           )),
+          if (_askTextFeedback) _textFeedbackCard(),
           if (widget.initialPreview) ...[
             Padding(padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(children: [
