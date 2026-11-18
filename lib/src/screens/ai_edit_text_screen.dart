@@ -338,9 +338,18 @@ class _AiEditTextScreenState extends State<AiEditTextScreen>
       _selected.clear();
     });
     try {
+      // The original words and the other lines let DS AI copy the font,
+      // size, colour and alignment of the print around the edit.
+      final lines = _lines;
       final replace = widget.replace ??
-          (bytes, area, text) => ImageTextProcessor.replaceLine(bytes,
-              normalizedArea: area, replacement: text);
+          (bytes, area, text) {
+            final source = lines.where((l) => l.bounds == area).firstOrNull;
+            return ImageTextProcessor.replaceLine(bytes,
+              normalizedArea: area, replacement: text,
+              originalText: source?.text,
+              neighbors: [for (final l in lines)
+                if (l.bounds != area) l.bounds]);
+          };
       final minimum = Future<void>.delayed(widget.minProcessTime);
       var edited = bytes;
       for (var k = 0; k < indexes.length; k++) {

@@ -392,6 +392,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - AI Mode: Models sheet (add / use first / remove, OpenRouter free model browser from the public /api/v1/models list), Auto-switch switch, Check APIs dialog.
 - Tests: test/ai_fallback_test.dart.
 
+## v0.5.55 — Edit Text blends edits into the print
+
+- `text_style_matcher.dart`: `analyzeAndEraseLine` (glyph mask vs per-column background, rules removed from mask, darkest-35% ink colour, edge softness, paper grain; replaces only glyph pixels + rim with interpolated background + grain), `maskSimilarity`, `guessAlignment` (neighbour lines).
+- `ImageTextProcessor.replaceLine`: renders the original OCR words in Roboto / serif / condensed / monospace × regular / bold, picks the best mask match (penalising stretch), reuses its size, width scale and descent to place the new words on the original baseline with matched alignment, ink colour and slight blur.
+- AiEditTextScreen passes the original line text and other line boxes.
+- Tests: `test/text_style_matcher_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
