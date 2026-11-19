@@ -36,10 +36,10 @@ jobs:
             gh release download "$tag" --pattern '*.apk' --dir "apks/$tag"
           done
           find apks -name '*.apk'
-      - name: Install and launch on Android 13 emulator
+      - name: Install and launch on Android 11 emulator (ARM translation)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: 30
           arch: x86_64
           target: google_apis
           disable-animations: true
