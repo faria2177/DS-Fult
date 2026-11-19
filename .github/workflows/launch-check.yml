@@ -1,0 +1,53 @@
+name: Launch check (emulator)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Release tags to test, space separated
+        required: false
+        default: ""
+  push:
+    branches: [launch-check]
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Download release APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAGS: ${{ github.event.inputs.tags }}
+        run: |
+          mkdir -p apks
+          tags="$TAGS"
+          if [ -z "$tags" ]; then
+            tags="$(gh release list --limit 4 --json tagName -q '.[].tagName' | tr '\n' ' ')"
+          fi
+          echo "TAGS_TO_TEST=$tags" >> "$GITHUB_ENV"
+          for tag in $tags; do
+            gh release download "$tag" --pattern '*.apk' --dir "apks/$tag"
+          done
+          find apks -name '*.apk'
+      - name: Install and launch on Android 13 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/launch_check.sh
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-logs
+          path: launch-logs
