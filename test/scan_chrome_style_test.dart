@@ -53,7 +53,7 @@ void main() {
     addTearDown(tester.view.reset);
     final settings = ReferenceScanSettings();
     addTearDown(settings.dispose);
-    await tester.pumpWidget(bigFont(ReferenceScanChrome(
+    await tester.pumpWidget(bigFont(Scaffold(body: ReferenceScanChrome(
       preview: const ColoredBox(color: Color(0xFF333333)),
       flashMode: FlashMode.auto,
       batchMode: false,
@@ -64,7 +64,7 @@ void main() {
       onBatchChanged: (_) {}, onFinishBatch: () {},
       settings: settings,
       onIdCards: () {},
-    )));
+    ))));
     expect(tester.takeException(), isNull);
     expect(tester.widget<Text>(find.text('Single')).style!.fontSize,
         ScanChromeStyle.modeFont);
