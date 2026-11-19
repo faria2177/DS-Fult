@@ -1,6 +1,7 @@
 import 'package:doclens/doclens.dart';
 import 'package:flutter/material.dart';
 
+import '../services/online_auto_crop_service.dart';
 import '../theme.dart';
 import 'online_auto_crop_settings_screen.dart';
 
@@ -10,7 +11,8 @@ class ScanMoreSettingsScreen extends StatelessWidget {
   final ReferenceScanSettings settings;
 
   @override
-  Widget build(BuildContext context) => Theme(
+  Widget build(BuildContext context) => MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1, child: Theme(
         data: ThemeData.dark(useMaterial3: true).copyWith(
           colorScheme: ColorScheme.fromSeed(
             seedColor: dsTeal,
@@ -30,9 +32,20 @@ class ScanMoreSettingsScreen extends StatelessWidget {
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20, vertical: 8),
-                title: const Text('Online First Auto Crop'),
-                subtitle: const Text('Private HTTPS AI boundary detection; '
-                    'automatic offline fallback'),
+                title: const Text('Online First Auto Crop',
+                    style: TextStyle(fontSize: 15)),
+                // Shows whether it is really in use: it needs the user's own
+                // HTTPS server; without one the offline detector is used.
+                subtitle: FutureBuilder<bool>(
+                  future: OnlineAutoCropConfig.canUpload(),
+                  builder: (context, snapshot) => Text(
+                    snapshot.data == true
+                        ? 'On · your HTTPS server first, offline if it fails'
+                        : 'Off · offline auto crop is used. Tap to set up '
+                          'your own HTTPS server',
+                    style: const TextStyle(color: Color(0xFF99999E),
+                        fontSize: 12)),
+                ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push<void>(
                   MaterialPageRoute(builder: (_) =>
@@ -74,7 +87,7 @@ class ScanMoreSettingsScreen extends StatelessWidget {
             ]),
           ),
         ),
-      );
+      ));
 
   Widget _toggle(String title, String? description, String key) => Material(
         color: const Color(0xFF2A2A2E),

@@ -36,6 +36,7 @@ class CameraScreen extends StatefulWidget {
     this.onOpenIdCards,
     this.onCardSourcePaths,
     this.onOutputSourcePaths,
+    this.onImportFiles,
   });
 
   final bool cardMode;
@@ -50,6 +51,9 @@ class CameraScreen extends StatefulWidget {
   final ValueChanged<List<String>>? onOutputSourcePaths;
   final Future<void> Function(BuildContext context,
       IdCardTemplate template)? onOpenIdCards;
+  /// "Import Files": PDFs or images from phone storage (not the photo
+  /// gallery). Falls back to Import Images when not provided.
+  final Future<void> Function(BuildContext context)? onImportFiles;
 
   /// Only options that reconfigure the native camera belong in this key.
   /// Switching Single/Batch or revealing ID Cards changes Flutter chrome,
@@ -131,6 +135,14 @@ class _CameraScreenState extends State<CameraScreen> {
     _syncLevelStream();
     await _applyOrientation(_settings.orientation);
     if (mounted) setState(() => _ready = true);
+    // More Settings → "Import from Gallery": a single-mode scan starts in
+    // the photo picker instead of the camera.
+    if (mounted && _settings.importFromGallery && !widget.cardMode &&
+        !_batchMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_finished) unawaited(_gallery());
+      });
+    }
   }
 
   Future<void> _applyOrientation(ScanOrientationMode mode) async {
@@ -563,6 +575,24 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  /// Import Files: pause the camera, let the app import a PDF or image
+  /// files, and resume if the scanner is still open afterwards.
+  Future<void> _importFiles() async {
+    if (_processingGallery || _cameraSuspended || _finished) return;
+    await _suspendCamera();
+    if (!mounted) return;
+    try {
+      await widget.onImportFiles!(context);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $error')));
+      }
+    } finally {
+      if (mounted && !_finished) setState(() => _cameraSuspended = false);
+    }
+  }
+
   Future<void> _systemCamera() async {
     if (_cameraSuspended || _finished) return;
     await _suspendCamera();
@@ -764,12 +794,13 @@ class _CameraScreenState extends State<CameraScreen> {
                       _cardLimit != null,
                   referenceScanChrome: !widget.cardMode,
                   referencePickerBuilder: _showIdCards && !widget.cardMode
-                      ? (context, livePreview, cycleFlash) =>
+                      ? (context, livePreview, cycleFlash, flashMode) =>
                           IdCardTemplateChooserContent(
                             selected: _idCardTemplate,
                             onSelect: (type) => setState(() => _idCardTemplate = type),
                             onClose: _returnToScan,
                             onFlash: cycleFlash,
+                            flashMode: flashMode,
                             onHd: _idCardsHd,
                             onSettings: _idCardsSettings,
                             onMakeItNow: _makeSelectedCard,
@@ -805,7 +836,8 @@ class _CameraScreenState extends State<CameraScreen> {
                       _settings.useSystemCamera && !widget.cardMode && !_batchMode
                           ? _systemCamera : null,
                   onBatchModeChanged: _switchMode,
-                  onImportFiles: _gallery,
+                  onImportFiles: widget.onImportFiles == null || widget.cardMode
+                      ? _gallery : _importFiles,
                   onImportImages: _gallery,
                   onManualScan: _manual,
                   onOpenIdCards: _openIdCards,
