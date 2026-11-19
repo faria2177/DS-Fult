@@ -404,6 +404,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - User request: in Models, add OpenRouter free models even when Gemini is active. Models sheet now has provider chips (OpenRouter, Gemini, Groq), opens on the active provider, "Add OpenRouter free models" shortcut, and "Select all" in the free-model picker. Models tile always visible.
 - Test: Gemini active → add all OpenRouter free models (test/ai_fallback_test.dart).
 
+## v0.5.57 — App did not open (jni 1.2.0) + emulator launch check
+
+- User report: v0.5.56 installs but does not open. Emulator test (x86_64 builds, .github launch-check branch) showed `E flutter: Unhandled Exception: ClassNotFoundException "Landroid/content/Context;"` from path_provider_android → package:jni during `DocumentStore.initialize` in main(). Cause: jni 1.2.0 / jni_flutter 1.1.0 published 2026-11-18 22:55Z; v0.5.55 and v0.5.56 resolved them (no pubspec.lock). Also confirmed ML Kit `ComponentDiscovery NoSuchMethodException` on the pre-0.5.54 config.
+- Fix: `dependency_overrides` jni 1.1.2, jni_flutter 1.0.4+1.
+- CI: builds an x86_64 release APK and opens it on an API 33 emulator (`tools/launch_smoke_test.sh`); fails on no process, FATAL/Fatal signal, `E flutter`, or ML Kit registrar errors. Release publishing runs only after it.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

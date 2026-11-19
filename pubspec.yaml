@@ -1,7 +1,7 @@
 name: docscanner
 description: Local-first document scanner with camera, ID copies, PDF and text tools.
 publish_to: none
-version: 0.5.56+70
+version: 0.5.57+71
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
@@ -45,3 +45,13 @@ flutter:
     - assets/tessdata/
     - assets/pptx/blank_template.pptx
     - assets/models/u2netp.onnx
+
+# jni 1.2.0 / jni_flutter 1.1.0 (published 18 Nov 2026) break
+# path_provider_android in release builds: the first getApplicationSupport
+# call fails with ClassNotFoundException "Landroid/content/Context;", so
+# DocumentStore cannot start and the app never opens (v0.5.55, v0.5.56).
+# Keep the last working versions until a fixed jni release is verified by
+# the emulator launch check in CI.
+dependency_overrides:
+  jni: 1.1.2
+  jni_flutter: 1.0.4+1
