@@ -6,74 +6,18 @@ on:
     branches: [launch-check]
 
 jobs:
-  arm64-release:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - name: KVM status
-        run: |
-          ls -l /dev/kvm || echo "no /dev/kvm"
-          sudo chmod 666 /dev/kvm || true
-      - name: Download release APKs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for tag in v0.5.56+70 v0.5.53+67; do
-            gh release download "$tag" --pattern '*.apk' --dir "apks/$tag"
-          done
-      - name: Install and launch release APKs on arm64 emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          arch: arm64-v8a
-          target: google_apis
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: bash tools/launch_release_apks.sh
-
-  x64-upgrade:
+  deps:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: checker
-      - uses: actions/checkout@v4
-        with:
-          ref: 'v0.5.53+67'
-          path: old
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          path: new
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.4'
-          channel: stable
-          cache: true
-      - name: Build old and new x86_64 APKs (same debug key)
+      - name: Recent versions on pub.dev
         run: |
-          for dir in old new; do
-            (cd $dir && bash tool/setup_android.sh && bash tool/download_ocr_models.sh \
-              && flutter pub get && bash tool/patch_tesseract_gradle.sh \
-              && flutter build apk --release --target-platform android-x64)
+          for p in jni jni_flutter path_provider_android path_provider; do
+            echo "== $p"
+            curl -s "https://pub.dev/api/packages/$p" | python3 -c "
+          import sys,json
+          d=json.load(sys.stdin)
+          for v in d['versions'][-5:]:
+              deps=v['pubspec'].get('dependencies',{})
+              print(v['version'], v.get('published'), {k:deps[k] for k in deps if 'jni' in k})
+          "
           done
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Upgrade old → new and launch
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: bash checker/tools/launch_upgrade.sh
