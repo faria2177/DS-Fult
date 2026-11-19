@@ -40,7 +40,7 @@ class ScannerSession(
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val captureExecutor = Executors.newSingleThreadExecutor()
     private val openCvDetector = OpenCvBoundaryAdapter()
-    val salientAssist = LiveSalientAssist()
+    internal val salientAssist = LiveSalientAssist()
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var preview: Preview? = null
