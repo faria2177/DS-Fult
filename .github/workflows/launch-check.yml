@@ -6,20 +6,47 @@ on:
     branches: [launch-check]
 
 jobs:
-  launch:
+  arm64-release:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: KVM status
+        run: |
+          ls -l /dev/kvm || echo "no /dev/kvm"
+          sudo chmod 666 /dev/kvm || true
+      - name: Download release APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in v0.5.56+70 v0.5.53+67; do
+            gh release download "$tag" --pattern '*.apk' --dir "apks/$tag"
+          done
+      - name: Install and launch release APKs on arm64 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: arm64-v8a
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/launch_release_apks.sh
+
+  x64-upgrade:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        ref: [main, 'v0.5.53+67']
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.ref }}
+          path: checker
       - uses: actions/checkout@v4
         with:
-          path: checker
+          ref: 'v0.5.53+67'
+          path: old
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: new
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -29,36 +56,24 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Generate Android host project
-        run: bash tool/setup_android.sh
-      - name: Bundle offline Bengali OCR model
-        run: bash tool/download_ocr_models.sh
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Repair legacy Tesseract Android build script
-        run: bash tool/patch_tesseract_gradle.sh
-      - name: Build x86_64 release APK
-        run: flutter build apk --release --target-platform android-x64
+      - name: Build old and new x86_64 APKs (same debug key)
+        run: |
+          for dir in old new; do
+            (cd $dir && bash tool/setup_android.sh && bash tool/download_ocr_models.sh \
+              && flutter pub get && bash tool/patch_tesseract_gradle.sh \
+              && flutter build apk --release --target-platform android-x64)
+          done
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Install and launch on Android 13 emulator
+      - name: Upgrade old → new and launch
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          APK: build/app/outputs/flutter-apk/app-release.apk
-          TAG: ${{ matrix.ref }}
         with:
           api-level: 33
           arch: x86_64
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: bash checker/tools/launch_check.sh
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-logs-${{ strategy.job-index }}
-          path: launch-logs
+          script: bash checker/tools/launch_upgrade.sh
