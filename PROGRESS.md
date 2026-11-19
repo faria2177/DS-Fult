@@ -410,6 +410,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Fix: `dependency_overrides` jni 1.1.2, jni_flutter 1.0.4+1.
 - CI: builds an x86_64 release APK and opens it on an API 33 emulator (`tools/launch_smoke_test.sh`); fails on no process, FATAL/Fatal signal, `E flutter`, or ML Kit registrar errors. Release publishing runs only after it.
 
+## v0.5.58 — Live salient assist for partly dark cards
+
+- User screenshot 386217.jpg: live green box covered only the white lower half of a bank ID card (dark blue top) on patterned cloth; bright pages worked.
+- `LiveSalientAssist` (Kotlin): runs `SalientMaskEngine.probabilityForRgba` (u2netp, shared net) on a copy of the 384px RGBA analysis frame on its own thread, at most every 450 ms; mask → largest component → approxPolyDP 4 corners; rejects blobs (fill < 88%), non-page sides, angles outside ~63–117°, ≥2 corners on frame edge, area < 3% or > 88%. `combine(edge, salient)`: salient when no edge quad, or when salient is ≥1.22× larger and ≥80% of the edge quad lies inside it; otherwise the edge quad. Results older than 1.1 s are ignored.
+- Model path handed over by `SalientDocumentDetector.enableLiveAssist()` from CameraScreen → plugin `setLiveSalientModel`.
+- Tests: `LiveSalientAssistTest.kt`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

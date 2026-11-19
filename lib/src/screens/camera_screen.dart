@@ -13,6 +13,7 @@ import '../services/document_edges.dart';
 import '../services/gallery_import_flow.dart';
 import '../services/image_processor.dart';
 import '../services/online_auto_crop_service.dart';
+import '../services/salient_document_detector.dart';
 import '../services/scan_settings_store.dart';
 import '../theme.dart';
 import 'batch_crop_screen.dart';
@@ -107,6 +108,7 @@ class _CameraScreenState extends State<CameraScreen> {
   void initState() {
     super.initState();
     unawaited(_prepareSettings());
+    unawaited(SalientDocumentDetector.enableLiveAssist());
   }
 
   Future<void> _prepareSettings() async {

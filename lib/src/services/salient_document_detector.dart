@@ -98,6 +98,22 @@ class SalientDocumentDetector {
     }
   }
 
+  /// Hand the installed model to the live camera so it can recover whole
+  /// cards whose dark half the edge detector misses. Safe to call often.
+  static Future<void> enableLiveAssist() async {
+    try {
+      final modelPath = await (_modelPath ??= _installModel());
+      if (modelPath == null) {
+        _modelPath = null;
+        return;
+      }
+      await _channel.invokeMethod<bool>('setLiveSalientModel',
+          {'modelPath': modelPath});
+    } catch (error) {
+      debugPrint('Live salient assist unavailable: $error');
+    }
+  }
+
   static Future<SalientMask?> _platformMask(String imagePath) async {
     final modelPath = await (_modelPath ??= _installModel());
     if (modelPath == null) {

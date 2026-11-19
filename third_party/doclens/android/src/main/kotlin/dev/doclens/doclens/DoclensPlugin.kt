@@ -61,6 +61,8 @@ class DoclensPlugin :
     private val stillImageExecutor = Executors.newFixedThreadPool(2)
 
     private var session: ScannerSession? = null
+    /** Bundled U²-Net model file for the live whole-object assist. */
+    private var liveSalientModelPath: String? = null
     private var pendingPermissionInit: (() -> Unit)? = null
     private var nativeUIScanner: NativeUIScanner? = null
     private var levelStream: DeviceLevelStream? = null
@@ -218,6 +220,12 @@ class DoclensPlugin :
             "scanWithNativeUI" -> handleNativeUIScan(call, result)
             "detectInImage" -> handleDetectInImage(call, result)
             "salientMask" -> handleSalientMask(call, result)
+            "setLiveSalientModel" -> {
+                liveSalientModelPath = call.argument<String>("modelPath")
+                    ?.takeIf { java.io.File(it).isFile }
+                session?.salientAssist?.modelPath = liveSalientModelPath
+                result.success(liveSalientModelPath != null)
+            }
             "getNativeLibraryStatus" -> result.success(NativeLibraryDiagnostics.status(context))
             else -> result.notImplemented()
         }
@@ -671,6 +679,7 @@ class DoclensPlugin :
             eventSink = { eventStream.send(it) },
         )
         session = s
+        s.salientAssist.modelPath = liveSalientModelPath
         s.start { startResult ->
             startResult.fold(
                 onSuccess = { result.success(it) },

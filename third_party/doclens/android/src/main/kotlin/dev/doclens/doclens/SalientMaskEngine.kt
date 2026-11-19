@@ -17,7 +17,7 @@ import org.opencv.imgproc.Imgproc
  * document corners; nothing leaves the device.
  */
 internal object SalientMaskEngine {
-    private const val SIDE = 320
+    const val SIDE = 320
     private const val EDGE_SIDE = 640.0
     /** Finest-resolution output of the rembg `u2netp.onnx` export. */
     private const val OUTPUT = "1959"
@@ -27,6 +27,71 @@ internal object SalientMaskEngine {
     private var net: Net? = null
     private var loadedModel: String? = null
     private var openCvReady = false
+
+    /**
+     * Probability map (SIDE×SIDE, 0..255) for a live RGBA camera frame.
+     * Shares the loaded network with [run]; both are synchronized.
+     */
+    @Synchronized
+    fun probabilityForRgba(modelPath: String, rgba: ByteArray, width: Int,
+                           height: Int): ByteArray? {
+        if (!openCvReady) {
+            openCvReady = OpenCVLoader.initLocal()
+            if (!openCvReady) return null
+        }
+        if (width <= 0 || height <= 0 || rgba.size != width * height * 4) return null
+        val frame = Mat(height, width, CvType.CV_8UC4)
+        val small = Mat()
+        val flat = Mat(1, 3 * SIDE * SIDE, CvType.CV_32F)
+        var blob: Mat? = null
+        var output: Mat? = null
+        var row: Mat? = null
+        try {
+            frame.put(0, 0, rgba)
+            Imgproc.resize(frame, small, Size(SIDE.toDouble(), SIDE.toDouble()),
+                0.0, 0.0, Imgproc.INTER_AREA)
+            val pixels = ByteArray(SIDE * SIDE * 4)
+            small.get(0, 0, pixels)
+            val plane = SIDE * SIDE
+            val input = FloatArray(plane * 3)
+            for (i in 0 until plane) {
+                val r = pixels[i * 4].toInt() and 0xFF
+                val g = pixels[i * 4 + 1].toInt() and 0xFF
+                val b = pixels[i * 4 + 2].toInt() and 0xFF
+                input[i] = (r / 255f - MEAN[0]) / STD[0]
+                input[plane + i] = (g / 255f - MEAN[1]) / STD[1]
+                input[2 * plane + i] = (b / 255f - MEAN[2]) / STD[2]
+            }
+            flat.put(0, 0, input)
+            blob = flat.reshape(1, intArrayOf(1, 3, SIDE, SIDE))
+            var network = net
+            if (network == null || loadedModel != modelPath) {
+                network = Dnn.readNetFromONNX(modelPath)
+                net = network
+                loadedModel = modelPath
+            }
+            network!!.setInput(blob)
+            output = network.forward(OUTPUT)
+            if (output.total() != plane.toLong()) return null
+            row = output.reshape(1, 1)
+            val values = FloatArray(plane)
+            row.get(0, 0, values)
+            val probability = ByteArray(plane)
+            for (i in 0 until plane) {
+                val v = values[i]
+                val clamped = if (v < 0f) 0f else if (v > 1f) 1f else v
+                probability[i] = (clamped * 255f + 0.5f).toInt().toByte()
+            }
+            return probability
+        } finally {
+            frame.release()
+            small.release()
+            flat.release()
+            blob?.release()
+            output?.release()
+            row?.release()
+        }
+    }
 
     @Synchronized
     fun run(modelPath: String, imagePath: String): Map<String, Any>? {

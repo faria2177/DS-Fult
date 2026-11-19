@@ -40,6 +40,7 @@ class ScannerSession(
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val captureExecutor = Executors.newSingleThreadExecutor()
     private val openCvDetector = OpenCvBoundaryAdapter()
+    internal val salientAssist = LiveSalientAssist()
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var preview: Preview? = null
@@ -297,8 +298,13 @@ class ScannerSession(
             // The last-resort luma detector can also follow a sharp printed
             // line or a coloured half of a notebook. Validate its four outer
             // sides with the SAME safety gate as the OpenCV live detector.
-            val quad = if (config.preferIdCardBounds) detected else
+            val edgeQuad = if (config.preferIdCardBounds) detected else
                 LiveBoundarySelector.choose(detected, null, width, height)
+            // Whole-object outline from the salient model (throttled, own
+            // thread). Recovers cards whose dark half the edge detector
+            // leaves out; see LiveSalientAssist.
+            if (rgba != null) salientAssist.offer(rgba, width, height, now)
+            val quad = LiveSalientAssist.combine(edgeQuad, salientAssist.fresh(now))
             // Rotate quad coordinates into the displayed (rotated) coordinate
             // space so that normalized values match what users see.
             val rotated = quad?.let { rotateNormalizedQuad(it, rotation) }
@@ -687,6 +693,7 @@ class ScannerSession(
     fun dispose() {
         cameraProvider?.unbindAll()
         cameraProvider = null
+        salientAssist.dispose()
         // Analyzer and native mats must not be released while a frame runs.
         analysisExecutor.execute { openCvDetector.release() }
         analysisExecutor.shutdown()
