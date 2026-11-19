@@ -1,6 +1,5 @@
-## DocScanner v0.5.57
+## DocScanner v0.5.58
 
-- 🚑 Fixed: v0.5.55 and v0.5.56 installed but did not open. A library update published on 18 November (jni 1.2.0) broke file-folder access in release builds, so the app could not load your documents at start-up. The app now uses the last working version of that library
-- 🔧 Edit Text OCR: the ML Kit fix from v0.5.54 is confirmed working on start-up
-- ✅ Every new version is now opened on an Android emulator before it is published; if it does not start cleanly, no update is released
-- Your documents are safe: install this APK over the old one (no need to uninstall)
+- 🟩 Scan camera: cards and documents that are partly dark (for example a bank ID card with a dark blue top and a white bottom, lying on a patterned cloth) are now boxed as a whole. Before, the green box only covered the bright part
+- How: the on-device object model that already powers gallery auto-crop now also checks the live camera a few times per second; when the edge detector has only found the bright part of an object, the box grows to the whole object
+- Bright white pages are boxed exactly as before
