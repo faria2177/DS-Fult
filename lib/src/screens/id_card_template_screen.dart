@@ -213,6 +213,7 @@ class _IdCardTemplateScreenState extends State<IdCardTemplateScreen>
     onSelect: (choice) => setState(() => _selected = choice),
     onClose: () => Navigator.pop(context),
     onFlash: _toggleFlash,
+    flashMode: _flash ? FlashMode.torch : FlashMode.off,
     onHd: _showHdModes,
     onSettings: _showSettings,
     onMakeItNow: _makeItNow,
@@ -236,6 +237,7 @@ class IdCardTemplateChooserContent extends StatelessWidget {
     this.preview,
     this.nativePreview = false,
     this.busy = false,
+    this.flashMode = FlashMode.off,
   });
 
   final IdCardTemplate selected;
@@ -250,22 +252,39 @@ class IdCardTemplateChooserContent extends StatelessWidget {
   /// makes the ID Cards preview jump or look stretched on mode changes.
   final bool nativePreview;
   final bool busy;
+  /// Current flash state, so the icon matches what the camera does.
+  final FlashMode flashMode;
+
+  IconData get _flashIcon => switch (flashMode) {
+        FlashMode.off => Icons.flash_off,
+        FlashMode.auto => Icons.flash_auto,
+        FlashMode.on => Icons.flash_on,
+        FlashMode.torch => Icons.highlight,
+      };
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => ScanChromeStyle.clampText(context,
+    Scaffold(
     backgroundColor: Colors.black,
     body: SafeArea(child: Column(children: [
-      SizedBox(height: 62, child: Row(children: [
+      SizedBox(height: 56, child: Row(children: [
         IconButton(tooltip: 'Close ID Cards', onPressed: onClose,
-          icon: const Icon(Icons.close, color: Colors.white, size: 30)),
+          icon: const Icon(Icons.close, color: Colors.white,
+              size: ScanChromeStyle.closeIcon)),
         const Spacer(),
         IconButton(tooltip: 'Flash', onPressed: onFlash,
-          icon: const Icon(Icons.flash_off, color: Colors.white)),
-        TextButton(onPressed: onHd, child: const Text('HD', style: TextStyle(
-          color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17))),
+          icon: Icon(_flashIcon, color: Colors.white,
+              size: ScanChromeStyle.topIcon)),
+        const SizedBox(width: ScanChromeStyle.topIconGap),
+        InkWell(onTap: onHd, child: const SizedBox(width: 44, height: 44,
+          child: Center(child: Text('HD', style: TextStyle(
+            color: Colors.white, fontWeight: FontWeight.w900,
+            fontSize: ScanChromeStyle.hdFont))))),
+        const SizedBox(width: ScanChromeStyle.topIconGap),
         IconButton(tooltip: 'Settings', onPressed: onSettings,
-          icon: const Icon(Icons.more_vert, color: Colors.white)),
-        const SizedBox(width: 8),
+          icon: const Icon(Icons.more_horiz, color: Colors.white,
+              size: ScanChromeStyle.topIcon)),
+        const SizedBox(width: 7),
       ])),
       Expanded(child: LayoutBuilder(builder: (context, constraints) {
         final height = constraints.maxHeight;
@@ -293,11 +312,11 @@ class IdCardTemplateChooserContent extends StatelessWidget {
                 'Create and share ID copies for various situations, including '
                 'banking, administration, and more.  Learn more >',
                 maxLines: 3,
-                style: TextStyle(fontSize: 12.5, color: Colors.white,
-                  height: 1.25),
+                style: TextStyle(fontSize: ScanChromeStyle.bodyFont,
+                  color: Colors.white, height: 1.3),
               )),
-              const SizedBox(height: 15),
-              SizedBox(height: 48, child: ListView.separated(
+              const SizedBox(height: 14),
+              SizedBox(height: 42, child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: IdCardTemplate.values.length,
                 separatorBuilder: (_, index) => const SizedBox(width: 8),
@@ -318,14 +337,17 @@ class IdCardTemplateChooserContent extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(type.label, textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12.5,
+                        maxLines: 2,
+                        style: TextStyle(fontSize: ScanChromeStyle.chipFont,
+                          height: 1.1,
                           color: active ? Colors.black : Colors.white)),
                     ),
                   );
                 },
               )),
-              const SizedBox(height: 19),
-              SizedBox(width: double.infinity, height: 47,
+              const SizedBox(height: 16),
+              SizedBox(width: double.infinity,
+                height: ScanChromeStyle.buttonHeight,
                 child: FilledButton(
                   key: const Key('id-make-it-now'),
                   onPressed: busy ? null : onMakeItNow,
@@ -333,36 +355,19 @@ class IdCardTemplateChooserContent extends StatelessWidget {
                     foregroundColor: Colors.white,
                     shape: const StadiumBorder()),
                   child: Text(busy ? 'Opening camera…' : 'Make it now',
-                    style: const TextStyle(fontSize: 19)),
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: ScanChromeStyle.buttonFont,
+                      fontWeight: FontWeight.w600)),
                 ),
               ),
             ]),
           ),
         ]);
       })),
-      SizedBox(height: 48, child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-        _nav('Scan', false, onClose),
-        _nav('ID Cards', true, null),
-      ])),
+      ScanModeTabs(idCardsSelected: true, accent: dsTeal, onScan: onClose),
+      const SizedBox(height: 6),
     ])),
-  );
-
-  Widget _nav(String label, bool active, VoidCallback? action) => SizedBox(
-    width: 134,
-    child: InkWell(onTap: action,
-      child: Column(children: [
-        Container(width: 24, height: 3,
-          color: active ? dsTeal : Colors.transparent),
-        const SizedBox(height: 7),
-        Text(label, textAlign: TextAlign.center, maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 10.5,
-            color: active ? dsTeal : Colors.white70)),
-      ]),
-    ),
-  );
+  ));
 }
 
 class _CameraFallback extends StatelessWidget {

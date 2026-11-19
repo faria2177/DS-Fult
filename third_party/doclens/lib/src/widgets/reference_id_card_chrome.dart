@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import 'reference_scan_settings.dart';
+import 'scan_chrome_style.dart';
 
 /// White-corner alignment guides used only for ID Card template capture.
 /// The live contour detector continues running underneath these guides.
@@ -63,7 +64,7 @@ class ReferenceIdCardChrome extends StatelessWidget {
     final footerHeight = (media.size.height * .245)
         .clamp(165.0, 260.0).toDouble();
 
-    return AnimatedBuilder(
+    return ScanChromeStyle.clampText(context, AnimatedBuilder(
       animation: settings,
       builder: (context, _) => Material(
         color: Colors.black,
@@ -73,17 +74,23 @@ class ReferenceIdCardChrome extends StatelessWidget {
               child: Padding(padding: EdgeInsets.only(top: top),
                 child: Row(children: [
                   IconButton(tooltip: 'Close card camera', onPressed: onClose,
-                    icon: const Icon(Icons.close, color: Colors.white, size: 29)),
+                    icon: const Icon(Icons.close, color: Colors.white,
+                        size: ScanChromeStyle.closeIcon)),
                   const Spacer(),
                   IconButton(tooltip: 'Flash', onPressed: onFlash,
-                    icon: Icon(_flashIcon, color: Colors.white, size: 26)),
+                    icon: Icon(_flashIcon, color: Colors.white,
+                        size: ScanChromeStyle.topIcon)),
+                  const SizedBox(width: ScanChromeStyle.topIconGap),
                   IconButton(tooltip: 'HD', onPressed: () =>
                       settings.togglePanel(ScanCameraPanel.hd),
                     icon: const Text('HD', style: TextStyle(color: Colors.white,
-                      fontSize: 16, fontWeight: FontWeight.w900))),
+                      fontSize: ScanChromeStyle.hdFont,
+                      fontWeight: FontWeight.w900))),
+                  const SizedBox(width: ScanChromeStyle.topIconGap),
                   IconButton(tooltip: 'Settings',
                     onPressed: () => settings.togglePanel(ScanCameraPanel.settings),
-                    icon: const Icon(Icons.more_vert, color: Colors.white)),
+                    icon: const Icon(Icons.more_horiz, color: Colors.white,
+                        size: ScanChromeStyle.topIcon)),
                   const SizedBox(width: 6),
                 ]),
               ),
@@ -117,21 +124,23 @@ class ReferenceIdCardChrome extends StatelessWidget {
                     : (side == 'General' ? 'Fit it into the borders' : side),
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white,
-                      fontSize: 14.5)),
+                      fontSize: ScanChromeStyle.hintFont)),
                 )),
               ),
             ])),
             SizedBox(height: footerHeight,
               child: Padding(padding: EdgeInsets.only(bottom: bottom),
                 child: Column(children: [
-                  Container(height: 4, width: 26, color: accent),
-                  const SizedBox(height: 9),
-                  Text(label, style: TextStyle(color: accent, fontSize: 16)),
+                  Container(height: 3, width: 26, color: accent),
+                  const SizedBox(height: 8),
+                  Text(label, style: TextStyle(color: accent,
+                      fontSize: ScanChromeStyle.tabFont)),
                   Expanded(child: Row(children: [
                     Expanded(child: Center(child: IconButton(
                       tooltip: 'Back to ID Cards',
                       onPressed: onClose,
-                      icon: const Icon(Icons.undo, size: 30, color: Colors.white),
+                      icon: const Icon(Icons.undo,
+                          size: ScanChromeStyle.actionIcon, color: Colors.white),
                     ))),
                     SizedBox(width: 116,
                       child: Center(child: GestureDetector(
@@ -157,14 +166,15 @@ class ReferenceIdCardChrome extends StatelessWidget {
                           Icon(waitingForBack ? Icons.check_circle_outline
                               : pagesCaptured > 0 ? Icons.photo_library_outlined
                               : Icons.add_photo_alternate_outlined,
-                            size: 27,
+                            size: ScanChromeStyle.actionIcon,
                             color: waitingForBack ? accent : Colors.white),
                           const SizedBox(height: 4),
                           Text(waitingForBack ? '$pagesCaptured/2 captured'
                               : pagesCaptured > 0 ? '$pagesCaptured  Done'
                               : 'Import Images',
                             style: const TextStyle(
-                              color: Colors.white, fontSize: 11.5)),
+                              color: Colors.white,
+                              fontSize: ScanChromeStyle.actionFont)),
                         ],
                       ),
                     )),
@@ -179,7 +189,7 @@ class ReferenceIdCardChrome extends StatelessWidget {
             ),
         ]),
       ),
-    );
+    ));
   }
 
   Widget _optionsPanel(BuildContext context) {
@@ -189,7 +199,8 @@ class ReferenceIdCardChrome extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 310),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Padding(padding: EdgeInsets.all(12), child: Text('HD Resolution',
-              style: TextStyle(color: Colors.white, fontSize: 16))),
+              style: TextStyle(color: Colors.white,
+                  fontSize: ScanChromeStyle.panelTitleFont))),
             if (cameraModes.isEmpty)
               const Padding(padding: EdgeInsets.all(12),
                 child: Text('Automatic (device default)',
@@ -223,7 +234,8 @@ class ReferenceIdCardChrome extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Row(children: [
               const Text('Settings', style: TextStyle(
-                color: Colors.white, fontSize: 19)),
+                color: Colors.white, fontSize: ScanChromeStyle.panelTitleFont,
+                fontWeight: FontWeight.w600)),
               const Spacer(),
               IconButton(onPressed: settings.closePanel,
                 icon: const Icon(Icons.close, color: Colors.white)),

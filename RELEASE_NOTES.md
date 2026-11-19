@@ -1,5 +1,7 @@
-## DocScanner v0.5.58
+## DocScanner v0.5.59
 
-- 🟩 Scan camera: cards and documents that are partly dark (for example a bank ID card with a dark blue top and a white bottom, lying on a patterned cloth) are now boxed as a whole. Before, the green box only covered the bright part
-- How: the on-device object model that already powers gallery auto-crop now also checks the live camera a few times per second; when the edge detector has only found the bright part of an object, the box grows to the whole object
-- Bright white pages are boxed exactly as before
+- 🔤 Scan and ID Cards screens: one set of smaller, even text and icon sizes (top icons, HD, Single/Batch, Scan/ID Cards, Import Files/Images, Make it now), and a large phone font size no longer blows them up — "Make it now" fits its button again
+- 🔁 ID Cards screen uses the same Scan / ID Cards tabs and ⋯ menu icon as Scan; its flash icon now shows the real flash state
+- 📄 Scan → **Import Files** now imports PDFs or image files from phone storage (it used to open the photo gallery, same as Import Images)
+- 🖼️ More Settings → **Import from Gallery** now works: a single-mode scan opens the photo picker straight away
+- ℹ️ More Settings → **Online First Auto Crop** now says whether it is really on (it needs your own HTTPS server; otherwise offline auto crop is used)

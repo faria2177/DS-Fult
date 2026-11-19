@@ -117,6 +117,7 @@ class _HomeShellState extends State<HomeShell> {
         MaterialPageRoute(builder: (_) => CameraScreen(
           onOutputSourcePaths: (sources) =>
               rawSourcePaths = List<String>.of(sources),
+          onImportFiles: _importFilesFromScanner,
           onOpenIdCards: (scannerContext, template) =>
               Navigator.of(scannerContext).push<void>(
             MaterialPageRoute(builder: (_) => IdCardScreen(
@@ -161,6 +162,25 @@ class _HomeShellState extends State<HomeShell> {
     if (ids == null || ids.isEmpty || !mounted) return;
     final document = widget.store.byId(ids.first);
     if (document != null) await _open(document.id);
+  }
+
+  /// Scanner → Import Files: same PDF/image file import as Tools → Import
+  /// File. On success the scanner closes and the new document opens.
+  Future<void> _importFilesFromScanner(BuildContext scannerContext) async {
+    final ids = await Navigator.of(scannerContext).push<List<String>>(
+      MaterialPageRoute(builder: (_) => VideoToolSourcePicker(
+        store: widget.store,
+        title: 'Import Files',
+        description: 'Import a PDF or images from your phone, offline.',
+        icon: Icons.upload_file_outlined,
+        allowPdf: true,
+        importsOnly: true,
+      )),
+    );
+    if (ids == null || ids.isEmpty || !scannerContext.mounted) return;
+    Navigator.of(scannerContext).pop();
+    final document = widget.store.byId(ids.first);
+    if (document != null && mounted) await _open(document.id);
   }
 
   Future<void> _create(List<String> paths, {List<String>? originalPaths}) async {

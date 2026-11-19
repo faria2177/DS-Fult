@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import 'reference_scan_settings.dart';
+import 'scan_chrome_style.dart';
 
 /// Camera-only chrome for DocScanner's Scan tab. The preview stays in its
 /// own rectangular viewport; all controls live outside that viewport so a
@@ -73,7 +74,7 @@ class ReferenceScanChrome extends StatelessWidget {
     final headerHeight = (height * 0.127).clamp(topInset + 54, 128.0).toDouble();
     final footerHeight = (height * 0.254).clamp(174.0, 265.0).toDouble();
 
-    return AnimatedBuilder(
+    return ScanChromeStyle.clampText(context, AnimatedBuilder(
       animation: settings,
       builder: (context, _) => ColoredBox(
       color: Colors.black,
@@ -89,36 +90,41 @@ class ReferenceScanChrome extends StatelessWidget {
                 IconButton(
                   tooltip: 'Close scanner',
                   onPressed: onClose,
-                  icon: const Icon(Icons.close, color: Colors.white, size: 31),
+                  icon: const Icon(Icons.close, color: Colors.white,
+                      size: ScanChromeStyle.closeIcon),
                 ),
                 const Spacer(),
                 IconButton(
                   tooltip: 'Flash',
                   onPressed: onFlash,
-                  icon: Icon(_flashIcon, color: Colors.white, size: 26),
+                  icon: Icon(_flashIcon, color: Colors.white,
+                      size: ScanChromeStyle.topIcon),
                 ),
-                const SizedBox(width: 13),
+                const SizedBox(width: ScanChromeStyle.topIconGap),
                 IconButton(
                   tooltip: 'Effects',
                   onPressed: () => settings.togglePanel(ScanCameraPanel.effects),
-                  icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 27),
+                  icon: const Icon(Icons.auto_awesome, color: Colors.white,
+                      size: ScanChromeStyle.topIcon),
                 ),
-                const SizedBox(width: 13),
+                const SizedBox(width: ScanChromeStyle.topIconGap),
                 InkWell(
                   onTap: () => settings.togglePanel(ScanCameraPanel.hd),
                   child: const SizedBox(
-                    width: 43,
-                    height: 45,
+                    width: 44,
+                    height: 44,
                     child: Center(
                       child: Text('HD', style: TextStyle(
-                        color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                        color: Colors.white, fontSize: ScanChromeStyle.hdFont,
+                        fontWeight: FontWeight.w900)),
                     ),
                   ),
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: ScanChromeStyle.topIconGap),
                 IconButton(
                   tooltip: 'Scanner Settings',
-                  icon: const Icon(Icons.more_horiz, color: Colors.white, size: 27),
+                  icon: const Icon(Icons.more_horiz, color: Colors.white,
+                      size: ScanChromeStyle.topIcon),
                   onPressed: () => settings.togglePanel(ScanCameraPanel.settings),
                 ),
                 const SizedBox(width: 7),
@@ -183,14 +189,8 @@ class ReferenceScanChrome extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(bottom: bottomInset),
             child: Column(children: [
-              SizedBox(
-                height: 45,
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _tab('Scan', true, null),
-                  const SizedBox(width: 42),
-                  _tab('ID Cards', false, onIdCards),
-                ]),
-              ),
+              ScanModeTabs(idCardsSelected: false, accent: accent,
+                  onIdCards: onIdCards),
               Expanded(child: Row(children: [
                 Expanded(child: _importAction(
                   Icons.insert_drive_file_outlined, 'Import Files', onImportFiles)),
@@ -224,7 +224,8 @@ class ReferenceScanChrome extends StatelessWidget {
                 Expanded(child: batchMode && pageCount > 0
                   ? TextButton(
                       onPressed: onFinishBatch,
-                      child: Text('Done ($pageCount)', style: TextStyle(color: accent)),
+                      child: Text('Done ($pageCount)', style: TextStyle(
+                        color: accent, fontSize: ScanChromeStyle.hintFont)),
                     )
                   : _importAction(
                       Icons.add_photo_alternate_outlined, 'Import\nImages', onImportImages)),
@@ -242,7 +243,7 @@ class ReferenceScanChrome extends StatelessWidget {
           ),
       ]),
     ),
-    );
+    ));
   }
 
   Widget _mode(String label, bool isBatch) {
@@ -251,43 +252,26 @@ class ReferenceScanChrome extends StatelessWidget {
       borderRadius: BorderRadius.circular(23),
       onTap: selected ? null : () => onBatchChanged(isBatch),
       child: Container(
-        width: 82,
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        width: ScanChromeStyle.modeWidth,
+        padding: const EdgeInsets.symmetric(vertical: 7),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF777777) : Colors.transparent,
           borderRadius: BorderRadius.circular(23),
         ),
         child: Text(label, textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontSize: 14)),
+          style: const TextStyle(color: Colors.white,
+              fontSize: ScanChromeStyle.modeFont)),
       ),
     );
   }
 
-  Widget _tab(String name, bool selected, VoidCallback? onTap) => InkWell(
-    onTap: onTap,
-    child: Column(mainAxisAlignment: MainAxisAlignment.start, children: [
-      Container(
-        width: 28,
-        height: 4,
-        decoration: BoxDecoration(
-          color: selected ? accent : Colors.transparent,
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(4)),
-        ),
-      ),
-      const SizedBox(height: 7),
-      Text(name, style: TextStyle(
-        color: selected ? accent : const Color(0xFFE0E0E0), fontSize: 17,
-      )),
-    ]),
-  );
-
   Widget _importAction(IconData icon, String label, VoidCallback? onTap) => InkWell(
     onTap: onTap,
     child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 29, color: Colors.white),
-      const SizedBox(height: 4),
+      Icon(icon, size: ScanChromeStyle.actionIcon, color: Colors.white),
+      const SizedBox(height: 5),
       Text(label, textAlign: TextAlign.center, style: const TextStyle(
-        color: Colors.white, fontSize: 12.5, height: 1.15,
+        color: Colors.white, fontSize: ScanChromeStyle.actionFont, height: 1.15,
       )),
     ])),
   );
@@ -453,7 +437,8 @@ class ReferenceScanChrome extends StatelessWidget {
             const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
             const SizedBox(width: 9),
             const Text('Settings', style: TextStyle(
-              color: Colors.white, fontSize: 19, fontWeight: FontWeight.w600)),
+              color: Colors.white, fontSize: ScanChromeStyle.panelTitleFont,
+              fontWeight: FontWeight.w600)),
             const Spacer(),
             IconButton(
               tooltip: 'Close Settings',
@@ -487,10 +472,12 @@ class ReferenceScanChrome extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              Text(label, style: const TextStyle(color: Colors.white,
+                  fontSize: ScanChromeStyle.settingFont)),
               const SizedBox(height: 3),
               Text(settings.flag(key) ? 'On' : 'Off',
-                style: TextStyle(color: accent, fontSize: 13)),
+                style: TextStyle(color: accent,
+                    fontSize: ScanChromeStyle.settingValueFont)),
             ],
           )),
           Switch(
@@ -507,13 +494,15 @@ class ReferenceScanChrome extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Orientation', style: TextStyle(color: Colors.white, fontSize: 14)),
+              const Text('Orientation', style: TextStyle(color: Colors.white,
+                  fontSize: ScanChromeStyle.settingFont)),
               const SizedBox(height: 3),
               Text(switch (settings.orientation) {
                 ScanOrientationMode.auto => 'Auto',
                 ScanOrientationMode.portrait => 'Vertical',
                 ScanOrientationMode.landscape => 'Horizontal',
-              }, style: TextStyle(color: accent, fontSize: 13)),
+              }, style: TextStyle(color: accent,
+                  fontSize: ScanChromeStyle.settingValueFont)),
             ],
           )),
           for (final choice in ScanOrientationMode.values)

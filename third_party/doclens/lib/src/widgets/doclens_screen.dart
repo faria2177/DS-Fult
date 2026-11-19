@@ -409,7 +409,7 @@ class DoclensScreen extends StatefulWidget {
   /// Optional in-place mode picker that shares the existing live CameraX
   /// session. Switching picker/Scan chrome does not dispose the controller.
   final Widget Function(BuildContext context, Widget livePreview,
-      VoidCallback cycleFlash)? referencePickerBuilder;
+      VoidCallback cycleFlash, FlashMode flashMode)? referencePickerBuilder;
   /// A dedicated capture frame only for ID Card template flows.
   final bool referenceIdCardChrome;
   /// For confirmed two-sided ID templates only, take Front then Back in the
@@ -1309,6 +1309,7 @@ class _DoclensScreenState extends State<DoclensScreen> {
         animation: _controller,
         builder: (context, _) => widget.referencePickerBuilder!(
           context, _plainCameraView(), _controller.cycleFlashMode,
+          _controller.flashMode,
         ),
       );
 

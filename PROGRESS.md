@@ -417,6 +417,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Model path handed over by `SalientDocumentDetector.enableLiveAssist()` from CameraScreen → plugin `setLiveSalientModel`.
 - Tests: `LiveSalientAssistTest.kt`.
 
+## v0.5.59 — Camera chrome sizes, option audit
+
+- User screenshots: large system font made Scan/ID Cards text big and clipped "Make it now". New `ScanChromeStyle` (doclens) with shared sizes + `MediaQuery.withClampedTextScaling(max 1.0)`; `ScanModeTabs` shared by Scan chrome and ID Cards chooser; ID chrome/chooser use more_horiz and real flash state (`referencePickerBuilder` now also passes FlashMode).
+- Option audit: Import Files called the photo gallery → now `CameraScreen.onImportFiles` (HomeShell opens the PDF/image file importer, closes the scanner, opens the document). "Import from Gallery" flag was unused → single-mode scan opens the photo picker on start. Online First subtitle shows real status. Other options (flash, effects, HD, auto capture, orientation, grid, sound, spirit level, auto crop, batch, auto adjust borders, adjust after each scan, start with camera, system camera, save to gallery, double focus) are wired.
+- "Glossy effect" text seen over the settings popup is not from DocScanner (no such string in the app).
+- Tests: `test/scan_chrome_style_test.dart`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
