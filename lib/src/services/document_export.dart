@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
+import 'native_pdf_codec.dart';
 
 class DocumentExport {
   static const MethodChannel _galleryChannel = MethodChannel('doclens/methods');
@@ -52,9 +53,20 @@ class DocumentExport {
       ]);
     }
 
-    Future<pw.MemoryImage> readImage(ScanPage page) async {
+    Future<pw.ImageProvider> readImage(ScanPage page) async {
+      // Black-and-white pages become 1-bit CCITT G4 (libds_pdfcodec.so):
+      // typically 10–20× smaller than JPEG and sharper. A compressed export
+      // accepts slightly greyer pages.
+      final bilevel = await NativePdfCodec.bilevelPage(page.path,
+          minShare: imageQuality == null ? .97 : .95);
+      if (bilevel != null) {
+        return pw.ImageProxy(NativePdfCodec.pdfImage(pdf.document, bilevel));
+      }
       final original = await File(page.path).readAsBytes();
       if (imageQuality == null) return pw.MemoryImage(original);
+      final native = await NativePdfCodec.compactJpeg(page.path,
+          maxSide: 1700, quality: imageQuality);
+      if (native != null && native.isNotEmpty) return pw.MemoryImage(native);
       final compact = await compute(_compactImage, {
         'bytes': original,
         'quality': imageQuality,
@@ -76,7 +88,7 @@ class DocumentExport {
         ));
       }
     } else if (document.kind.twoSided) {
-      final pictures = <pw.MemoryImage>[];
+      final pictures = <pw.ImageProvider>[];
       for (final page in document.pages.take(2)) {
         pictures.add(await readImage(page));
       }

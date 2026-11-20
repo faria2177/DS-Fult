@@ -237,6 +237,26 @@ class DoclensPlugin :
                     mainHandler.post { result.success(out) }
                 }
             }
+            "pdfBilevelPage" -> {
+                val path = call.argument<String>("imagePath")
+                val minShare = call.argument<Double>("minShare") ?: .95
+                val maxColour = call.argument<Double>("maxColour") ?: .002
+                if (path == null) { result.success(null); return }
+                stillImageExecutor.execute {
+                    val out = NativePdfCodec.bilevelPage(path, minShare, maxColour)
+                    mainHandler.post { result.success(out) }
+                }
+            }
+            "nativeCompactJpeg" -> {
+                val path = call.argument<String>("imagePath")
+                val maxSide = call.argument<Int>("maxSide") ?: 1700
+                val quality = call.argument<Int>("quality") ?: 80
+                if (path == null) { result.success(null); return }
+                stillImageExecutor.execute {
+                    val out = NativePdfCodec.compactJpeg(path, maxSide, quality)
+                    mainHandler.post { result.success(out) }
+                }
+            }
             "nativePaperRegion" -> {
                 val path = call.argument<String>("imagePath")
                 if (path == null) { result.success(null); return }

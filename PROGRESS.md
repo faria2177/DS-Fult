@@ -460,6 +460,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Dart SalientDocumentDetector: DocNet outline used when edge-confirmed; otherwise U²-Net runs and a confirmed outline from either wins (no regression path).
 - CI: APK must contain libds_docnet.so and assets/docnet/*.
 
+## v0.5.65 — Native library phase 3: libds_pdfcodec.so (CCITT G4 PDF pages)
+
+- ds_pdf_codec.{h,cpp}: own T.6 (Group 4) encoder with EOFB, MSB first; output verified byte-identical to libtiff's Group 4 on text/noise/wide/long-run/random pages (Pillow, local). BilevelShare (<64 or >191) and ColourShare (max−min > 48). ds_pdf_codec_jni.cpp → NativePdfCodec.kt (`pdfBilevelPage`, plus `nativeCompactJpeg` via Android's built-in JPEG codec).
+- Dart NativePdfCodec: PdfImage.jpegStream re-labelled as /CCITTFaxDecode, /K −1, 1 bpc, DeviceGray (PdfDict/PdfNum via implementation imports). DocumentExport.readImage: G4 when bilevel ≥ .97 (≥ .95 for compressed export) and colour ≤ 0.2 %; else JPEG (native compaction first, Dart fallback).
+- Measured locally on the three user pages after scanner Enhance at 1240×1754: JPEG q94 412–478 KB → G4 17–18 KB; bilevel share ≈ .96 (so they become G4 in compressed export; B&W-filter pages always).
+- Decision: no separate libjpeg-turbo/libpng/zlib .so — Android already ships them (BitmapFactory / Bitmap.compress use them); bundling copies would only add size.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

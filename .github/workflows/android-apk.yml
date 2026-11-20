@@ -80,6 +80,20 @@ jobs:
             -o /tmp/libds_scannercore_host.so
           nm -D /tmp/libds_scannercore_host.so | grep -F 'NativeScannerCore_magicEnhanceNative'
           nm -D /tmp/libds_scannercore_host.so | grep -F 'NativeScannerCore_paperRegionNative'
+      - name: Verify PDF codec libds_pdfcodec (sanitizers + JNI symbol)
+        run: |
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wconversion -pedantic \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            third_party/doclens/android/src/main/cpp/ds_pdf_codec.cpp \
+            third_party/doclens/android/src/test/cpp/ds_pdf_codec_test.cpp \
+            -o /tmp/ds_pdf_codec_test
+          /tmp/ds_pdf_codec_test
+          g++ -std=c++17 -O2 -Wall -Wextra -fPIC -shared \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            third_party/doclens/android/src/main/cpp/ds_pdf_codec.cpp \
+            third_party/doclens/android/src/main/cpp/ds_pdf_codec_jni.cpp \
+            -o /tmp/libds_pdfcodec_host.so
+          nm -D /tmp/libds_pdfcodec_host.so | grep -F 'NativePdfCodec_bilevelG4Native'
       - name: Verify native four-corner detector and JNI plugin
         run: cd android && ./gradlew :doclens:testDebugUnitTest --no-daemon
       - name: Static analysis
@@ -107,6 +121,7 @@ jobs:
           grep -q 'libds_scannercore.so' /tmp/own_libs.txt
           grep -q 'libds_pagescanner.so' /tmp/own_libs.txt
           grep -q 'libds_docnet.so' /tmp/own_libs.txt
+          grep -q 'libds_pdfcodec.so' /tmp/own_libs.txt
           unzip -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -E 'assets/docnet/docnet.(param|bin)'
       - name: Show APK signing certificate
         run: |
