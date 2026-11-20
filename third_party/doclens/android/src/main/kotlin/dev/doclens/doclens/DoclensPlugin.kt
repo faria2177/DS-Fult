@@ -237,6 +237,22 @@ class DoclensPlugin :
                     mainHandler.post { result.success(out) }
                 }
             }
+            "stitchLongImage" -> {
+                val paths = call.argument<List<String>>("paths")
+                val watermark = call.argument<Boolean>("watermark") == true
+                val smart = call.argument<Boolean>("smart") != false
+                if (paths.isNullOrEmpty()) { result.success(null); return }
+                stillImageExecutor.execute {
+                    try {
+                        val out = LongImageStitcher.stitch(paths, watermark, smart)
+                        mainHandler.post { result.success(out) }
+                    } catch (e: IllegalStateException) {
+                        mainHandler.post { result.error("too_long", e.message, null) }
+                    } catch (_: Throwable) {
+                        mainHandler.post { result.success(null) }
+                    }
+                }
+            }
             "pdfBilevelPage" -> {
                 val path = call.argument<String>("imagePath")
                 val minShare = call.argument<Double>("minShare") ?: .95

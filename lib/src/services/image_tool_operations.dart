@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -17,6 +18,46 @@ class ImageToolOperations {
   static Uint8List buildLongImageBytes(List<Uint8List> pages,
       {bool watermark = false}) =>
       _joinVertical((pages: pages, watermark: watermark));
+
+  /// Kill switch for the native stitcher; tests flip it.
+  static bool nativeStitchEnabled = !kIsWeb && Platform.isAndroid;
+  static const MethodChannel _channel = MethodChannel('doclens/methods');
+
+  /// Long image with smart stitching (libds_stitch.so): where the bottom of
+  /// a page and the top of the next show the same content, the repeated band
+  /// is shown once. [merged] counts such joins. Falls back to the plain join.
+  static Future<({Uint8List bytes, int merged})> createSmartLongImage(
+      ScanDocument document,
+      {bool watermark = false, bool smart = true}) async {
+    if (document.pages.isEmpty) {
+      throw const FormatException('This document has no images.');
+    }
+    if (nativeStitchEnabled) {
+      try {
+        final raw = await _channel.invokeMapMethod<String, Object?>(
+            'stitchLongImage', {
+          'paths': [for (final page in document.pages) page.path],
+          'watermark': watermark,
+          'smart': smart,
+        });
+        final jpeg = raw?['jpeg'];
+        if (jpeg is Uint8List && jpeg.isNotEmpty) {
+          return (bytes: jpeg, merged: (raw?['merged'] as int?) ?? 0);
+        }
+      } on PlatformException catch (error) {
+        if (error.code == 'too_long') {
+          throw FormatException(error.message ?? 'Long image is too tall.');
+        }
+        debugPrint('Native long image unavailable: $error');
+      } on MissingPluginException catch (error) {
+        debugPrint('Native long image unavailable: $error');
+      }
+    }
+    return (
+      bytes: await createLongImage(document, watermark: watermark),
+      merged: 0,
+    );
+  }
 
   static Future<Uint8List> createLongImage(ScanDocument document,
       {bool watermark = false}) async {

@@ -39,6 +39,8 @@ class LongImageStudioScreen extends StatefulWidget {
 class _LongImageStudioScreenState extends State<LongImageStudioScreen> {
   Uint8List? _preview;
   bool _watermark = false;
+  bool _smart = true;
+  int _merged = 0;
   bool _busy = false;
   String? _error;
 
@@ -58,10 +60,17 @@ class _LongImageStudioScreenState extends State<LongImageStudioScreen> {
       _preview = null;
     });
     try {
-      final bytes = await (widget.builder?.call(widget.document, _watermark)
-          ?? ImageToolOperations.createLongImage(widget.document,
-              watermark: _watermark));
-      if (mounted) setState(() => _preview = bytes);
+      final builder = widget.builder;
+      final result = builder != null
+          ? (bytes: await builder(widget.document, _watermark), merged: 0)
+          : await ImageToolOperations.createSmartLongImage(widget.document,
+              watermark: _watermark, smart: _smart);
+      if (mounted) {
+        setState(() {
+          _preview = result.bytes;
+          _merged = result.merged;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = 'Long image could not be created: $error');
     } finally {
@@ -183,6 +192,19 @@ class _LongImageStudioScreenState extends State<LongImageStudioScreen> {
         Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: Text(_error!, style: TextStyle(
               color: Theme.of(context).colorScheme.error))),
+      SwitchListTile(
+        key: const Key('long-image-smart-stitch'),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        title: const Text('Smart stitch'),
+        subtitle: Text(_smart && _merged > 0
+            ? 'Joined $_merged overlapping part${_merged == 1 ? '' : 's'}'
+            : 'Joins overlapping parts of a long page without repeats'),
+        value: _smart,
+        onChanged: _busy ? null : (value) {
+          setState(() => _smart = value);
+          _render();
+        },
+      ),
       SwitchListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         title: const Text('Add DocScanner watermark'),

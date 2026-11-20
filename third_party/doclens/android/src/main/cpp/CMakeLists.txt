@@ -27,7 +27,13 @@ add_library(ds_dewarp SHARED
     ds_dewarp_jni.cpp
 )
 
-foreach(target ds_pagescanner ds_scannercore ds_pdfcodec ds_dewarp)
+# Long image: finds overlaps between consecutive pages.
+add_library(ds_stitch SHARED
+    ds_stitch.cpp
+    ds_stitch_jni.cpp
+)
+
+foreach(target ds_pagescanner ds_scannercore ds_pdfcodec ds_dewarp ds_stitch)
     target_compile_features(${target} PRIVATE cxx_std_17)
     target_compile_options(${target} PRIVATE -O3 -Wall -Wextra -Wconversion)
     set_target_properties(${target} PROPERTIES
