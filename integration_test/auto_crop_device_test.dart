@@ -83,7 +83,21 @@ void main() {
           .copy('${shots.path}/${entry.key}_imported.jpg');
       // Small copy in the log as well, for reviewers without artifacts.
       final page = img.decodeImage(await File(imported.paths.single).readAsBytes());
+      var paper = 0.0;
       if (page != null) {
+        // Brightness of the paper after Enhance: 75th-percentile luminance.
+        final lum = <int>[];
+        for (var y = 0; y < page.height; y += 4) {
+          for (var x = 0; x < page.width; x += 4) {
+            final p = page.getPixel(x, y);
+            lum.add((.299 * p.r + .587 * p.g + .114 * p.b).round());
+          }
+        }
+        lum.sort();
+        paper = lum[(lum.length * .75).floor()].toDouble();
+        // ignore: avoid_print
+        print('PAPER ${entry.key} p75=${paper.toStringAsFixed(0)} '
+            'reviewed=${imported.needsReview}');
         final small = base64Encode(img.encodeJpg(
             img.copyResize(page, width: 360), quality: 70));
         for (var i = 0; i < small.length; i += 700) {

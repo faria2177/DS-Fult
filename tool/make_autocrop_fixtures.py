@@ -153,6 +153,19 @@ def clip_bottom(quad):
             at_bottom(x0, y0, x3, y3)]
 
 
+def clip_right_bottom(quad):
+    """Visible part of a quad that runs off the right and bottom edges."""
+    (x0, y0), (x1, y1), _, (x3, y3) = quad
+
+    def at(ax, ay, bx, by, x=None, y=None):
+        t = (x - ax) / (bx - ax) if x is not None else (y - ay) / (by - ay)
+        return (ax + (bx - ax) * t, ay + (by - ay) * t)
+
+    top_right = at(x0, y0, x1, y1, x=1.0)
+    bottom_left = at(x0, y0, x3, y3, y=1.0)
+    return [(x0, y0), top_right, (1.0, 1.0), bottom_left]
+
+
 def scene(name, bg, obj, quad, **kw):
     SCENES.append((name, place(bg, obj, quad, **kw), quad))
 
@@ -188,6 +201,17 @@ def main():
     cut = [(.06, .04), (.97, .02), (.99, 1.10), (.04, 1.12)]
     scene('page_runs_off_bottom', bg, page(1100, 1000), cut, shadow=.3)
     SCENES[-1] = (SCENES[-1][0], SCENES[-1][1], clip_bottom(cut))
+    # 386450/386455: phone photos where the sheet fills the frame and runs
+    # off two edges, with a strip of cloth on the other sides.
+    bg = cloth(w2, h2, (110, 75, 45), (0, 0, 0), (0, 0, 0), 'denim')
+    off2 = [(.07, .06), (1.12, .02), (1.15, 1.2), (.05, 1.18)]
+    scene('page_off_right_and_bottom', bg, page(1100, 1000), off2, shadow=.25)
+    SCENES[-1] = (SCENES[-1][0], SCENES[-1][1], clip_right_bottom(off2))
+    bg = cloth(W, H, (70, 60, 120), (40, 40, 90), (60, 50, 110), 'paisley')
+    big = [(.04, .05), (1.10, .03), (1.12, 1.15), (.03, 1.12)]
+    gray = (page(820, 1160).astype(np.float32) * .78).astype(np.uint8)
+    scene('dim_page_fills_frame', bg, gray, big, shadow=.2)
+    SCENES[-1] = (SCENES[-1][0], SCENES[-1][1], clip_right_bottom(big))
     scene('white_page_on_light_table',
           cloth(W, H, (196, 204, 210), (0, 0, 0), (0, 0, 0), 'denim')
           * 0 + np.uint8(200) + rng.normal(0, 4, (H, W, 3)).astype(np.uint8),

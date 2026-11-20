@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'background_contrast_contour.dart';
 import 'image_processor.dart';
 import 'offline_document_contour.dart';
+import 'paper_region_detector.dart';
 import 'online_auto_crop_service.dart';
 import 'salient_document_detector.dart';
 import 'quad_edge_refiner.dart';
@@ -585,7 +586,16 @@ class DocumentEdges {
     final found = await _detectSafeStillOutlineCoarse(imagePath,
         preferIdCardBounds: preferIdCardBounds,
         galleryDetectors: galleryDetectors);
+    // A sheet photographed from close up runs off the frame; its visible
+    // outline (corners may sit on the frame edge) is what CamScanner crops.
+    final paper = !preferIdCardBounds && galleryDetectors
+        ? (await PaperRegionDetector.detectFile(imagePath))?.detection
+        : null;
     if (found == null) {
+      if (paper != null) {
+        _log(imagePath, 'accepted visible paper region');
+        return paper;
+      }
       // Nothing else found a document; the model's outline, even with one
       // unconfirmed side, is closer than leaving the whole photo.
       if (salient != null) {
@@ -594,12 +604,42 @@ class DocumentEdges {
       }
       return null;
     }
+    if (paper != null && paperRegionBeats(paper, found)) {
+      // The rectangle detectors stopped at a table or a printed box inside
+      // the sheet; the paper itself is the page.
+      _log(imagePath, 'paper region encloses the detected box; using paper');
+      return paper;
+    }
     // Every detector path (native OpenCV, native colour masks, offline Dart)
     // tends to land a few percent inside the real paper edge. Snap the
     // accepted outline onto the actual edge pixels; on any doubt this returns
     // the unchanged detection.
     return _refineSafely(imagePath, found,
         preferIdCardBounds: preferIdCardBounds);
+  }
+
+  /// True when [paper] is a clearly bigger sheet that contains [found].
+  @visibleForTesting
+  static bool paperRegionBeats(ImageDetection paper, ImageDetection found) {
+    final sheet = paper.quad;
+    final f = found.quad;
+    if (sheet == null || f == null) return false;
+    if (sheet.area < f.area * 1.2) return false;
+    // Only a big inner box (a table, a printed frame) is replaced; a card
+    // lying on a sheet of paper keeps its own, smaller outline.
+    if (f.area < .30 || sheet.area < .45) return false;
+    var inside = 0;
+    const n = 12;
+    for (var i = 0; i < n; i++) {
+      for (var j = 0; j < n; j++) {
+        final u = (i + .5) / n;
+        final v = (j + .5) / n;
+        final top = Offset.lerp(f.topLeft, f.topRight, u)!;
+        final bottom = Offset.lerp(f.bottomLeft, f.bottomRight, u)!;
+        if (sheet.contains(Offset.lerp(top, bottom, v)!)) inside++;
+      }
+    }
+    return inside / (n * n) >= .85;
   }
 
   static Future<ImageDetection?> _detectSafeStillOutlineCoarse(

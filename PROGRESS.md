@@ -430,6 +430,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - GalleryPickerScreen: `_processingPage()` (document-style grid of the selected thumbnails with per-page overlay) replaces the old centred spinner for in-app picks; `processGalleryImport(onPagesFinished)`.
 - New `.github/workflows/autocrop-device-check.yml` + `integration_test/auto_crop_device_test.dart` + `tool/make_autocrop_fixtures.py`: synthetic (privacy-safe) photos, real native pipeline on an API 33 emulator, IoU vs true corners must be ≥ 0.90. Results 2026-11-20: all 9 scenes 0.989–0.998; also prints the imported page (crop + Enhance) as base64 `SHOT` lines for visual review. Runs on branch pushes touching detection code. `integration_test/**` excluded from analyzer (fixture file is generated).
 
+## v0.5.61 — Close-up page photos: paper region crop + enhance; preview Import
+
+- User screenshots 386450/386455/386456 (CamScanner output for three close-up page photos) vs DocScanner leaving them uncropped/unbrightened. Reproduced with the emulator check: `page_off_right_and_bottom` → no quad (native page 0.42 rejected), `dim_page_fills_frame` → inner quad (IoU 0.51).
+- `PaperRegionDetector` (Dart): Otsu-bright + low-chroma largest component → convex hull → Visvalingam to 4 corners (corners may lie on the frame), accepted when ≥25% of the photo, ≥38 luma brighter than the rest, fills ≥82% of its quad, not the whole frame. Used in `detectSafeStillOutline` when nothing else is found, or when it encloses a ≥30%-area inner box with ≥1.2× area (`paperRegionBeats`; cards on paper unaffected).
+- `processGalleryImport`: document-mode Enhance also when an uncropped photo is ≥55% paper.
+- Gallery preview: Import(n) button (imports the shown photo when none selected).
+- Tests: test/paper_region_detector_test.dart, picker preview Import test; emulator scenes added.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
