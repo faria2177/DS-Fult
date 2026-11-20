@@ -480,6 +480,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - First CI run crashed in the emulator test within 2 s: with NCNN_RUNTIME_CPU off, ncnn compiles every enabled ISA extension (AVX-512, ARMv8.2…) into the whole library → SIGILL on CPUs without it. Fix: all ISA extension options off (baseline NEON / SSE2 only).
 - Host check: minimal ncnn vs full ncnn (python) on the same input: max abs diff ≤ 1.5e-5; host static lib 2.0 MB. CI asserts libds_docnet.so < 2.5 MB. Result: arm64 libds_docnet.so 918 232 bytes (was 5 236 680); emulator check unchanged (DocNet used, same IoUs).
 
+## v0.5.68 — Native library: libds_stitch.so (smart long image)
+
+- ds_stitch.{h,cpp}: FindOverlap — coarse search at 1/4 size (blurred) over overlap height (4–60 % of the shorter page) × horizontal shift (±2 %) by zero-mean NCC with texture check (std ≥ 6), best ≥ 0.60 and ≥ 0.05 above any match ≥ 4 rows away (repeating tables refused), then refinement at 1/2 size, accept ≥ 0.82.
+- Local synthetic check: overlaps 120–700 px with gain 0.9–1.05, shifts −10…+6 px, noise → all exact (±1 px); unrelated / blank / repeating-table pairs refused; zoom ≥ 2 % between parts refused (falls back to plain join). ~0.12 s per pair at 1100 px width.
+- LongImageStitcher.kt (channel `stitchLongImage`): pages at width 1100, join at the middle of the repeated band, shift compensated, watermark footer via Canvas, JPEG 86; 15 500 px limit as before. Dart `createSmartLongImage` (fallback: old Dart join); Long Image screen has a "Smart stitch" switch (default on) showing joined count.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
