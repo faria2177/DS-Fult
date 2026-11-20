@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/document_edges.dart';
 import '../services/image_processor.dart';
+import '../services/paper_region_detector.dart';
 import '../services/scan_workflow.dart';
 import 'batch_crop_screen.dart';
 import '../theme.dart';
@@ -82,11 +83,17 @@ Future<GalleryImportResult> processGalleryImport({
     var result = adjustedPaths[index];
     if (folder != null) {
       try {
+        // Strong document enhancement applies after a reliable crop, and
+        // also when an uncropped photo is mostly paper (a page shot from
+        // close up), so it is brightened like CamScanner does. Photos of
+        // other things keep the gentle version.
+        final cropped = adjustedPaths[index] != sourcePaths[index];
+        final mostlyPaper = !cropped &&
+            ((await PaperRegionDetector.detectFile(result))?.paperFraction ??
+                0) >= .55;
         final enhanced = await ImageProcessor.process(
           await File(result).readAsBytes(), filter: filter,
-          // Strong document enhancement only applies after a reliable
-          // crop, avoiding bleaching the untouched background.
-          documentMode: adjustedPaths[index] != sourcePaths[index]);
+          documentMode: cropped || mostlyPaper);
         final target = File(p.join(folder.path,
             'ds_import_${DateTime.now().microsecondsSinceEpoch}_$index.jpg'));
         await target.writeAsBytes(enhanced, flush: true);

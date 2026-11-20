@@ -111,15 +111,18 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
 
   Future<void> _openPreview(int index) async {
     if (_busy) return;
-    await Navigator.of(context).push<void>(MaterialPageRoute(
+    final shouldImport = await Navigator.of(context).push<bool>(MaterialPageRoute(
       builder: (_) => _GalleryPreview(
         source: widget.source,
         initialIndex: index,
         isPicked: _picked.contains,
         onToggle: _toggle,
+        pickedCount: () => _picked.length,
       ),
     ));
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (shouldImport == true && _picked.isNotEmpty) await _import();
   }
 
   /// Grid indexes shown on the CamScanner-style processing page while the
@@ -413,12 +416,14 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
 /// Full-screen, swipeable preview with a "Select" box, titled `n/total`.
 class _GalleryPreview extends StatefulWidget {
   const _GalleryPreview({required this.source, required this.initialIndex,
-      required this.isPicked, required this.onToggle});
+      required this.isPicked, required this.onToggle,
+      required this.pickedCount});
 
   final GalleryAssetSource source;
   final int initialIndex;
   final bool Function(int index) isPicked;
   final void Function(int index) onToggle;
+  final int Function() pickedCount;
 
   @override
   State<_GalleryPreview> createState() => _GalleryPreviewState();
@@ -454,6 +459,28 @@ class _GalleryPreviewState extends State<_GalleryPreview> {
         foregroundColor: Colors.white,
         title: Text('${_index + 1}/${widget.source.count}',
             style: const TextStyle(fontSize: 17)),
+        actions: [
+          // CamScanner: import straight from the preview. With nothing
+          // selected yet, the photo on screen is selected and imported.
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Center(child: FilledButton(
+              key: const Key('gallery-preview-import'),
+              style: FilledButton.styleFrom(
+                backgroundColor: dsTeal,
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6))),
+              onPressed: () {
+                if (widget.pickedCount() == 0) widget.onToggle(_index);
+                Navigator.pop(context, true);
+              },
+              child: Text('Import(${widget.pickedCount() == 0 ? 1
+                  : widget.pickedCount()})'),
+            )),
+          ),
+        ],
       ),
       body: SafeArea(child: Column(children: [
         Expanded(child: PageView.builder(
