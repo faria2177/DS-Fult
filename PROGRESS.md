@@ -438,6 +438,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Gallery preview: Import(n) button (imports the shown photo when none selected).
 - Tests: test/paper_region_detector_test.dart, picker preview Import test; emulator scenes added.
 
+## v0.5.62 — Scanner-style document Enhance; rail-proof paper crop
+
+- User raws 386317/386313/386310 + results 386461 (DocScanner) vs 386462 (CamScanner): IP Phone page not cropped, Settlement crooked, paper grey with shadows.
+- `PaperRegionDetector`: fill holes in the paper mask (text/table lines), then a morphological opening (radius 1.6% of the working side) before the largest component, grown back inside the mask. A light wall rail touching the sheet made the hull non-quadrilateral (quad/hull .90 < .93) → rejected. Python port on the three raws: IP Phone now accepted (quad/hull .97), Settlement TL .00 → .10 (truth ≈ .125), Debit unchanged.
+- `scanDocument` (image_processor.dart): paper map from per-block 95th-percentile luma (max-filtered, blurred) → divide → tone curve (≥.90 white, ≤.45 deep ink, smoothstep between) → 3×3 unsharp; tinted pixels keep their colour. Used for document-mode Enhance when `isNeutralDocument` (≥88% neutral, ≥55% bright); gold/colour cards keep the old path.
+- New emulator scene `page_with_wall_rail` (synthetic); unit tests for the rail crop, shadowed page → white/black, stamp colour.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

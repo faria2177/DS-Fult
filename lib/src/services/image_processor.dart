@@ -128,6 +128,12 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
 
 img.Image _filterImage(img.Image input, ScanFilter filter,
     {bool documentMode = false}) {
+  // A cropped black-and-white page (letters, forms, tables): scanner-style
+  // result — even white paper, crisp dark text, shadows removed.
+  if (documentMode && filter == ScanFilter.enhance &&
+      isNeutralDocument(input)) {
+    return scanDocument(input);
+  }
   final image = img.Image.from(input);
   // A gold/cream plastic card is not neutral white paper. Once its *outer*
   // corners are confirmed and perspective-warped, identify the continuous
@@ -607,4 +613,188 @@ List<double> _homography(List<Offset> target, List<Offset> source) {
     }
   }
   return List.generate(8, (i) => matrix[i][8]);
+}
+
+
+/// True for a page that is mostly paper and dark ink: few strongly coloured
+/// pixels. ID cards, photos and colourful leaflets keep the gentler
+/// colour-preserving Enhance.
+@visibleForTesting
+bool isNeutralDocument(img.Image image) {
+  var neutral = 0;
+  var bright = 0;
+  var total = 0;
+  final step = math.max(1, math.min(image.width, image.height) ~/ 160);
+  for (var y = 0; y < image.height; y += step) {
+    for (var x = 0; x < image.width; x += step) {
+      final p = image.getPixel(x, y);
+      final r = p.r.toDouble();
+      final g = p.g.toDouble();
+      final b = p.b.toDouble();
+      final tint = math.max(r, math.max(g, b)) - math.min(r, math.min(g, b));
+      if (tint < 42) neutral++;
+      if (_luma(r, g, b) > 120) bright++;
+      total++;
+    }
+  }
+  return total > 0 && neutral / total >= .88 && bright / total >= .55;
+}
+
+/// Scanner-style document enhancement.
+///
+/// 1. Estimate the paper brightness everywhere (a smooth "paper map"):
+///    per-block maxima, widened so text and table lines disappear, then
+///    smoothed. Shadows, a darker corner or a grey phone photo all live in
+///    this map.
+/// 2. Divide each pixel by its paper value: paper becomes 1.0 everywhere
+///    regardless of lighting, ink stays far below it.
+/// 3. Tone curve: near-paper → pure white, ink → deep dark, a smooth ramp
+///    between so thin strokes stay intact.
+/// 4. Light unsharp mask so text edges look printed rather than photographed.
+@visibleForTesting
+img.Image scanDocument(img.Image input) {
+  final w = input.width;
+  final h = input.height;
+  final lum = Float32List(w * h);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final p = input.getPixel(x, y);
+      lum[y * w + x] = _luma(p.r.toDouble(), p.g.toDouble(), p.b.toDouble());
+    }
+  }
+
+  // 1. Paper map on a coarse grid.
+  final block = math.max(4, math.max(w, h) ~/ 96);
+  final gw = (w + block - 1) ~/ block;
+  final gh = (h + block - 1) ~/ block;
+  var grid = Float32List(gw * gh);
+  for (var gy = 0; gy < gh; gy++) {
+    for (var gx = 0; gx < gw; gx++) {
+      // 95th percentile of the block (robust to specks), via a histogram.
+      final hist = List<int>.filled(64, 0);
+      var n = 0;
+      for (var y = gy * block; y < math.min(h, (gy + 1) * block); y += 2) {
+        for (var x = gx * block; x < math.min(w, (gx + 1) * block); x += 2) {
+          hist[(lum[y * w + x] / 4).floor().clamp(0, 63)]++;
+          n++;
+        }
+      }
+      var acc = 0;
+      var value = 63;
+      for (var i = 63; i >= 0; i--) {
+        acc += hist[i];
+        if (acc >= n * .05) {
+          value = i;
+          break;
+        }
+      }
+      grid[gy * gw + gx] = value * 4 + 2;
+    }
+  }
+  Float32List maxFilter(Float32List g, int radius) {
+    final out = Float32List(gw * gh);
+    for (var y = 0; y < gh; y++) {
+      for (var x = 0; x < gw; x++) {
+        var m = 0.0;
+        for (var dy = -radius; dy <= radius; dy++) {
+          final yy = (y + dy).clamp(0, gh - 1);
+          for (var dx = -radius; dx <= radius; dx++) {
+            final v = g[yy * gw + (x + dx).clamp(0, gw - 1)];
+            if (v > m) m = v;
+          }
+        }
+        out[y * gw + x] = m;
+      }
+    }
+    return out;
+  }
+
+  Float32List boxBlur(Float32List g, int radius) {
+    final out = Float32List(gw * gh);
+    for (var y = 0; y < gh; y++) {
+      for (var x = 0; x < gw; x++) {
+        var sum = 0.0;
+        var count = 0;
+        for (var dy = -radius; dy <= radius; dy++) {
+          final yy = y + dy;
+          if (yy < 0 || yy >= gh) continue;
+          for (var dx = -radius; dx <= radius; dx++) {
+            final xx = x + dx;
+            if (xx < 0 || xx >= gw) continue;
+            sum += g[yy * gw + xx];
+            count++;
+          }
+        }
+        out[y * gw + x] = sum / count;
+      }
+    }
+    return out;
+  }
+
+  // Large dark areas (thick tables, filled boxes) must not darken the map.
+  grid = maxFilter(grid, 2);
+  grid = boxBlur(boxBlur(grid, 2), 2);
+  double paperAt(int x, int y) {
+    final fx = ((x + .5) / block - .5).clamp(0.0, gw - 1.0);
+    final fy = ((y + .5) / block - .5).clamp(0.0, gh - 1.0);
+    final x0 = fx.floor();
+    final y0 = fy.floor();
+    final x1 = math.min(gw - 1, x0 + 1);
+    final y1 = math.min(gh - 1, y0 + 1);
+    final tx = fx - x0;
+    final ty = fy - y0;
+    final top = grid[y0 * gw + x0] * (1 - tx) + grid[y0 * gw + x1] * tx;
+    final bottom = grid[y1 * gw + x0] * (1 - tx) + grid[y1 * gw + x1] * tx;
+    return math.max(60, top * (1 - ty) + bottom * ty);
+  }
+
+  // 2 + 3. Normalise and tone-map.
+  final out = img.Image(width: w, height: h);
+  final toned = Float32List(w * h);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final i = y * w + x;
+      final n = (lum[i] / paperAt(x, y)).clamp(0.0, 1.2);
+      double v;
+      if (n >= .90) {
+        v = 255;
+      } else if (n <= .45) {
+        v = 18 + n / .45 * 30; // deep ink: 18..48
+      } else {
+        // Smoothstep from ink (48) to paper (255).
+        final t = (n - .45) / .45;
+        v = 48 + (255 - 48) * (t * t * (3 - 2 * t));
+      }
+      toned[i] = v;
+    }
+  }
+
+  // 4. Unsharp mask (3×3) on the toned luminance.
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final i = y * w + x;
+      var v = toned[i];
+      if (v < 250 && x > 0 && y > 0 && x < w - 1 && y < h - 1) {
+        final blur = (toned[i - 1] + toned[i + 1] + toned[i - w] +
+                toned[i + w] + v * 4) / 8;
+        v = v + (v - blur) * .6;
+      }
+      final p = input.getPixel(x, y);
+      final r = p.r.toDouble();
+      final g = p.g.toDouble();
+      final b = p.b.toDouble();
+      final tint = math.max(r, math.max(g, b)) - math.min(r, math.min(g, b));
+      if (tint > 45 && v < 250) {
+        // Keep coloured ink (stamps, signatures in blue) coloured: scale
+        // the original colour to the new brightness.
+        final l = math.max(1.0, lum[i]);
+        final k = v / l;
+        out.setPixelRgb(x, y, _byte(r * k), _byte(g * k), _byte(b * k));
+      } else {
+        final c = _byte(v);
+        out.setPixelRgb(x, y, c, c, c);
+      }
+    }
+  }
+  return out;
 }

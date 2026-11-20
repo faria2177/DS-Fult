@@ -69,9 +69,26 @@ class PaperRegionDetector {
     for (var i = 0; i < w * h; i++) {
       if (luma[i] >= threshold && chroma[i] < 58) paper[i] = 1;
     }
-    final component = _largestComponent(paper, w, h);
+    // Printed text and table lines are holes in the paper mask; fill them so
+    // the opening below cannot eat a text-heavy page.
+    _fillHoles(paper, w, h);
+    // Thin light things touching the sheet (a wall rail, a cable, another
+    // sheet's edge) would join it into one odd shape (386313: a grey rail
+    // ran across the photo behind the page). An opening cuts those links:
+    // shrink, keep the largest part, grow it back inside the paper mask.
+    final radius = math.max(3, (math.max(w, h) * .016).round());
+    final eroded = _minFilter(paper, w, h, radius);
+    final component = _largestComponent(eroded, w, h);
     if (component == null) return null;
-    final (mask, count) = component;
+    final grown = _maxFilter(component.$1, w, h, radius);
+    final mask = Uint8List(w * h);
+    var count = 0;
+    for (var i = 0; i < w * h; i++) {
+      if (grown[i] == 1 && paper[i] == 1) {
+        mask[i] = 1;
+        count++;
+      }
+    }
     final fraction = count / (w * h);
     final paperFraction = fraction;
     if (fraction < .25) return PaperRegion(null, size, paperFraction);
@@ -134,6 +151,77 @@ class PaperRegionDetector {
     if (quad == null) return PaperRegion(null, size, paperFraction);
     return PaperRegion(ImageDetection(quad: quad, imageSize: size), size,
         paperFraction);
+  }
+
+  /// Marks every "off" pixel that cannot reach the frame border as "on".
+  static void _fillHoles(Uint8List m, int w, int h) {
+    final outside = Uint8List(w * h);
+    final stack = <int>[];
+    void seed(int i) {
+      if (m[i] == 0 && outside[i] == 0) {
+        outside[i] = 1;
+        stack.add(i);
+      }
+    }
+
+    for (var x = 0; x < w; x++) {
+      seed(x);
+      seed((h - 1) * w + x);
+    }
+    for (var y = 0; y < h; y++) {
+      seed(y * w);
+      seed(y * w + w - 1);
+    }
+    while (stack.isNotEmpty) {
+      final i = stack.removeLast();
+      final x = i % w;
+      if (x > 0) seed(i - 1);
+      if (x < w - 1) seed(i + 1);
+      if (i >= w) seed(i - w);
+      if (i < (h - 1) * w) seed(i + w);
+    }
+    for (var i = 0; i < w * h; i++) {
+      if (outside[i] == 0) m[i] = 1;
+    }
+  }
+
+  /// Square min/max filters, separable (rows then columns).
+  static Uint8List _minFilter(Uint8List m, int w, int h, int r) =>
+      _squareFilter(m, w, h, r, keepIfAll: true);
+  static Uint8List _maxFilter(Uint8List m, int w, int h, int r) =>
+      _squareFilter(m, w, h, r, keepIfAll: false);
+
+  static Uint8List _squareFilter(Uint8List m, int w, int h, int r,
+      {required bool keepIfAll}) {
+    Uint8List pass(Uint8List src, bool horizontal) {
+      final out = Uint8List(w * h);
+      final lines = horizontal ? h : w;
+      final length = horizontal ? w : h;
+      for (var line = 0; line < lines; line++) {
+        // Running count of "on" pixels in the window.
+        int at(int k) => horizontal ? src[line * w + k] : src[k * w + line];
+        var on = 0;
+        for (var k = 0; k <= math.min(r, length - 1); k++) {
+          on += at(k);
+        }
+        for (var k = 0; k < length; k++) {
+          final lo = math.max(0, k - r);
+          final hi = math.min(length - 1, k + r);
+          final size = hi - lo + 1;
+          final value = keepIfAll ? (on == size ? 1 : 0) : (on > 0 ? 1 : 0);
+          if (horizontal) {
+            out[line * w + k] = value;
+          } else {
+            out[k * w + line] = value;
+          }
+          if (k + r + 1 < length) on += at(k + r + 1);
+          if (k - r >= 0) on -= at(k - r);
+        }
+      }
+      return out;
+    }
+
+    return pass(pass(m, true), false);
   }
 
   static double _otsu(Float32List values) {

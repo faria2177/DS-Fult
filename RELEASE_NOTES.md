@@ -1,5 +1,5 @@
-## DocScanner v0.5.61
+## DocScanner v0.5.62
 
-- ✂️ Import Images: photos where the page fills the picture and runs off the edges (a full sheet shot from close up) are now cropped along the visible paper edge, like CamScanner. Before, they were left uncropped, or cut down to a table inside the page
-- ☀️ Such page photos are now always brightened with the document Enhance (white paper, dark text), even when there is nothing to crop
-- 📥 Photo preview (the "12/7562" screen) now has an **Import** button at the top right; it imports the photo you are looking at, or all selected photos
+- ✂️ Import / auto crop: a page photographed on a wall or partition is now cropped even when a light rail, cable or the edge of another sheet touches the page (before, such photos were left uncropped with cloth on both sides)
+- ✂️ Pages full of tables are cropped along the real paper edge instead of a crooked line
+- ☀️ New scanner-style Enhance for black-and-white pages: grey phone-photo paper becomes clean white, shadows and darker corners are removed, and text becomes crisp and dark — like CamScanner. Coloured stamps and signatures keep their colour; cards and colour documents use the previous Enhance
