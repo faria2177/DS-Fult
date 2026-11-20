@@ -46,6 +46,39 @@ void main() {
     expect(q.bottomLeft.dx, closeTo(35 / 640, .03));
   });
 
+  test('a light wall rail touching the sheet does not stop the crop', () {
+    // 386313: page runs off top and bottom; a light rail crosses the cloth
+    // behind it and touches both sides of the sheet.
+    final image = img.Image(width: 640, height: 360);
+    img.fill(image, color: img.ColorRgb8(60, 70, 110));
+    for (var y = 232; y < 248; y++) {
+      for (var x = 0; x < 640; x++) {
+        image.setPixelRgb(x, y, 200, 200, 196);
+      }
+    }
+    for (var y = 0; y < 360; y++) {
+      final left = 25 + 35 * y / 360; // 25 → 60
+      final right = 598 - 28 * y / 360; // 598 → 570
+      for (var x = 0; x < 640; x++) {
+        if (x >= left && x <= right) image.setPixelRgb(x, y, 232, 234, 230);
+      }
+    }
+    for (var r = 0; r < 10; r++) {
+      final y = 30 + r * 30;
+      for (var x = 100; x < 500; x++) {
+        image.setPixelRgb(x, y, 30, 30, 30);
+        image.setPixelRgb(x, y + 1, 30, 30, 30);
+      }
+    }
+    final region = PaperRegionDetector.detectBytes(
+        Uint8List.fromList(img.encodePng(image)))!;
+    final q = region.detection!.quad!;
+    expect(q.topLeft.dx, closeTo(25 / 640, .025));
+    expect(q.topRight.dx, closeTo(598 / 640, .025));
+    expect(q.bottomRight.dx, closeTo(570 / 640, .025));
+    expect(q.bottomLeft.dx, closeTo(60 / 640, .025));
+  });
+
   test('a photo that is all paper gives no crop but counts as paper', () {
     final image = img.Image(width: 300, height: 400);
     img.fill(image, color: img.ColorRgb8(240, 240, 236));

@@ -186,6 +186,51 @@ void main() {
     expect(paper.b, lessThan(210));
   });
 
+  test('Grey shadowed page scans to white paper with dark text', () async {
+    // 386461 vs 386462: a phone photo of a printed list is grey-blue with a
+    // darker corner; the scan must be white paper and near-black text.
+    final input = img.Image(width: 300, height: 400);
+    for (var y = 0; y < 400; y++) {
+      for (var x = 0; x < 300; x++) {
+        // 190 at the top-left fading to 130 at the bottom-right (shadow).
+        final v = 190 - 60 * (x / 300 + y / 400) / 2;
+        input.setPixelRgb(x, y, v.round(), (v + 6).round(), (v + 10).round());
+      }
+    }
+    for (var row = 0; row < 12; row++) {
+      final y = 30 + row * 30;
+      for (var x = 30; x < 270; x++) {
+        for (var t = 0; t < 3; t++) {
+          input.setPixelRgb(x, y + t, 55, 55, 60);
+        }
+      }
+    }
+    expect(isNeutralDocument(input), isTrue);
+    final output = img.decodeImage(await ImageProcessor.process(
+      Uint8List.fromList(img.encodePng(input)),
+      filter: ScanFilter.enhance, documentMode: true))!;
+    // Bright and shadowed paper both become white.
+    expect(output.getPixel(20, 15).r, greaterThan(245));
+    expect(output.getPixel(285, 380).r, greaterThan(245));
+    // Text stays dark in both places.
+    expect(output.getPixel(100, 31).r, lessThan(70));
+    expect(output.getPixel(250, 361).r, lessThan(70));
+  });
+
+  test('Coloured stamp stays coloured in a document scan', () {
+    final input = img.Image(width: 200, height: 200);
+    img.fill(input, color: img.ColorRgb8(200, 200, 196));
+    for (var y = 90; y < 110; y++) {
+      for (var x = 90; x < 110; x++) {
+        input.setPixelRgb(x, y, 40, 60, 170); // blue ink
+      }
+    }
+    final output = scanDocument(input);
+    final ink = output.getPixel(100, 100);
+    expect(ink.b, greaterThan(ink.r + 40));
+    expect(output.getPixel(20, 20).r, 255);
+  });
+
   test('Invert effect reverses a mid-tone pixel', () async {
     final input = img.Image(width: 16, height: 16);
     img.fill(input, color: img.ColorRgb8(40, 90, 160));
