@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import 'native_scanner_core.dart';
 import 'perspective_aspect.dart';
 
 enum ScanFilter {
@@ -89,6 +90,34 @@ class ImageProcessor {
     if (crop == null && filter == ScanFilter.original && rotateDegrees == 0) {
       return source;
     }
+    // Black-and-white pages: crop/rotate here, then the scanner-style
+    // enhance in libds_scannercore.so. Colour pages, cards and any native
+    // failure continue with the Dart filter below.
+    if (documentMode && filter == ScanFilter.enhance &&
+        NativeScannerCore.enabled) {
+      final upright = crop == null && rotateDegrees == 0
+          ? source
+          : await compute(_processInIsolate, {
+              'bytes': source,
+              'crop': crop?.toData(),
+              'filter': ScanFilter.original.name,
+              'rotate': rotateDegrees,
+              'outputPng': false,
+              'quality': 98,
+              'documentMode': documentMode,
+            });
+      final native =
+          await NativeScannerCore.magicEnhance(upright, png: outputPng);
+      if (native != null && native.isNotEmpty) return native;
+      return compute(_processInIsolate, {
+        'bytes': upright,
+        'crop': null,
+        'filter': filter.name,
+        'rotate': 0,
+        'outputPng': outputPng,
+        'documentMode': documentMode,
+      });
+    }
     return compute(_processInIsolate, {
       'bytes': source,
       'crop': crop?.toData(),
@@ -123,7 +152,7 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
   }
   return Uint8List.fromList(options['outputPng'] == true
       ? img.encodePng(image)
-      : img.encodeJpg(image, quality: 94));
+      : img.encodeJpg(image, quality: options['quality'] as int? ?? 94));
 }
 
 img.Image _filterImage(img.Image input, ScanFilter filter,

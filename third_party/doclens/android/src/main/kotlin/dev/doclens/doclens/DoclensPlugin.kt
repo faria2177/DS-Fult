@@ -227,6 +227,24 @@ class DoclensPlugin :
                 result.success(liveSalientModelPath != null)
             }
             "getNativeLibraryStatus" -> result.success(NativeLibraryDiagnostics.status(context))
+            "nativeMagicEnhance" -> {
+                val bytes = call.argument<ByteArray>("imageBytes")
+                val png = call.argument<Boolean>("png") == true
+                val onlyNeutral = call.argument<Boolean>("onlyNeutral") != false
+                if (bytes == null || bytes.isEmpty()) { result.success(null); return }
+                stillImageExecutor.execute {
+                    val out = NativeScannerCore.magicEnhance(bytes, png, onlyNeutral)
+                    mainHandler.post { result.success(out) }
+                }
+            }
+            "nativePaperRegion" -> {
+                val path = call.argument<String>("imagePath")
+                if (path == null) { result.success(null); return }
+                stillImageExecutor.execute {
+                    val out = NativeScannerCore.paperRegion(path)
+                    mainHandler.post { result.success(out) }
+                }
+            }
             else -> result.notImplemented()
         }
     }

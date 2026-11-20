@@ -41,3 +41,16 @@ Native results are not trusted blindly. Reject malformed quads, unusual
 coverage, self-intersection, background/frame overlaps and weak outer
 edge evidence. If confidence is inadequate, leave the original still
 available for manual crop. Never auto-trigger a shutter.
+
+## libds_scannercore.so (scanner core, v0.5.63)
+
+- ds_scanner_core.cpp: `FindPaperRegion` (Otsu + low-chroma paper mask,
+  hole fill, opening against rails/cables, largest component, hull →
+  four corners) and `MagicEnhance` / `IsNeutralDocument` (paper map from
+  per-block 95th percentile → divide → tone curve → unsharp; coloured ink
+  kept). Native twins of lib/src/services/paper_region_detector.dart and
+  scanDocument() in image_processor.dart, which remain the fallback.
+- ds_scanner_core_jni.cpp: `NativeScannerCore.magicEnhanceNative` /
+  `paperRegionNative`; Kotlin wrapper NativeScannerCore.kt; method channel
+  `nativeMagicEnhance` / `nativePaperRegion`.
+- Host tests: src/test/cpp/ds_scanner_core_test.cpp (CI, with ASan/UBSan).

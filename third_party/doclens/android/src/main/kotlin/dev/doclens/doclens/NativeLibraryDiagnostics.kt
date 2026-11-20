@@ -27,6 +27,8 @@ internal object NativeLibraryDiagnostics {
         "libmainstone.so",
     )
 
+    private val ownNames = listOf("libds_pagescanner.so", "libds_scannercore.so")
+
     fun status(context: Context): Map<String, Any> {
         val info = context.applicationInfo
         val nativeDir = info.nativeLibraryDir?.let(::File)
@@ -35,10 +37,14 @@ internal object NativeLibraryDiagnostics {
         val installedApks = listOfNotNull(info.sourceDir) +
             (info.splitSourceDirs?.toList() ?: emptyList())
         val packaged = mutableSetOf<String>()
+        val ownPackaged = mutableSetOf<String>()
         installedApks.forEach { path ->
             try {
                 ZipFile(path).use { apk ->
                     for (abi in supported) {
+                        for (name in ownNames) {
+                            if (apk.getEntry("lib/$abi/$name") != null) ownPackaged.add(name)
+                        }
                         for (name in importedNames) {
                             if (apk.getEntry("lib/$abi/$name") != null) {
                                 packaged.add(name)
@@ -62,6 +68,11 @@ internal object NativeLibraryDiagnostics {
             // A present ELF does not imply valid JNI methods, models or rights.
             "importedFunctionsEnabled" to false,
             "independentNativeEnhancer" to "ds_pagescanner",
+            // DocScanner's own native libraries (built from src/main/cpp).
+            "ownLibraries" to ownNames.associateWith { name ->
+                (nativeDir?.let { File(it, name).isFile } == true) || name in ownPackaged
+            },
+            "scannerCoreLoaded" to NativeScannerCore.available,
             "fallbackEngine" to "kotlin",
         )
     }
