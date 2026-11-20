@@ -3,3 +3,7 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   errors:
     invalid_annotation_target: ignore
+  exclude:
+    # Needs integration_test/autocrop_fixture_data.dart, which the
+    # "Auto crop device check" workflow generates before running it.
+    - integration_test/**
