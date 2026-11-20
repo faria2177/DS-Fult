@@ -36,6 +36,8 @@ Future<GalleryImportResult> processGalleryImport({
   required ScanFilter filter,
   bool preferIdCardBounds = false,
   void Function(String message)? onProgress,
+  /// Number of finished pages (cropped and enhanced) so far.
+  void Function(int finishedPages)? onPagesFinished,
   Future<Map<int, Uint8List>?> Function(List<String> unresolvedPaths)?
       reviewUncertain,
 }) async {
@@ -94,6 +96,7 @@ Future<GalleryImportResult> processGalleryImport({
       }
     }
     paths.add(result);
+    onPagesFinished?.call(paths.length);
   }
   return GalleryImportResult(
     paths: paths,

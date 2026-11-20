@@ -424,6 +424,12 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - "Glossy effect" text seen over the settings popup is not from DocScanner (no such string in the app).
 - Tests: `test/scan_chrome_style_test.dart`.
 
+## v0.5.60 — Import processing page + on-device auto-crop check
+
+- Reference video 386418 (CamScanner Import Images): Select Photo → Import(n) → document pages appear with per-page "Processing images… Please do NOT quit the app" → single photo opens edit preview, several open the page grid.
+- GalleryPickerScreen: `_processingPage()` (document-style grid of the selected thumbnails with per-page overlay) replaces the old centred spinner for in-app picks; `processGalleryImport(onPagesFinished)`.
+- New `.github/workflows/autocrop-device-check.yml` + `integration_test/auto_crop_device_test.dart` + `tool/make_autocrop_fixtures.py`: synthetic (privacy-safe) photos, real native pipeline on an API 33 emulator, IoU vs true corners must be ≥ 0.90. Results 2026-11-20: all 9 scenes 0.989–0.998; also prints the imported page (crop + Enhance) as base64 `SHOT` lines for visual review. Runs on branch pushes touching detection code. `integration_test/**` excluded from analyzer (fixture file is generated).
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
