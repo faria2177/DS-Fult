@@ -453,6 +453,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - CMake builds libds_pagescanner.so and libds_scannercore.so (16 KB page alignment). Diagnostics report `ownLibraries`, `scannerCoreLoaded`.
 - CI: host tests with ASan/UBSan + JNI symbol check; APK packaging check for both libds_*.so; device check now triggers on these files.
 
+## v0.5.64 — Native library phase 2: libds_docnet.so (DocNet on ncnn)
+
+- DocNet: own U-Net-style document-mask model (0.13 M params, 160×160 → 80×80), trained in tool/docnet on 14k fully synthetic images (make_data.py: procedural backgrounds incl. wall rails, pages with real glyph text/tables/handwriting, cards, receipts, off-frame pages, distractor sheets, light/shadow/JPEG). SWA of epochs 10–16. Local eval (ncnn python, crude largest-component quad): 12 emulator scenes mean IoU 0.94; user raws 386313/386317/386310 0.97/0.97/0.99 (local only, not trained on). First run without glyph text overfit (raws 0.71–0.81) → regenerated data.
+- libds_docnet.so: ds_docnet_jni.cpp, ncnn 20241226 Android static (CMake FetchContent, SHA-256 pinned), -static-openmp; model in plugin assets/docnet. DocNetEngine.kt; SalientMaskEngine.run(..., assets) uses DocNet first (map upscaled to 320 for the existing quadFromSalientMask), `engine` field in the result.
+- Dart SalientDocumentDetector: DocNet outline used when edge-confirmed; otherwise U²-Net runs and a confirmed outline from either wins (no regression path).
+- CI: APK must contain libds_docnet.so and assets/docnet/*.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

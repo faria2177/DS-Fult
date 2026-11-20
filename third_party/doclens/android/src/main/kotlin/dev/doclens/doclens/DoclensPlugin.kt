@@ -565,7 +565,8 @@ class DoclensPlugin :
         }
         stillImageExecutor.execute {
             val out = try {
-                SalientMaskEngine.run(modelPath, imagePath)
+                SalientMaskEngine.run(modelPath, imagePath,
+                    if (call.argument<Boolean>("docNet") == false) null else context.assets)
             } catch (_: Throwable) {
                 null
             }

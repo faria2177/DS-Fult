@@ -106,6 +106,8 @@ jobs:
           unzip -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -E 'lib/arm64-v8a/libds_' | tee /tmp/own_libs.txt
           grep -q 'libds_scannercore.so' /tmp/own_libs.txt
           grep -q 'libds_pagescanner.so' /tmp/own_libs.txt
+          grep -q 'libds_docnet.so' /tmp/own_libs.txt
+          unzip -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -E 'assets/docnet/docnet.(param|bin)'
       - name: Show APK signing certificate
         run: |
           apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"

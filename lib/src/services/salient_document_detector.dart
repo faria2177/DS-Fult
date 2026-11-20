@@ -14,7 +14,8 @@ class SalientMask {
   const SalientMask({required this.width, required this.height,
       required this.probability, required this.rgb,
       required this.imageWidth, required this.imageHeight,
-      this.edgeRgb, this.edgeWidth = 0, this.edgeHeight = 0});
+      this.edgeRgb, this.edgeWidth = 0, this.edgeHeight = 0,
+      this.engine = 'u2netp'});
 
   final int width, height;
   /// Foreground probability per pixel, 0..255.
@@ -25,6 +26,9 @@ class SalientMask {
   /// Sharper aspect-correct colour copy used to check the outline's sides.
   final Uint8List? edgeRgb;
   final int edgeWidth, edgeHeight;
+
+  /// Which network produced the map: 'docnet' or 'u2netp'.
+  final String engine;
 }
 
 /// A model outline and whether the photo's own edges confirm it.
@@ -39,9 +43,10 @@ class SalientResult {
   final bool edgesConfirmed;
 }
 
-/// Finds the document in an imported photo with a bundled open-source
-/// neural network (U²-Net small, Apache-2.0; see assets/models/README.md)
-/// and fits its four corners. Runs fully on-device.
+/// Finds the document in an imported photo with an on-device network and
+/// fits its four corners. DocNet (DocScanner's own document-mask model on
+/// ncnn, libds_docnet.so) answers first; the open-source U²-Net small
+/// (Apache-2.0; see assets/models/README.md) is the fallback.
 ///
 /// Returns null whenever the model is unavailable or not confident, so the
 /// caller's rectangle detectors remain the fallback.
@@ -57,45 +62,59 @@ class SalientDocumentDetector {
   static Future<SalientResult?> detectFile(String imagePath) async {
     try {
       final provider = maskProviderForTesting;
-      final mask = provider != null
-          ? await provider(imagePath)
-          : await _platformMask(imagePath);
-      if (mask == null) return null;
-      final quad = BackgroundContrastContour.quadFromSalientMask(
-        probability: mask.probability,
-        rgb: mask.rgb,
-        width: mask.width,
-        height: mask.height,
-        imageWidth: mask.imageWidth.toDouble(),
-        imageHeight: mask.imageHeight.toDouble(),
-      );
-      if (quad == null) return null;
-      var finalQuad = quad;
-      var confirmed = false;
-      final edges = mask.edgeRgb;
-      if (edges != null) {
-        final evidence = await compute(_checkEdges, (
-          quad: quad, rgb: edges, width: mask.edgeWidth,
-          height: mask.edgeHeight));
-        if (evidence != null) {
-          finalQuad = evidence.quad;
-          confirmed = evidence.confirmed;
-          debugPrint('[AutoCrop] model outline edge support '
-              '${evidence.weakestSide.toStringAsFixed(2)}');
-        }
+      if (provider != null) {
+        final mask = await provider(imagePath);
+        return mask == null ? null : await _resultFrom(mask);
       }
-      return SalientResult(
-        ImageDetection(
-          quad: finalQuad,
-          imageSize: Size(
-              mask.imageWidth.toDouble(), mask.imageHeight.toDouble()),
-        ),
-        edgesConfirmed: confirmed,
-      );
+      // DocNet (own document model) first. Its outline is used when the
+      // photo's edges confirm it; otherwise U²-Net gets a turn, and a
+      // confirmed outline from either wins.
+      final docNet = await _platformMask(imagePath, docNet: true);
+      final first = docNet == null ? null : await _resultFrom(docNet);
+      if (first != null && first.edgesConfirmed) return first;
+      if (docNet != null && docNet.engine != 'docnet') return first;
+      final u2 = await _platformMask(imagePath, docNet: false);
+      final second = u2 == null ? null : await _resultFrom(u2);
+      if (second != null && second.edgesConfirmed) return second;
+      return second ?? first;
     } catch (error) {
       debugPrint('Segmentation model unavailable: $error');
       return null;
     }
+  }
+
+  static Future<SalientResult?> _resultFrom(SalientMask mask) async {
+    final quad = BackgroundContrastContour.quadFromSalientMask(
+      probability: mask.probability,
+      rgb: mask.rgb,
+      width: mask.width,
+      height: mask.height,
+      imageWidth: mask.imageWidth.toDouble(),
+      imageHeight: mask.imageHeight.toDouble(),
+    );
+    if (quad == null) return null;
+    var finalQuad = quad;
+    var confirmed = false;
+    final edges = mask.edgeRgb;
+    if (edges != null) {
+      final evidence = await compute(_checkEdges, (
+        quad: quad, rgb: edges, width: mask.edgeWidth,
+        height: mask.edgeHeight));
+      if (evidence != null) {
+        finalQuad = evidence.quad;
+        confirmed = evidence.confirmed;
+        debugPrint('[AutoCrop] ${mask.engine} outline edge support '
+            '${evidence.weakestSide.toStringAsFixed(2)}');
+      }
+    }
+    return SalientResult(
+      ImageDetection(
+        quad: finalQuad,
+        imageSize: Size(
+            mask.imageWidth.toDouble(), mask.imageHeight.toDouble()),
+      ),
+      edgesConfirmed: confirmed,
+    );
   }
 
   /// Hand the installed model to the live camera so it can recover whole
@@ -114,7 +133,8 @@ class SalientDocumentDetector {
     }
   }
 
-  static Future<SalientMask?> _platformMask(String imagePath) async {
+  static Future<SalientMask?> _platformMask(String imagePath,
+      {required bool docNet}) async {
     final modelPath = await (_modelPath ??= _installModel());
     if (modelPath == null) {
       // Allow another attempt later (e.g. storage was briefly unavailable).
@@ -122,8 +142,13 @@ class SalientDocumentDetector {
       return null;
     }
     final raw = await _channel.invokeMapMethod<String, Object?>(
-        'salientMask', {'imagePath': imagePath, 'modelPath': modelPath});
+        'salientMask', {
+          'imagePath': imagePath,
+          'modelPath': modelPath,
+          'docNet': docNet,
+        });
     if (raw == null) return null;
+    debugPrint('DocumentEdges segmentation engine: ${raw['engine'] ?? 'u2netp'}');
     final width = raw['width'], height = raw['height'];
     final probability = raw['probability'], rgb = raw['rgb'];
     final imageWidth = raw['imageWidth'], imageHeight = raw['imageHeight'];
@@ -141,7 +166,8 @@ class SalientDocumentDetector {
         imageWidth: imageWidth, imageHeight: imageHeight,
         edgeRgb: edgesValid ? edgeRgb : null,
         edgeWidth: edgesValid ? edgeWidth : 0,
-        edgeHeight: edgesValid ? edgeHeight : 0);
+        edgeHeight: edgesValid ? edgeHeight : 0,
+        engine: raw['engine'] as String? ?? 'u2netp');
   }
 
   /// OpenCV reads the network from a real file, so the bundled asset is
