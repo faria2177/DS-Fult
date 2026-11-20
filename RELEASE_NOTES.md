@@ -1,5 +1,4 @@
-## DocScanner v0.5.65
+## DocScanner v0.5.66
 
-- 📄 New native library **libds_pdfcodec.so** — DocScanner's own CCITT Group 4 encoder: black-and-white pages are saved in the PDF as sharp 1-bit images, typically 10–20× smaller than before (a full A4 text page ≈ 20 KB instead of ≈ 400 KB)
-- 🎨 Pages with colour (stamps, photos, coloured print) stay full colour automatically
-- ⚡ Compressed PDF export now shrinks pages with Android's built-in JPEG codec — much faster on big documents
+- 📐 New native library **libds_dewarp.so** — DocScanner's own page flattening: a bent, curled or bowed page (a sheet lifting at the bottom, a book page) is straightened when it is cropped, so its edges and text lines come out straight
+- ✅ Flat pages and ID/bank cards are left exactly as before; flattening only happens when a side of the page is clearly curved
