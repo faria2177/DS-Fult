@@ -21,7 +21,13 @@ add_library(ds_pdfcodec SHARED
     ds_pdf_codec_jni.cpp
 )
 
-foreach(target ds_pagescanner ds_scannercore ds_pdfcodec)
+# Dewarp: flattens bent, curled or bowed pages.
+add_library(ds_dewarp SHARED
+    ds_dewarp.cpp
+    ds_dewarp_jni.cpp
+)
+
+foreach(target ds_pagescanner ds_scannercore ds_pdfcodec ds_dewarp)
     target_compile_features(${target} PRIVATE cxx_std_17)
     target_compile_options(${target} PRIVATE -O3 -Wall -Wextra -Wconversion)
     set_target_properties(${target} PROPERTIES

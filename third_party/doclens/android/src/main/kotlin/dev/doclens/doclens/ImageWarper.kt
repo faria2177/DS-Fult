@@ -76,19 +76,26 @@ object ImageWarper {
             0f, outH.toFloat(),
         )
 
-        val matrix = Matrix()
-        if (!matrix.setPolyToPoly(src, 0, dst, 0, 4)) {
-            throw ScannerException.CaptureFailed("setPolyToPoly failed")
+        // A bent or curled page (libds_dewarp.so) is flattened; ID and bank
+        // cards are rigid (they ask for auto orientation) and skip this.
+        val flattened = if (autoOrientation == "auto") null
+            else NativeDewarp.dewarp(bitmap, quad, outW, outH)
+        val out = flattened ?: run {
+            val matrix = Matrix()
+            if (!matrix.setPolyToPoly(src, 0, dst, 0, 4)) {
+                throw ScannerException.CaptureFailed("setPolyToPoly failed")
+            }
+            val plain = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+            // An untouched ARGB bitmap is fully transparent, and JPEG has no
+            // alpha channel, so any sub-pixel gap the sampled quad leaves along
+            // the output border was encoded as a black strip. Erasing to white
+            // first keeps every edge of an auto-cropped page clean.
+            plain.eraseColor(Color.WHITE)
+            val canvas = Canvas(plain)
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+            canvas.drawBitmap(bitmap, matrix, paint)
+            plain
         }
-        val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
-        // An untouched ARGB bitmap is fully transparent, and JPEG has no alpha
-        // channel, so any sub-pixel gap the sampled quad leaves along the
-        // output border was encoded as a black strip. Erasing to white first
-        // keeps every edge of an auto-cropped page clean.
-        out.eraseColor(Color.WHITE)
-        val canvas = Canvas(out)
-        val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-        canvas.drawBitmap(bitmap, matrix, paint)
 
         // Optional post-warp enhancement (shadow-aware). Operates on the
         // cropped pixels in place; `none` is a no-op.

@@ -467,6 +467,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Measured locally on the three user pages after scanner Enhance at 1240×1754: JPEG q94 412–478 KB → G4 17–18 KB; bilevel share ≈ .96 (so they become G4 in compressed export; B&W-filter pages always).
 - Decision: no separate libjpeg-turbo/libpng/zlib .so — Android already ships them (BitmapFactory / Bitmap.compress use them); bundling copies would only add size.
 
+## v0.5.66 — Native library: libds_dewarp.so (bent page flattening)
+
+- ds_dewarp.{h,cpp}: rectify quad + 8 % margin at 640 px → trace each side (outermost background→paper step ≥ 24 luma, 40 samples, search ±7.5 %) → robust cubic fit (MAD rejection, RMS ≤ 0.5 %, ends within 3 % of the corners) pinned to the corners → when max bow is 0.8–7 %, resample through a Coons patch (P = u + (1−u)L(v) + uR(v), v + (1−v)T(u) + vB(u)) and the quad homography. Otherwise returns false.
+- Local synthetic check (bent page on cloth with perspective): flat page untouched (bow 0.0004); bowed pages straightened (NCC to flat page: book 0.05 → 0.91, sin 0.11 → 0.79; visually straight lines for 2.5–4.5 % curl). User raws: IP Phone no change; Settlement left side wavy edge removed (cloth strip gone); Debit tiny change.
+- ImageWarper.warp: NativeDewarp first unless autoOrientation == auto (ID/bank cards); else the old Canvas homography.
+- CI: host test (bowed page → ink line level within 4 px; flat page refused) with ASan/UBSan, JNI symbol, APK must contain libds_dewarp.so.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
