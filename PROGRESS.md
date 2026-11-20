@@ -477,7 +477,8 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 ## v0.5.67 — libds_docnet.so slimmed (ncnn from source, minimal)
 
 - CMake now fetches the ncnn 20241226 full-source release (SHA-256 pinned) and builds it with NCNN_VULKAN/INT8/BF16/OPENMP/RUNTIME_CPU/PIXEL_ROTATE/AFFINE/DRAWING/C_API OFF and 85 unused layers off (kept: Input Convolution ConvolutionDepthWise Concat Interp Split ReLU Clip Sigmoid Mish HardSwish Padding Packing Cast Crop Flatten InnerProduct Convolution1D Bias Scale Noop Reshape — the model's layers plus those ncnn creates internally), -ffunction-sections + --gc-sections; 1 thread.
-- Host check: minimal ncnn vs full ncnn (python) on the same input: max abs diff 3.8e-6; host static lib 2.0 MB. CI asserts libds_docnet.so < 2.5 MB.
+- First CI run crashed in the emulator test within 2 s: with NCNN_RUNTIME_CPU off, ncnn compiles every enabled ISA extension (AVX-512, ARMv8.2…) into the whole library → SIGILL on CPUs without it. Fix: all ISA extension options off (baseline NEON / SSE2 only).
+- Host check: minimal ncnn vs full ncnn (python) on the same input: max abs diff ≤ 1.5e-5; host static lib 2.0 MB. CI asserts libds_docnet.so < 2.5 MB.
 
 ## Recent CI note
 
