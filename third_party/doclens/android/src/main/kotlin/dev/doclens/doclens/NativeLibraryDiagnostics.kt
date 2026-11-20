@@ -27,7 +27,7 @@ internal object NativeLibraryDiagnostics {
         "libmainstone.so",
     )
 
-    private val ownNames = listOf("libds_pagescanner.so", "libds_scannercore.so", "libds_docnet.so")
+    private val ownNames = listOf("libds_pagescanner.so", "libds_scannercore.so", "libds_docnet.so", "libds_pdfcodec.so")
 
     fun status(context: Context): Map<String, Any> {
         val info = context.applicationInfo

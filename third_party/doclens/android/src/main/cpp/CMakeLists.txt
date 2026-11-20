@@ -15,7 +15,13 @@ add_library(ds_scannercore SHARED
     ds_scanner_core_jni.cpp
 )
 
-foreach(target ds_pagescanner ds_scannercore)
+# PDF codec: CCITT Group 4 for black-and-white pages.
+add_library(ds_pdfcodec SHARED
+    ds_pdf_codec.cpp
+    ds_pdf_codec_jni.cpp
+)
+
+foreach(target ds_pagescanner ds_scannercore ds_pdfcodec)
     target_compile_features(${target} PRIVATE cxx_std_17)
     target_compile_options(${target} PRIVATE -O3 -Wall -Wextra -Wconversion)
     set_target_properties(${target} PROPERTIES
