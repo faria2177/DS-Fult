@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:docscanner/src/services/image_processor.dart';
 import 'package:docscanner/src/services/native_scanner_core.dart';
 import 'package:flutter/services.dart';

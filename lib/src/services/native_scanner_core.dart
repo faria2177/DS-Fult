@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
@@ -14,8 +13,7 @@ import 'package:flutter/services.dart';
 abstract final class NativeScannerCore {
   static const MethodChannel _channel = MethodChannel('doclens/methods');
 
-  /// Test hook and kill switch.
-  @visibleForTesting
+  /// Kill switch; tests flip it to exercise the bridge.
   static bool enabled = !kIsWeb && Platform.isAndroid;
 
   /// Scanner-style enhance of an upright, cropped page. Null when the page
