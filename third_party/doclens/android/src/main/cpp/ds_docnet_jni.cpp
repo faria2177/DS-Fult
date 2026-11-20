@@ -29,7 +29,7 @@ Java_dev_doclens_doclens_DocNetEngine_loadNative(JNIEnv* env, jobject /* thiz */
     AAssetManager* manager = AAssetManager_fromJava(env, assets);
     if (!manager) return JNI_FALSE;
     auto* net = new ncnn::Net();
-    net->opt.num_threads = 2;
+    net->opt.num_threads = 1;
     net->opt.lightmode = true;
     net->opt.use_vulkan_compute = false;
     if (net->load_param(manager, "docnet/docnet.param") != 0 ||

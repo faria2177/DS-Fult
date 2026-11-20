@@ -10,8 +10,9 @@
 ## ncnn
 
 The inference engine is Tencent ncnn 20241226 (BSD 3-Clause License,
-https://github.com/Tencent/ncnn), linked statically. The Android prebuilt is
-downloaded at build time by CMake (pinned by SHA-256).
+https://github.com/Tencent/ncnn), linked statically. CMake downloads its source
+release at build time (pinned by SHA-256) and compiles only the layers and
+features DocNet needs (float32 CPU, no Vulkan/int8/bf16/OpenMP).
 
 ## Recipe (v0.5.64)
 

@@ -474,6 +474,11 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - ImageWarper.warp: NativeDewarp first unless autoOrientation == auto (ID/bank cards); else the old Canvas homography.
 - CI: host test (bowed page → ink line level within 4 px; flat page refused) with ASan/UBSan, JNI symbol, APK must contain libds_dewarp.so.
 
+## v0.5.67 — libds_docnet.so slimmed (ncnn from source, minimal)
+
+- CMake now fetches the ncnn 20241226 full-source release (SHA-256 pinned) and builds it with NCNN_VULKAN/INT8/BF16/OPENMP/RUNTIME_CPU/PIXEL_ROTATE/AFFINE/DRAWING/C_API OFF and 85 unused layers off (kept: Input Convolution ConvolutionDepthWise Concat Interp Split ReLU Clip Sigmoid Mish HardSwish Padding Packing Cast Crop Flatten InnerProduct Convolution1D Bias Scale Noop Reshape — the model's layers plus those ncnn creates internally), -ffunction-sections + --gc-sections; 1 thread.
+- Host check: minimal ncnn vs full ncnn (python) on the same input: max abs diff 3.8e-6; host static lib 2.0 MB. CI asserts libds_docnet.so < 2.5 MB.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
