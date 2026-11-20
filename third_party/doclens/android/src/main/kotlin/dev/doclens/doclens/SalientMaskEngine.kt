@@ -1,5 +1,6 @@
 package dev.doclens.doclens
 
+import android.content.res.AssetManager
 import android.graphics.BitmapFactory
 import org.opencv.android.OpenCVLoader
 import org.opencv.core.CvType
@@ -64,6 +65,14 @@ internal object SalientMaskEngine {
             }
             flat.put(0, 0, input)
             blob = flat.reshape(1, intArrayOf(1, 3, SIDE, SIDE))
+            // DocNet (document-specific, own model) first; U²-Net otherwise.
+            val docNet = if (assets != null && DocNetEngine.ensureLoaded(assets)) {
+                docNetProbability(small)
+            } else null
+            if (docNet != null) {
+                return finish(decoded, docNet, rgb, imageWidth, imageHeight, "docnet")
+            }
+
             var network = net
             if (network == null || loadedModel != modelPath) {
                 network = Dnn.readNetFromONNX(modelPath)
@@ -94,7 +103,8 @@ internal object SalientMaskEngine {
     }
 
     @Synchronized
-    fun run(modelPath: String, imagePath: String): Map<String, Any>? {
+    fun run(modelPath: String, imagePath: String,
+            assets: AssetManager? = null): Map<String, Any>? {
         if (!openCvReady) {
             openCvReady = OpenCVLoader.initLocal()
             if (!openCvReady) return null
@@ -171,36 +181,7 @@ internal object SalientMaskEngine {
                 val clamped = if (v < 0f) 0f else if (v > 1f) 1f else v
                 probability[i] = (clamped * 255f + 0.5f).toInt().toByte()
             }
-            // A sharper, aspect-correct colour copy (long side 640) so Flutter
-            // can check that every side of the outline sits on a real edge.
-            val longSide = maxOf(decoded.cols(), decoded.rows()).toDouble()
-            val scale = minOf(1.0, EDGE_SIDE / longSide)
-            val edgeW = maxOf(1, Math.round(decoded.cols() * scale).toInt())
-            val edgeH = maxOf(1, Math.round(decoded.rows() * scale).toInt())
-            val edge = Mat()
-            val edgeRgbMat = Mat()
-            val edgeRgb = ByteArray(edgeW * edgeH * 3)
-            try {
-                Imgproc.resize(decoded, edge, Size(edgeW.toDouble(), edgeH.toDouble()),
-                    0.0, 0.0, Imgproc.INTER_AREA)
-                Imgproc.cvtColor(edge, edgeRgbMat, Imgproc.COLOR_BGR2RGB)
-                Imgproc.GaussianBlur(edgeRgbMat, edgeRgbMat, Size(3.0, 3.0), 0.0)
-                edgeRgbMat.get(0, 0, edgeRgb)
-            } finally {
-                edge.release()
-                edgeRgbMat.release()
-            }
-            return mapOf(
-                "edgeWidth" to edgeW,
-                "edgeHeight" to edgeH,
-                "edgeRgb" to edgeRgb,
-                "width" to SIDE,
-                "height" to SIDE,
-                "probability" to probability,
-                "rgb" to rgb,
-                "imageWidth" to imageWidth,
-                "imageHeight" to imageHeight,
-            )
+            return finish(decoded, probability, rgb, imageWidth, imageHeight, "u2netp")
         } finally {
             decoded.release()
             small.release()
@@ -209,5 +190,71 @@ internal object SalientMaskEngine {
             output?.release()
             row?.release()
         }
+    }
+
+    private fun docNetProbability(small: Mat): ByteArray? {
+        val input = Mat()
+        val rgbMat = Mat()
+        val probMat = Mat(DocNetEngine.OUTPUT, DocNetEngine.OUTPUT, CvType.CV_32F)
+        val upscaled = Mat()
+        try {
+            Imgproc.resize(small, input, Size(DocNetEngine.INPUT.toDouble(),
+                DocNetEngine.INPUT.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+            Imgproc.cvtColor(input, rgbMat, Imgproc.COLOR_BGR2RGB)
+            val bytes = ByteArray(DocNetEngine.INPUT * DocNetEngine.INPUT * 3)
+            rgbMat.get(0, 0, bytes)
+            val prob = DocNetEngine.run(bytes) ?: return null
+            probMat.put(0, 0, prob)
+            Imgproc.resize(probMat, upscaled, Size(SIDE.toDouble(), SIDE.toDouble()),
+                0.0, 0.0, Imgproc.INTER_LINEAR)
+            val values = FloatArray(SIDE * SIDE)
+            upscaled.get(0, 0, values)
+            return ByteArray(SIDE * SIDE) { i ->
+                val v = values[i]
+                val clamped = if (v < 0f) 0f else if (v > 1f) 1f else v
+                (clamped * 255f + 0.5f).toInt().toByte()
+            }
+        } finally {
+            input.release()
+            rgbMat.release()
+            probMat.release()
+            upscaled.release()
+        }
+    }
+
+    private fun finish(decoded: Mat, probability: ByteArray, rgb: ByteArray,
+                       imageWidth: Int, imageHeight: Int,
+                       engine: String): Map<String, Any> {
+        // A sharper, aspect-correct colour copy (long side 640) so Flutter
+        // can check that every side of the outline sits on a real edge.
+        val longSide = maxOf(decoded.cols(), decoded.rows()).toDouble()
+        val scale = minOf(1.0, EDGE_SIDE / longSide)
+        val edgeW = maxOf(1, Math.round(decoded.cols() * scale).toInt())
+        val edgeH = maxOf(1, Math.round(decoded.rows() * scale).toInt())
+        val edge = Mat()
+        val edgeRgbMat = Mat()
+        val edgeRgb = ByteArray(edgeW * edgeH * 3)
+        try {
+            Imgproc.resize(decoded, edge, Size(edgeW.toDouble(), edgeH.toDouble()),
+                0.0, 0.0, Imgproc.INTER_AREA)
+            Imgproc.cvtColor(edge, edgeRgbMat, Imgproc.COLOR_BGR2RGB)
+            Imgproc.GaussianBlur(edgeRgbMat, edgeRgbMat, Size(3.0, 3.0), 0.0)
+            edgeRgbMat.get(0, 0, edgeRgb)
+        } finally {
+            edge.release()
+            edgeRgbMat.release()
+        }
+        return mapOf(
+            "edgeWidth" to edgeW,
+            "edgeHeight" to edgeH,
+            "edgeRgb" to edgeRgb,
+            "width" to SIDE,
+            "height" to SIDE,
+            "probability" to probability,
+            "rgb" to rgb,
+            "imageWidth" to imageWidth,
+            "imageHeight" to imageHeight,
+            "engine" to engine,
+        )
     }
 }
