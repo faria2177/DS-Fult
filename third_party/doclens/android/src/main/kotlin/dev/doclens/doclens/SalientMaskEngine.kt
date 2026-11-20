@@ -65,14 +65,6 @@ internal object SalientMaskEngine {
             }
             flat.put(0, 0, input)
             blob = flat.reshape(1, intArrayOf(1, 3, SIDE, SIDE))
-            // DocNet (document-specific, own model) first; U²-Net otherwise.
-            val docNet = if (assets != null && DocNetEngine.ensureLoaded(assets)) {
-                docNetProbability(small)
-            } else null
-            if (docNet != null) {
-                return finish(decoded, docNet, rgb, imageWidth, imageHeight, "docnet")
-            }
-
             var network = net
             if (network == null || loadedModel != modelPath) {
                 network = Dnn.readNetFromONNX(modelPath)
@@ -162,6 +154,14 @@ internal object SalientMaskEngine {
             }
             flat.put(0, 0, input)
             blob = flat.reshape(1, intArrayOf(1, 3, SIDE, SIDE))
+
+            // DocNet (document-specific, own model) first; U²-Net otherwise.
+            val docNet = if (assets != null && DocNetEngine.ensureLoaded(assets)) {
+                docNetProbability(small)
+            } else null
+            if (docNet != null) {
+                return finish(decoded, docNet, rgb, imageWidth, imageHeight, "docnet")
+            }
 
             var network = net
             if (network == null || loadedModel != modelPath) {
