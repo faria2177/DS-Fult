@@ -27,3 +27,4 @@ assets/tessdata/*.traineddata
 third_party/doclens/android/src/main/optionalNativeJniLibs/
 third_party/doclens/android/src/main/import-manifest.json
 integration_test/autocrop_fixture_data.dart
+__pycache__/
