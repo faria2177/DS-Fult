@@ -6,6 +6,8 @@ import 'package:doclens/doclens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import 'native_scanner_core.dart';
+
 /// The visible part of a sheet of paper that fills most of a photo and runs
 /// off one or more edges of the frame.
 ///
@@ -24,6 +26,14 @@ class PaperRegionDetector {
   static const int _workingSide = 420;
 
   static Future<PaperRegion?> detectFile(String path) async {
+    // libds_scannercore.so first (same algorithm, native speed).
+    final native = await NativeScannerCore.paperRegion(path);
+    if (native != null) {
+      final (quad, size, fraction) = native;
+      return PaperRegion(
+          quad == null ? null : ImageDetection(quad: quad, imageSize: size),
+          size, fraction);
+    }
     try {
       final bytes = await File(path).readAsBytes();
       return await compute(detectBytes, bytes);

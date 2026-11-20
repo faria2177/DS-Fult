@@ -65,6 +65,21 @@ jobs:
             -o /tmp/libds_enhancer_jni_host.so
           nm -D /tmp/libds_enhancer_jni_host.so | grep -F \
             'Java_dev_doclens_doclens_NativeImageEnhancer_enhanceArgbNative'
+      - name: Verify scanner core libds_scannercore (sanitizers + JNI symbols)
+        run: |
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wconversion -pedantic \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            third_party/doclens/android/src/main/cpp/ds_scanner_core.cpp \
+            third_party/doclens/android/src/test/cpp/ds_scanner_core_test.cpp \
+            -o /tmp/ds_scanner_core_test
+          /tmp/ds_scanner_core_test
+          g++ -std=c++17 -O2 -Wall -Wextra -fPIC -shared \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            third_party/doclens/android/src/main/cpp/ds_scanner_core.cpp \
+            third_party/doclens/android/src/main/cpp/ds_scanner_core_jni.cpp \
+            -o /tmp/libds_scannercore_host.so
+          nm -D /tmp/libds_scannercore_host.so | grep -F 'NativeScannerCore_magicEnhanceNative'
+          nm -D /tmp/libds_scannercore_host.so | grep -F 'NativeScannerCore_paperRegionNative'
       - name: Verify native four-corner detector and JNI plugin
         run: cd android && ./gradlew :doclens:testDebugUnitTest --no-daemon
       - name: Static analysis
@@ -86,6 +101,11 @@ jobs:
         env:
           DS_KEYSTORE_PASSWORD: ${{ secrets.DS_KEYSTORE_PASSWORD }}
         run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Verify DocScanner native libraries are packaged
+        run: |
+          unzip -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | grep -E 'lib/arm64-v8a/libds_' | tee /tmp/own_libs.txt
+          grep -q 'libds_scannercore.so' /tmp/own_libs.txt
+          grep -q 'libds_pagescanner.so' /tmp/own_libs.txt
       - name: Show APK signing certificate
         run: |
           apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"

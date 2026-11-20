@@ -445,6 +445,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - `scanDocument` (image_processor.dart): paper map from per-block 95th-percentile luma (max-filtered, blurred) → divide → tone curve (≥.90 white, ≤.45 deep ink, smoothstep between) → 3×3 unsharp; tinted pixels keep their colour. Used for document-mode Enhance when `isNeutralDocument` (≥88% neutral, ≥55% bright); gold/colour cards keep the old path.
 - New emulator scene `page_with_wall_rail` (synthetic); unit tests for the rail crop, shadowed page → white/black, stamp colour.
 
+## v0.5.63 — Native library phase 1: libds_scannercore.so
+
+- User list of CamScanner's 74 .so files → "create native libraries in the app" (chose: all, step by step). Not copying or recreating CamScanner binaries; building our own equivalents. Phase 1 = scanner core, phase 2 = AI model engine (ncnn/MNN, open source), phase 3 = PDF/image libs.
+- third_party/doclens/android/src/main/cpp/ds_scanner_core.{h,cpp}: `FindPaperRegion` + `MagicEnhance`/`IsNeutralDocument` (C++ ports of PaperRegionDetector and scanDocument). Host check on the three user raws (local only): same quads as the Dart/Python reference, enhance mean abs diff 0.3–0.6.
+- ds_scanner_core_jni.cpp + NativeScannerCore.kt + channel `nativeMagicEnhance` / `nativePaperRegion`; Dart `NativeScannerCore` (lib/src/services/native_scanner_core.dart). `ImageProcessor.process` (documentMode + Enhance, Android): crop in isolate (JPEG q98) → native enhance; null → Dart filter. `PaperRegionDetector.detectFile`: native first.
+- CMake builds libds_pagescanner.so and libds_scannercore.so (16 KB page alignment). Diagnostics report `ownLibraries`, `scannerCoreLoaded`.
+- CI: host tests with ASan/UBSan + JNI symbol check; APK packaging check for both libds_*.so; device check now triggers on these files.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.
