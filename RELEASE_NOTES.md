@@ -1,4 +1,3 @@
-## DocScanner v0.5.66
+## DocScanner v0.5.67
 
-- 📐 New native library **libds_dewarp.so** — DocScanner's own page flattening: a bent, curled or bowed page (a sheet lifting at the bottom, a book page) is straightened when it is cropped, so its edges and text lines come out straight
-- ✅ Flat pages and ID/bank cards are left exactly as before; flattening only happens when a side of the page is clearly curved
+- 📦 Smaller app: the DocNet AI library **libds_docnet.so** is now built with only the parts of the ncnn engine that DocNet uses — 0.9 MB instead of 5.2 MB, with identical results
