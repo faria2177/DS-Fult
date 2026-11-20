@@ -21,15 +21,20 @@ void Check(bool ok, const char* what) {
 constexpr int kW = 900, kH = 1100;
 // Page occupies x 100..800, y 100..1000 when flat; the sheet is bowed by
 // bow·sin(πu) (pixels), more at the bottom than at the top.
-std::vector<uint32_t> Scene(double bow) {
+std::vector<uint32_t> Scene(double bow, bool curl = false) {
     std::vector<uint32_t> px(static_cast<size_t>(kW) * kH, 0xff3c2814U);
     for (int y = 0; y < kH; ++y) {
         for (int x = 100; x < 800; ++x) {
             const double u = (x - 100) / 700.0;
             const double v_flat = (y - 100) / 900.0;
-            // Invert y = 100 + 900 v + bow·sin(πu)·(0.4 + 0.6 v) for v.
+            // Invert y = 100 + 900 v + bow·sin(πu)·g(v) for v; g is linear
+            // (0.4 + 0.6 v) or, for a curl, quadratic (0.2 + 0.8 v²).
             const double s = bow * std::sin(M_PI * u);
-            const double v = (v_flat * 900.0 - 0.4 * s) / (900.0 + 0.6 * s);
+            double v = v_flat;
+            for (int it = 0; it < 30; ++it) {
+                const double g = curl ? 0.2 + 0.8 * v * v : 0.4 + 0.6 * v;
+                v = (v_flat * 900.0 - s * g) / 900.0;
+            }
             if (v < 0 || v > 1) continue;
             const int line = static_cast<int>(v * 900.0) % 30;
             const bool ink = line >= 12 && line < 18 && u > .05 && u < .95;
@@ -79,6 +84,23 @@ int main() {
         std::printf("ink rows %d %d %d (bow %.3f)\n", a, b, c, info.max_bow);
         Check(a >= 0 && b >= 0 && c >= 0, "ink found");
         Check(std::abs(a - b) <= 4 && std::abs(c - b) <= 4, "line is straight");
+    }
+    {
+        // A curl: the middle of the page waves differently from its sides;
+        // the text-line step straightens it.
+        const auto curled = Scene(40, true);
+        std::vector<uint32_t> out;
+        ds::DewarpInfo info;
+        Check(ds::Dewarp(curled.data(), kW, kH, quad, 700, 900, &out, &info),
+              "curled page is dewarped");
+        const int y = 900 / 2 + 15;
+        const int a = InkRow(out, 700, 70, y);
+        const int b = InkRow(out, 700, 350, y);
+        const int c = InkRow(out, 700, 630, y);
+        std::printf("curl rows %d %d %d (text lines %d, shift %.1f)\n", a, b, c,
+                    info.text_lines, info.text_shift);
+        Check(a >= 0 && b >= 0 && c >= 0, "curl ink found");
+        Check(std::abs(a - b) <= 3 && std::abs(c - b) <= 3, "curled line is straight");
     }
     {
         std::vector<uint32_t> out;

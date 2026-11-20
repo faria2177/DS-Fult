@@ -23,7 +23,15 @@ struct DewarpInfo {
     float max_bow = 0.0f;
     // Which sides were traced (top, right, bottom, left).
     std::array<bool, 4> traced{};
+    // Text lines were straightened inside the page (largest shift, pixels).
+    bool text_lines = false;
+    float text_shift = 0.0f;
 };
+
+// Aligns wavy text lines of an already rectified page in place. Returns
+// false (page unchanged) when there is too little text or no clear waviness.
+bool StraightenTextLines(std::vector<uint32_t>* page, int width, int height,
+                         float* max_shift);
 
 // src: ARGB width×height. quad: TL, TR, BR, BL in source pixels.
 // out: out_width×out_height ARGB on success.

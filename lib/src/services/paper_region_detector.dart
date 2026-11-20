@@ -81,6 +81,13 @@ class PaperRegionDetector {
     }
     // Printed text and table lines are holes in the paper mask; fill them so
     // the opening below cannot eat a text-heavy page.
+    // Close thin dark lines first: table rules that run off the frame are
+    // not enclosed holes, and the opening below would otherwise eat the
+    // narrow strips between them (dim_page_fills_frame lost its corner).
+    final closed = _minFilter(_maxFilter(paper, w, h, 2), w, h, 2);
+    for (var i = 0; i < w * h; i++) {
+      if (closed[i] == 1) paper[i] = 1;
+    }
     _fillHoles(paper, w, h);
     // Thin light things touching the sheet (a wall rail, a cable, another
     // sheet's edge) would join it into one odd shape (386313: a grey rail

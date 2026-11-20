@@ -73,8 +73,8 @@ internal object LongImageStitcher {
         val pages = mutableListOf<Bitmap>()
         try {
             for (path in paths) pages.add(decodeAtWidth(path) ?: return null)
-            // Overlap (rows, shift) between page i and i + 1.
-            val overlaps = MutableList(pages.size) { intArrayOf(0, 0) }
+            // Overlap (rows, shift, scale‰) between page i − 1 and page i.
+            val overlaps = MutableList(pages.size) { intArrayOf(0, 0, 1000) }
             var merged = 0
             if (smart && available) {
                 var previous = gray(pages[0])
@@ -86,15 +86,18 @@ internal object LongImageStitcher {
                     } catch (_: Throwable) {
                         null
                     }
-                    if (found != null && found[0] > 0) {
-                        overlaps[i] = intArrayOf(found[0], found[1])
+                    if (found != null && found[0] > 0 && found.size >= 4) {
+                        overlaps[i] = intArrayOf(found[0], found[1], found[3])
                         merged++
                     }
                     previous = current
                 }
             }
+            // A page photographed from a little closer or farther is drawn
+            // at the scale that makes its overlap match the previous page.
+            fun scaledHeight(i: Int) = (pages[i].height * overlaps[i][2] / 1000.0).roundToInt()
             var total = 0
-            for (i in pages.indices) total += pages[i].height - overlaps[i][0]
+            for (i in pages.indices) total += scaledHeight(i) - overlaps[i][0]
             val footer = if (watermark) FOOTER else 0
             if (total + footer > MAX_HEIGHT) {
                 throw IllegalStateException("Long image exceeds 15,500 pixels in height. " +
@@ -107,14 +110,21 @@ internal object LongImageStitcher {
             var bottom = 0
             for (i in pages.indices) {
                 val page = pages[i]
-                val (rows, shift) = overlaps[i].let { it[0] to it[1] }
+                val rows = overlaps[i][0]
+                val shift = overlaps[i][1]
+                val scale = overlaps[i][2] / 1000.0
+                val height = scaledHeight(i)
                 // Join in the middle of the repeated band; earlier rows of
                 // this page are already shown at the end of the previous one.
                 val skip = rows / 2
                 val top = bottom - rows
-                canvas.drawBitmap(page, Rect(0, skip, page.width, page.height),
-                    Rect(-shift, top + skip, page.width - shift, top + page.height), paint)
-                bottom = top + page.height
+                val left = (WIDTH / 2.0 * (1 - scale)).roundToInt() - shift
+                val right = left + (page.width * scale).roundToInt()
+                canvas.drawBitmap(page,
+                    Rect(0, (skip / scale).roundToInt().coerceIn(0, page.height - 1),
+                        page.width, page.height),
+                    Rect(left, top + skip, right, top + height), paint)
+                bottom = top + height
             }
             if (watermark) {
                 val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {

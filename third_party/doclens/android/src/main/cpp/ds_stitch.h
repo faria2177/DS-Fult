@@ -12,6 +12,10 @@ struct Overlap {
     int rows = 0;       // rows of B that repeat the bottom of A (0: none)
     int shift = 0;      // B's content sits this many pixels right of A's
     float score = 0.0f; // normalised cross-correlation of the matched band
+    // B was photographed this much larger than A (1.0: same scale). rows and
+    // shift are in B's pixels after scaling it by 'scale' about its top
+    // centre.
+    float scale = 1.0f;
 };
 
 // gray_a: width × height_a, gray_b: width × height_b (same width, 8-bit).

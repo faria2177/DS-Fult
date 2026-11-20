@@ -1,5 +1,6 @@
 package dev.doclens.doclens
 
+import android.content.res.AssetManager
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint
@@ -29,6 +30,10 @@ import kotlin.math.hypot
 internal class LiveSalientAssist {
     @Volatile var modelPath: String? = null
 
+    /** App assets: enables DocNet (libds_docnet.so), the document-specific
+     * model, which is preferred over U²-Net and fast enough to run more often. */
+    @Volatile var assets: AssetManager? = null
+
     private val worker = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
     @Volatile private var lastStart = 0L
@@ -36,14 +41,18 @@ internal class LiveSalientAssist {
 
     /** Offer the current RGBA analysis frame; returns immediately. */
     fun offer(rgba: ByteArray, width: Int, height: Int, now: Long) {
-        val model = modelPath ?: return
-        if (now - lastStart < INTERVAL_MS || !busy.compareAndSet(false, true)) return
+        val model = modelPath
+        val docNet = assets?.let { DocNetEngine.ensureLoaded(it) } == true
+        if (model == null && !docNet) return
+        val interval = if (docNet) DOCNET_INTERVAL_MS else INTERVAL_MS
+        if (now - lastStart < interval || !busy.compareAndSet(false, true)) return
         lastStart = now
         val copy = rgba.copyOf()
         try {
             worker.execute {
                 try {
-                    val quad = detect(model, copy, width, height)
+                    val quad = (if (docNet) detectDocNet(copy, width, height) else null)
+                        ?: model?.let { detect(it, copy, width, height) }
                     latest = quad?.let { it to System.currentTimeMillis() }
                 } catch (_: Throwable) {
                     latest = null
@@ -71,8 +80,44 @@ internal class LiveSalientAssist {
         return quadFromMask(probability, SalientMaskEngine.SIDE, width, height)
     }
 
+    /** DocNet outline: 160×160 RGB in, 80×80 probabilities → 320×320 map. */
+    private fun detectDocNet(rgba: ByteArray, width: Int, height: Int): Quad? {
+        if (rgba.size != width * height * 4) return null
+        val frame = Mat(height, width, CvType.CV_8UC4)
+        val small = Mat()
+        val rgb = Mat()
+        val prob = Mat(DocNetEngine.OUTPUT, DocNetEngine.OUTPUT, CvType.CV_32F)
+        val up = Mat()
+        try {
+            frame.put(0, 0, rgba)
+            Imgproc.resize(frame, small, Size(DocNetEngine.INPUT.toDouble(),
+                DocNetEngine.INPUT.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+            Imgproc.cvtColor(small, rgb, Imgproc.COLOR_RGBA2RGB)
+            val bytes = ByteArray(DocNetEngine.INPUT * DocNetEngine.INPUT * 3)
+            rgb.get(0, 0, bytes)
+            val values = DocNetEngine.run(bytes) ?: return null
+            prob.put(0, 0, values)
+            val side = SalientMaskEngine.SIDE
+            Imgproc.resize(prob, up, Size(side.toDouble(), side.toDouble()),
+                0.0, 0.0, Imgproc.INTER_LINEAR)
+            val map = FloatArray(side * side)
+            up.get(0, 0, map)
+            val probability = ByteArray(side * side) { i ->
+                (map[i].coerceIn(0f, 1f) * 255f + .5f).toInt().toByte()
+            }
+            return quadFromMask(probability, side, width, height)
+        } finally {
+            frame.release()
+            small.release()
+            rgb.release()
+            prob.release()
+            up.release()
+        }
+    }
+
     companion object {
         private const val INTERVAL_MS = 450L
+        private const val DOCNET_INTERVAL_MS = 200L
         private const val MAX_AGE_MS = 1100L
 
         /**
