@@ -139,6 +139,7 @@ def place(bg, obj, quad, shadow=0.0, blur=1.0):
 
 
 SCENES = []
+QR_TEXT = 'https://docscanner.example/qr-check?id=42'
 
 
 def clip_bottom(quad):
@@ -268,6 +269,27 @@ def main():
         lines.append(f'    [{flat}],')
         lines.append('  ),')
     lines.append('};')
+    # A page photo with a printed QR code, for the live/still code reader.
+    qr = cv2.QRCodeEncoder.create().encode(QR_TEXT)
+    qr = cv2.resize(qr, (qr.shape[1] * 8, qr.shape[0] * 8),
+                    interpolation=cv2.INTER_NEAREST)
+    sheet = page(820, 1160)
+    pad = cv2.copyMakeBorder(cv2.cvtColor(qr, cv2.COLOR_GRAY2BGR), 24, 24, 24, 24,
+                             cv2.BORDER_CONSTANT, value=(255, 255, 255))
+    sheet[800:800 + pad.shape[0], 480:480 + pad.shape[1]] = pad
+    qr_scene = place(cloth(900, 1200, (120, 80, 50), (0, 0, 0), (0, 0, 0), 'denim'),
+                     sheet, [(.08, .10), (.92, .07), (.95, .90), (.06, .93)], shadow=.2)
+    ok, data = cv2.imencode('.jpg', qr_scene, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    assert ok
+    enc = base64.b64encode(data.tobytes()).decode()
+    lines.append(f"const qrCodeText = '{QR_TEXT}';")
+    lines.append('const qrCodeScene =')
+    for i in range(0, len(enc), 76):
+        lines.append(f"    '{enc[i:i + 76]}'")
+    lines[-1] += ';'
+    if jpg_dir:
+        with open(os.path.join(jpg_dir, 'qr_code_on_page.jpg'), 'wb') as f:
+            f.write(data.tobytes())
     with open(OUT, 'w') as f:
         f.write('\n'.join(lines) + '\n')
     print('wrote', len(SCENES), 'scenes to', os.path.abspath(OUT))

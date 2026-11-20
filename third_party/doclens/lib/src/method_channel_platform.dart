@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import 'fallback/fallback_engine.dart';
+import 'live_code.dart';
 import 'models.dart';
 import 'ocr.dart';
 import 'platform_interface.dart';
@@ -205,6 +206,7 @@ class MethodChannelDoclens extends DoclensPlatform {
         lowLight: (map['lowLight'] as bool?) ?? false,
         previewSize: previewSize,
         sharpness: (map['sharpness'] as num?)?.toDouble(),
+        codes: map.containsKey('codes') ? LiveCode.listFrom(map['codes']) : null,
       );
     });
   }

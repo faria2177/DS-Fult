@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controller.dart';
+import '../live_code.dart';
 import '../models.dart';
 import '../quad.dart';
 import 'quad_overlay.dart';
@@ -92,6 +94,9 @@ class _DoclensViewState extends State<DoclensView>
   StreamSubscription<DetectionStatus>? _statusSub;
   StreamSubscription<ScanResult>? _autoCaptureSub;
   StreamSubscription<bool>? _lowLightSub;
+  StreamSubscription<List<LiveCode>>? _codesSub;
+  List<LiveCode> _codes = const [];
+  Timer? _codesTimer;
   StreamSubscription<Size>? _previewSizeSub;
 
   Quad? _quad;
@@ -139,6 +144,14 @@ class _DoclensViewState extends State<DoclensView>
         c.lowLightStream.listen((l) => setState(() => _lowLight = l));
     _previewSizeSub = c.previewSizeStream
         .listen((s) => setState(() => _previewSize = s));
+    _codesSub = c.codeStream.listen((codes) {
+      setState(() => _codes = codes);
+      // Hide the chip once the code has left the camera for a while.
+      _codesTimer?.cancel();
+      _codesTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _codes = const []);
+      });
+    });
   }
 
   void _teardown() {
@@ -147,6 +160,8 @@ class _DoclensViewState extends State<DoclensView>
     _autoCaptureSub?.cancel();
     _lowLightSub?.cancel();
     _previewSizeSub?.cancel();
+    _codesSub?.cancel();
+    _codesTimer?.cancel();
   }
 
   @override
@@ -311,6 +326,13 @@ class _DoclensViewState extends State<DoclensView>
               left: 0,
               right: 0,
               child: Center(child: widget.lowLightHintBuilder!(context)),
+            ),
+          if (_codes.isNotEmpty)
+            Positioned(
+              top: 112,
+              left: 24,
+              right: 24,
+              child: Center(child: LiveCodeChip(codes: _codes)),
             ),
           if (widget.flashButtonBuilder != null)
             Positioned(
@@ -486,6 +508,57 @@ class _FocusRingState extends State<_FocusRing>
           ),
         );
       },
+    );
+  }
+}
+
+
+/// What happens when the user taps a live QR / barcode chip. The app sets
+/// [onTap] (open link, copy, share); the default copies the text.
+abstract final class DoclensCodeActions {
+  static void Function(BuildContext context, LiveCode code)? onTap;
+}
+
+/// Chip shown over the live camera when libds_qr.so reads a QR code or
+/// barcode: format and content; tap for actions.
+class LiveCodeChip extends StatelessWidget {
+  const LiveCodeChip({super.key, required this.codes});
+
+  final List<LiveCode> codes;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = codes.first;
+    final more = codes.length > 1 ? '  +${codes.length - 1}' : '';
+    return Material(
+      key: const Key('doclens-live-code-chip'),
+      color: Colors.black.withValues(alpha: .72),
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () {
+          final handler = DoclensCodeActions.onTap;
+          if (handler != null) {
+            handler(context, code);
+          } else {
+            Clipboard.setData(ClipboardData(text: code.text));
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(code.label == 'QR' ? Icons.qr_code_2 : Icons.qr_code_scanner,
+                color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Flexible(child: Text('${code.label}: ${code.text}$more',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 13.5,
+                    fontWeight: FontWeight.w600))),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right, color: Colors.white70, size: 18),
+          ]),
+        ),
+      ),
     );
   }
 }

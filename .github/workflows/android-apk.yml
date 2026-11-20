@@ -152,6 +152,7 @@ jobs:
           grep -q 'libds_pdfcodec.so' /tmp/own_libs.txt
           grep -q 'libds_dewarp.so' /tmp/own_libs.txt
           grep -q 'libds_stitch.so' /tmp/own_libs.txt
+          grep -q 'libds_qr.so' /tmp/own_libs.txt
           docnet_size=$(awk '/libds_docnet.so/ {print $1}' /tmp/own_libs.txt)
           echo "libds_docnet.so: $docnet_size bytes"
           test "$docnet_size" -lt 2500000

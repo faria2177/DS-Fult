@@ -38,6 +38,8 @@ class ScannerSession(
     private val eventSink: (Map<String, Any?>) -> Unit,
 ) {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    // QR / barcode reading on live frames (libds_qr.so), own thread.
+    private val codeReader = QrReader.Live { codes -> eventSink(mapOf("codes" to codes)) }
     private val captureExecutor = Executors.newSingleThreadExecutor()
     private val openCvDetector = OpenCvBoundaryAdapter()
     internal val salientAssist = LiveSalientAssist()
@@ -267,6 +269,14 @@ class ScannerSession(
             // then refer to that exact field without a second offset guess.
             val crop = YuvUtils.checkedCrop(
                 image.width, image.height, proxy.cropRect)
+            if (codeReader.wants(now)) {
+                try {
+                    val full = YuvUtils.extractLuma(image, QrReader.Live.SIDE, crop)
+                    codeReader.offer(full.data, full.width, full.height, rotation, now)
+                } catch (_: Throwable) {
+                    // A code reader problem must never stop page detection.
+                }
+            }
             val downscaleTo = 384
             val (luma, width, height) =
                 YuvUtils.extractLuma(image, downscaleTo, crop)
@@ -697,6 +707,7 @@ class ScannerSession(
         // Analyzer and native mats must not be released while a frame runs.
         analysisExecutor.execute { openCvDetector.release() }
         analysisExecutor.shutdown()
+        codeReader.dispose()
         captureExecutor.shutdown()
         textureEntry.release()
     }

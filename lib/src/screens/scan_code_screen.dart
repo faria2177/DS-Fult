@@ -1,11 +1,14 @@
 import 'dart:io';
 
+import 'package:doclens/doclens.dart' show LiveCode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/code_actions.dart';
 import '../theme.dart';
 
 /// Reads QR and common linear/2D barcodes from a captured or imported image.
@@ -37,15 +40,22 @@ class _ScanCodeScreenState extends State<ScanCodeScreen> {
           imageQuality: 95, maxWidth: 3000, maxHeight: 3000);
       if (image == null || !mounted) return;
       setState(() { _busy = true; _codes = []; _notice = null; _photoPath = image.path; });
+      final unique = <String>{};
+      final found = <_CodeResult>[];
+      // libds_qr.so (zxing-cpp) first; ML Kit reads whatever it missed.
+      for (final code in await _nativeCodes(image.path)) {
+        if (unique.add(code.value)) found.add(code);
+      }
       final scanner = BarcodeScanner(formats: const [BarcodeFormat.all]);
       try {
-        final decoded = await scanner.processImage(InputImage.fromFilePath(image.path));
-        final unique = <String>{};
-        final found = <_CodeResult>[];
-        for (final code in decoded) {
-          final value = (code.rawValue ?? code.displayValue ?? '').trim();
-          if (value.isEmpty || !unique.add(value)) continue;
-          found.add(_CodeResult(code.format.name, value));
+        if (found.isEmpty) {
+          final decoded =
+              await scanner.processImage(InputImage.fromFilePath(image.path));
+          for (final code in decoded) {
+            final value = (code.rawValue ?? code.displayValue ?? '').trim();
+            if (value.isEmpty || !unique.add(value)) continue;
+            found.add(_CodeResult(code.format.name, value));
+          }
         }
         if (mounted) {
           setState(() {
@@ -67,6 +77,21 @@ class _ScanCodeScreenState extends State<ScanCodeScreen> {
     }
   }
 
+  static const _channel = MethodChannel('doclens/methods');
+
+  Future<List<_CodeResult>> _nativeCodes(String path) async {
+    try {
+      final raw = await _channel.invokeListMethod<Object?>(
+          'readCodesInFile', {'imagePath': path});
+      return [
+        for (final code in LiveCode.listFrom(raw))
+          _CodeResult(code.label, code.text.trim()),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _copy(String value) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (mounted) {
@@ -84,7 +109,8 @@ class _ScanCodeScreenState extends State<ScanCodeScreen> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
       const Text('Capture a clear image or select one from your gallery. '
-          'Detection runs locally on your phone.',
+          'Detection runs locally on your phone. The Scan camera also reads '
+          'QR codes and barcodes live.',
           style: TextStyle(color: dsMuted)),
       const SizedBox(height: 20),
       Row(children: [
@@ -124,7 +150,11 @@ class _ScanCodeScreenState extends State<ScanCodeScreen> {
             const SizedBox(height: 8),
             SelectableText(result.value),
             const SizedBox(height: 10),
-            Row(children: [
+            Wrap(children: [
+              if (CodeActions.isLink(result.value))
+                TextButton.icon(onPressed: () => launchUrl(
+                    Uri.parse(result.value), mode: LaunchMode.externalApplication),
+                    icon: const Icon(Icons.open_in_new), label: const Text('Open')),
               TextButton.icon(onPressed: () => _copy(result.value),
                   icon: const Icon(Icons.copy_outlined), label: const Text('Copy')),
               TextButton.icon(onPressed: () => SharePlus.instance.share(

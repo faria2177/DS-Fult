@@ -237,6 +237,14 @@ class DoclensPlugin :
                     mainHandler.post { result.success(out) }
                 }
             }
+            "readCodesInFile" -> {
+                val path = call.argument<String>("imagePath")
+                if (path == null) { result.success(emptyList<Any>()); return }
+                stillImageExecutor.execute {
+                    val out = try { QrReader.readFile(path) } catch (_: Throwable) { emptyList() }
+                    mainHandler.post { result.success(out) }
+                }
+            }
             "stitchLongImage" -> {
                 val paths = call.argument<List<String>>("paths")
                 val watermark = call.argument<Boolean>("watermark") == true
