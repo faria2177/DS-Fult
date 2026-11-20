@@ -122,9 +122,20 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
     if (mounted) setState(() {});
   }
 
+  /// Grid indexes shown on the CamScanner-style processing page while the
+  /// selected photos are cropped and enhanced; empty for system-picker
+  /// imports, which keep the simple progress overlay.
+  List<int> _processingIndexes = const [];
+  int _finishedPages = 0;
+
   Future<void> _import() async {
     if (_busy || _picked.isEmpty) return;
-    setState(() { _busy = true; _progress = 'Loading selected photos…'; });
+    setState(() {
+      _busy = true;
+      _progress = 'Loading selected photos…';
+      _processingIndexes = List<int>.of(_picked);
+      _finishedPages = 0;
+    });
     await _process(() async {
       final sourcePaths = <String>[];
       for (final index in List<int>.of(_picked)) {
@@ -160,6 +171,9 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
         onProgress: (message) {
           if (mounted) setState(() => _progress = message);
         },
+        onPagesFinished: (finished) {
+          if (mounted) setState(() => _finishedPages = finished);
+        },
       );
       if (mounted) Navigator.pop(context, result);
     } catch (error) {
@@ -168,8 +182,73 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
           content: Text('Could not import selected photos: $error')));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _processingIndexes = const [];
+        });
+      }
     }
+  }
+
+  /// Like CamScanner after Import(n): the new document's pages appear at
+  /// once, each dimmed with "Processing images… Please do NOT quit the
+  /// app" until it is cropped and enhanced.
+  Widget _processingPage() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final title = 'DocScanner ${two(now.day)}-${two(now.month)}-${now.year} '
+        '${two(now.hour)}.${two(now.minute)}';
+    return Scaffold(
+      key: const Key('gallery-processing-page'),
+      backgroundColor: const Color(0xFF1B1B1D),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1B1B1D),
+        foregroundColor: Colors.white54,
+        automaticallyImplyLeading: false,
+        leading: const Icon(Icons.arrow_back),
+        title: Text(title, style: const TextStyle(fontSize: 16)),
+      ),
+      body: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 14,
+          childAspectRatio: .66),
+        itemCount: _processingIndexes.length,
+        itemBuilder: (context, i) {
+          final done = i < _finishedPages;
+          return Column(children: [
+            Expanded(child: Stack(fit: StackFit.expand, children: [
+              FutureBuilder<Uint8List?>(
+                future: _thumbnail(_processingIndexes[i]),
+                builder: (context, snapshot) => snapshot.data == null
+                    ? const ColoredBox(color: Color(0xFF2A2C30))
+                    : Image.memory(snapshot.data!, fit: BoxFit.cover,
+                        gaplessPlayback: true),
+              ),
+              if (!done) ColoredBox(
+                color: const Color(0xB3000000),
+                child: Center(child: Column(mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    SizedBox(width: 26, height: 26,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.5)),
+                    SizedBox(height: 10),
+                    Text('Processing images…', textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('Please do NOT quit the app',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  ])),
+              ),
+            ])),
+            const SizedBox(height: 6),
+            Text((i + 1).toString().padLeft(2, '0'),
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ]);
+        },
+      ),
+    );
   }
 
   Widget _tile(int index) {
@@ -228,6 +307,9 @@ class _GalleryPickerScreenState extends State<GalleryPickerScreen> {
   @override
   Widget build(BuildContext context) {
     final count = widget.source.count;
+    if (_busy && _processingIndexes.isNotEmpty) {
+      return PopScope(canPop: false, child: _processingPage());
+    }
     return PopScope(canPop: !_busy, child: Scaffold(
       backgroundColor: const Color(0xFF181A1D),
       appBar: AppBar(
