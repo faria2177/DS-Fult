@@ -79,6 +79,37 @@ void main() {
     expect(q.bottomLeft.dx, closeTo(60 / 640, .025));
   });
 
+  test('table rules running off the frame keep the page corner', () {
+    // dim_page_fills_frame: the sheet runs off the right and bottom edges
+    // and its tables reach the frame; the opening must not eat the strips
+    // between their rules (the corner used to be cut diagonally).
+    final image = img.Image(width: 600, height: 800);
+    img.fill(image, color: img.ColorRgb8(90, 60, 80));
+    for (var y = 0; y < 800; y++) {
+      final left = 24 - 6 * y / 800;
+      for (var x = 0; x < 600; x++) {
+        final top = 40 - 14 * x / 600;
+        if (x >= left && y >= top) image.setPixelRgb(x, y, 196, 196, 192);
+      }
+    }
+    for (var y = 420; y < 800; y += 22) {
+      for (var x = 60; x < 600; x++) {
+        image.setPixelRgb(x, y, 40, 40, 40);
+        image.setPixelRgb(x, y + 1, 40, 40, 40);
+      }
+    }
+    for (var x = 300; x < 600; x += 90) {
+      for (var y = 420; y < 800; y++) {
+        image.setPixelRgb(x, y, 40, 40, 40);
+      }
+    }
+    final region = PaperRegionDetector.detectBytes(
+        Uint8List.fromList(img.encodePng(image)))!;
+    final q = region.detection!.quad!;
+    expect(q.bottomRight.dx, greaterThan(.97));
+    expect(q.bottomRight.dy, greaterThan(.97));
+  });
+
   test('a photo that is all paper gives no crop but counts as paper', () {
     final image = img.Image(width: 300, height: 400);
     img.fill(image, color: img.ColorRgb8(240, 240, 236));
