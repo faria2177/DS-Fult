@@ -92,6 +92,8 @@ def main():
     ap.add_argument('--out', default='docnet.pt')
     ap.add_argument('--epochs', type=int, default=24)
     ap.add_argument('--batch', type=int, default=64)
+    ap.add_argument('--init', help='start from these weights (fine-tuning)')
+    ap.add_argument('--lr', type=float, default=3e-3)
     args = ap.parse_args()
     torch.set_num_threads(2)
     torch.manual_seed(0)
@@ -106,10 +108,12 @@ def main():
     xv, yv = x[:n_val], y[:n_val]
     xt, yt = x[n_val:], y[n_val:]
     model = DocNet()
+    if args.init:
+        model.load_state_dict(torch.load(args.init, map_location='cpu'))
     print('params', sum(p.numel() for p in model.parameters()))
-    opt = torch.optim.AdamW(model.parameters(), 3e-3, weight_decay=1e-4)
+    opt = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=1e-4)
     steps = args.epochs * (len(xt) // args.batch)
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, 3e-3, total_steps=steps)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, args.lr, total_steps=steps)
     for epoch in range(args.epochs):
         model.train()
         perm = torch.randperm(len(xt))
