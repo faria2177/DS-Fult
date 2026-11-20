@@ -3,14 +3,15 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+import 'live_code.dart';
 import 'method_channel_platform.dart';
 import 'models.dart';
 import 'ocr.dart';
 import 'platform_interface.dart';
 import 'quad.dart';
 import 'quad_smoother.dart';
-import 'shutter_quad_selector.dart';
 import 'sharpness_tracker.dart';
+import 'shutter_quad_selector.dart';
 import 'stability_tracker.dart';
 import 'status_classifier.dart';
 
@@ -81,6 +82,11 @@ class DoclensController extends ChangeNotifier {
       StreamController.broadcast();
   final StreamController<bool> _lowLightCtrl = StreamController.broadcast();
   final StreamController<Size> _previewSizeCtrl = StreamController.broadcast();
+  final StreamController<List<LiveCode>> _codesCtrl =
+      StreamController.broadcast();
+
+  /// QR codes / barcodes seen in the live camera (libds_qr.so).
+  Stream<List<LiveCode>> get codeStream => _codesCtrl.stream;
 
   Stream<Quad?> get quadStream => _quadCtrl.stream;
   Stream<DetectionStatus> get statusStream => _statusCtrl.stream;
@@ -177,7 +183,9 @@ class DoclensController extends ChangeNotifier {
       _previewSizeCtrl.add(ps);
       notifyListeners();
     }
-    if (event.isPreviewSizeOnly) return;
+    final codes = event.codes;
+    if (codes != null && codes.isNotEmpty) _codesCtrl.add(codes);
+    if (event.isInfoOnly) return;
 
     // Run the raw quad through a median filter so jitter doesn't reach the
     // overlay or the stability tracker. Smoothing is a no-op when disabled.
@@ -590,6 +598,7 @@ class DoclensController extends ChangeNotifier {
     await _autoCaptureCtrl.close();
     await _lowLightCtrl.close();
     await _previewSizeCtrl.close();
+    await _codesCtrl.close();
     super.dispose();
   }
 }

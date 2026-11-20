@@ -486,6 +486,13 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Local synthetic check: overlaps 120–700 px with gain 0.9–1.05, shifts −10…+6 px, noise → all exact (±1 px); unrelated / blank / repeating-table pairs refused; zoom ≥ 2 % between parts refused (falls back to plain join). ~0.12 s per pair at 1100 px width.
 - LongImageStitcher.kt (channel `stitchLongImage`): pages at width 1100, join at the middle of the repeated band, shift compensated, watermark footer via Canvas, JPEG 86; 15 500 px limit as before. Dart `createSmartLongImage` (fallback: old Dart join); Long Image screen has a "Smart stitch" switch (default on) showing joined count.
 
+## v0.5.69 — Native library: libds_qr.so (QR / barcode, live + still)
+
+- ds_qr.{h,cpp} + ds_qr_jni.cpp around zxing-cpp 2.2.1 (Apache-2.0, readers only; CMake FetchContent by pinned commit 99a83b3). UTF-8 text passed via Java String(byte[], UTF_8). Host check: rotated+noisy QR with Bengali text, EAN-13, blurred Code128 read; blank → none.
+- Live: ScannerSession offers a 1280-px luma frame every 500 ms to QrReader.Live (own thread, one at a time); `codes` info events (do not clear the quad) → DoclensController.codeStream → LiveCodeChip in DoclensView (hides after 4 s); DoclensCodeActions.onTap set by the app (CodeActions sheet: Open link / Copy / Share).
+- Still: channel `readCodesInFile`; ScanCodeScreen (was not reachable) now in Tools → Scan Code, native first then ML Kit.
+- Emulator check: fixture `qrCodeScene` (QR printed on a page on cloth, OpenCV QRCodeEncoder) must be read via `readCodesInFile`.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

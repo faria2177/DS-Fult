@@ -7,6 +7,7 @@ import 'fallback/fallback_engine.dart';
 import 'method_channel_platform.dart';
 import 'models.dart';
 import 'ocr.dart';
+import 'live_code.dart';
 import 'quad.dart';
 
 /// Raw event from the native detection stream.
@@ -21,6 +22,7 @@ class DetectionEvent {
     this.lowLight = false,
     this.previewSize,
     this.sharpness,
+    this.codes,
   });
   final Quad? quad;
   final bool lowLight;
@@ -31,7 +33,13 @@ class DetectionEvent {
   /// does not provide it — consumers treat null as "no signal".
   final double? sharpness;
 
+  /// QR codes / barcodes read on a recent frame (a separate info event).
+  final List<LiveCode>? codes;
+
   bool get isPreviewSizeOnly => previewSize != null && quad == null;
+
+  /// Metadata only (preview size or codes): must not clear the quad.
+  bool get isInfoOnly => (previewSize != null || codes != null) && quad == null;
 }
 
 /// Platform interface for the native pipeline. The default implementation

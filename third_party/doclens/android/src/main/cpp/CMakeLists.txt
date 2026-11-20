@@ -109,3 +109,31 @@ set_target_properties(ds_docnet PROPERTIES
     VISIBILITY_INLINES_HIDDEN YES
 )
 target_link_options(ds_docnet PRIVATE -Wl,--gc-sections "-Wl,-z,max-page-size=16384")
+
+# QR / barcode reading: zxing-cpp 2.2.1 (Apache-2.0), readers only, built
+# from its tagged source (commit pinned), plus DocScanner's JNI wrapper.
+FetchContent_Declare(zxing_source
+    GIT_REPOSITORY https://github.com/zxing-cpp/zxing-cpp.git
+    GIT_TAG 99a83b3a6ac514d7f850dda7fa24cddb5120c7e2
+    GIT_SHALLOW FALSE
+)
+FetchContent_GetProperties(zxing_source)
+if(NOT zxing_source_POPULATED)
+    FetchContent_Populate(zxing_source)
+endif()
+foreach(option BUILD_WRITERS BUILD_EXAMPLES BUILD_BLACKBOX_TESTS BUILD_UNIT_TESTS
+        BUILD_PYTHON_MODULE BUILD_C_API BUILD_SHARED_LIBS)
+    set(${option} OFF CACHE BOOL "" FORCE)
+endforeach()
+set(BUILD_READERS ON CACHE BOOL "" FORCE)
+add_subdirectory(${zxing_source_SOURCE_DIR} ${zxing_source_BINARY_DIR} EXCLUDE_FROM_ALL)
+
+add_library(ds_qr SHARED ds_qr.cpp ds_qr_jni.cpp)
+target_compile_features(ds_qr PRIVATE cxx_std_17)
+target_compile_options(ds_qr PRIVATE -O2)
+target_link_libraries(ds_qr ZXing::ZXing)
+set_target_properties(ds_qr PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES
+)
+target_link_options(ds_qr PRIVATE -Wl,--gc-sections "-Wl,-z,max-page-size=16384")

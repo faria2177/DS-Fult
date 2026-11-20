@@ -31,6 +31,7 @@ import 'pdf_tools_screen.dart';
 import 'pdf_to_images_screen.dart';
 import 'photo_studio_screen.dart';
 import 'qr_code_screen.dart';
+import 'scan_code_screen.dart';
 import 'reorder_pages_screen.dart';
 import 'rotate_pages_screen.dart';
 import 'scan_more_settings_screen.dart';
@@ -440,6 +441,7 @@ class _HomeShellState extends State<HomeShell> {
       'Utilities': [
         _Tool('Print', Icons.print_outlined, () => _openExisting('print')),
         _Tool('Create QR Code', Icons.qr_code_2_outlined, _createQrCode),
+        _Tool('Scan Code', Icons.qr_code_scanner, _scanCode),
       ],
     };
     const iconColors = [Color(0xFF20C7B0), Color(0xFF3D91FA),
@@ -839,6 +841,11 @@ class _HomeShellState extends State<HomeShell> {
     await Navigator.push<void>(context, MaterialPageRoute(
       builder: (_) => const TextToPdfScreen(),
     ));
+  }
+
+  Future<void> _scanCode() async {
+    await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => const ScanCodeScreen()));
   }
 
   Future<void> _createQrCode() async {

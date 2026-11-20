@@ -12,6 +12,7 @@ import 'dart:ui';
 import 'package:docscanner/src/screens/gallery_import_review_screen.dart';
 import 'package:docscanner/src/services/document_edges.dart';
 import 'package:docscanner/src/services/image_processor.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
@@ -117,5 +118,17 @@ void main() {
       }
     }
     expect(failures, isEmpty, reason: failures.join('\n'));
+  });
+
+  testWidgets('libds_qr reads a QR code printed on a page photo', (tester) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/qr_code_on_page.jpg');
+    await file.writeAsBytes(base64Decode(qrCodeScene), flush: true);
+    final raw = await const MethodChannel('doclens/methods')
+        .invokeListMethod<Object?>('readCodesInFile', {'imagePath': file.path});
+    // ignore: avoid_print
+    print('QRCODE found=${raw?.length ?? 0} ${raw ?? ''}');
+    final texts = [for (final item in raw ?? const []) (item as Map)['text']];
+    expect(texts, contains(qrCodeText));
   });
 }
