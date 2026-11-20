@@ -110,22 +110,23 @@ set_target_properties(ds_docnet PROPERTIES
 )
 target_link_options(ds_docnet PRIVATE -Wl,--gc-sections "-Wl,-z,max-page-size=16384")
 
-# QR / barcode reading: zxing-cpp 2.2.1 (Apache-2.0), readers only, built
+# QR / barcode reading: zxing-cpp 2.3.0 (Apache-2.0), readers only, built
 # from its tagged source (commit pinned), plus DocScanner's JNI wrapper.
+# (2.2.x does not build with the NDK 28 libc++: char_traits<unsigned char>.)
 FetchContent_Declare(zxing_source
     GIT_REPOSITORY https://github.com/zxing-cpp/zxing-cpp.git
-    GIT_TAG 99a83b3a6ac514d7f850dda7fa24cddb5120c7e2
-    GIT_SHALLOW FALSE
+    GIT_TAG d6068bcebeb8fd9f0d35a99b00d202be86a14dbe
 )
 FetchContent_GetProperties(zxing_source)
 if(NOT zxing_source_POPULATED)
     FetchContent_Populate(zxing_source)
 endif()
-foreach(option BUILD_WRITERS BUILD_EXAMPLES BUILD_BLACKBOX_TESTS BUILD_UNIT_TESTS
-        BUILD_PYTHON_MODULE BUILD_C_API BUILD_SHARED_LIBS)
+set(ZXING_WRITERS OFF CACHE STRING "" FORCE)
+set(ZXING_READERS ON CACHE BOOL "" FORCE)
+foreach(option ZXING_EXAMPLES ZXING_BLACKBOX_TESTS ZXING_UNIT_TESTS
+        ZXING_PYTHON_MODULE ZXING_C_API BUILD_SHARED_LIBS)
     set(${option} OFF CACHE BOOL "" FORCE)
 endforeach()
-set(BUILD_READERS ON CACHE BOOL "" FORCE)
 add_subdirectory(${zxing_source_SOURCE_DIR} ${zxing_source_BINARY_DIR} EXCLUDE_FROM_ALL)
 
 add_library(ds_qr SHARED ds_qr.cpp ds_qr_jni.cpp)

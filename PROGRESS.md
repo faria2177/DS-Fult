@@ -488,7 +488,7 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 
 ## v0.5.69 — Native library: libds_qr.so (QR / barcode, live + still)
 
-- ds_qr.{h,cpp} + ds_qr_jni.cpp around zxing-cpp 2.2.1 (Apache-2.0, readers only; CMake FetchContent by pinned commit 99a83b3). UTF-8 text passed via Java String(byte[], UTF_8). Host check: rotated+noisy QR with Bengali text, EAN-13, blurred Code128 read; blank → none.
+- ds_qr.{h,cpp} + ds_qr_jni.cpp around zxing-cpp 2.3.0 (Apache-2.0, readers only; CMake FetchContent by pinned commit d6068bc; 2.2.1 failed to build with the NDK 28 libc++ — char_traits<unsigned char>). UTF-8 text passed via Java String(byte[], UTF_8). Host check: rotated+noisy QR with Bengali text, EAN-13, blurred Code128 read; blank → none.
 - Live: ScannerSession offers a 1280-px luma frame every 500 ms to QrReader.Live (own thread, one at a time); `codes` info events (do not clear the quad) → DoclensController.codeStream → LiveCodeChip in DoclensView (hides after 4 s); DoclensCodeActions.onTap set by the app (CodeActions sheet: Open link / Copy / Share).
 - Still: channel `readCodesInFile`; ScanCodeScreen uses it first, then ML Kit. Not added back to Tools: "Scan Code" was one of the nine Tools entries the user had removed (test/me_scan_settings_test.dart); the live chip in Scan is the entry point.
 - Emulator check: fixture `qrCodeScene` (QR printed on a page on cloth, OpenCV QRCodeEncoder) must be read via `readCodesInFile`.
