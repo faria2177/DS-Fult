@@ -107,4 +107,29 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     settings.dispose();
   });
+
+  testWidgets('General uses the same framed Front screen as the cards',
+      (tester) async {
+    final settings = ReferenceScanSettings();
+    await tester.pumpWidget(MaterialApp(home: ReferenceIdCardChrome(
+      preview: const ColoredBox(color: Color(0xFF333333)),
+      label: 'General', side: 'General', portraitGuide: false,
+      accent: const Color(0xFF00BBA4), flashMode: FlashMode.off,
+      capturing: false, settings: settings,
+      onClose: () {}, onFlash: () {}, onCapture: () {},
+    )));
+    expect(find.text('Front'), findsOneWidget);
+    expect(find.byKey(const Key('card-frame')), findsOneWidget);
+    expect(find.byIcon(Icons.hd), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    settings.dispose();
+  });
+
+  test('card frame is centred at the ID-1 ratio', () {
+    final rect = cardFrameRect(const Size(400, 600));
+    expect(rect.center, const Offset(200, 300));
+    expect(rect.width / rect.height, closeTo(1.58, .01));
+    expect(rect.width, closeTo(352, .5));
+  });
 }

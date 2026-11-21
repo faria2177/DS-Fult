@@ -85,16 +85,54 @@ class _DocumentScreenState extends State<DocumentScreen> {
     final page = doc.pages[_index];
     setState(() => _busy = true);
     try {
-      final source = await File(
-        rotation != 0 ? page.path : page.originalPath,
-      ).readAsBytes();
+      if (rotation != 0) {
+        // Turn both the shown page and its unfiltered original, and keep
+        // the chosen filter: the next filter is rendered from the original.
+        final shown = await ImageProcessor.process(
+            await File(page.path).readAsBytes(), rotateDegrees: rotation);
+        final original = page.originalPath == page.path ? shown
+            : await ImageProcessor.process(
+                await File(page.originalPath).readAsBytes(),
+                rotateDegrees: rotation);
+        await widget.store.replacePageBytes(doc.id, page.id, shown,
+            filter: page.filter, originalBytes: original);
+        return;
+      }
+      // Filters are always rendered from the unfiltered original, so
+      // picking one after another never stacks them.
+      final source = await File(page.originalPath).readAsBytes();
       final bytes = await ImageProcessor.process(source,
-          filter: filter, rotateDegrees: rotation);
+          filter: filter, documentMode: true);
       await widget.store.replacePageBytes(doc.id, page.id, bytes, filter: filter.label);
     } catch (error) {
       _message('Image processing failed: $error');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Small previews of every filter for the current page's original.
+  final Map<String, Uint8List> _filterPreviews = {};
+  String? _previewsFor;
+
+  Future<void> _buildFilterPreviews(String originalPath) async {
+    if (_previewsFor == originalPath) return;
+    _previewsFor = originalPath;
+    try {
+      final small = await ImageProcessor.thumbnail(
+          await File(originalPath).readAsBytes(), maxSide: 220);
+      for (final filter in _referenceFilters) {
+        if (!mounted || _previewsFor != originalPath) return;
+        final key = '$originalPath|${filter.name}';
+        if (_filterPreviews.containsKey(key)) continue;
+        final bytes = filter == ScanFilter.original ? small
+            : await ImageProcessor.process(small,
+                filter: filter, documentMode: true);
+        if (!mounted) return;
+        setState(() => _filterPreviews[key] = bytes);
+      }
+    } catch (_) {
+      // Thumbnails fall back to the page image.
     }
   }
 
@@ -471,6 +509,16 @@ class _DocumentScreenState extends State<DocumentScreen> {
         ]),
       ));
 
+  Widget _filterThumb(ScanPage page, ScanFilter filter) {
+    unawaited(_buildFilterPreviews(page.originalPath));
+    final preview = _filterPreviews['${page.originalPath}|${filter.name}'];
+    return preview != null
+        ? Image.memory(preview, fit: BoxFit.cover, width: double.infinity,
+            gaplessPlayback: true)
+        : Image.file(File(page.path), cacheWidth: 190,
+            fit: BoxFit.cover, width: double.infinity);
+  }
+
   Widget _filterBar(ScanDocument doc) => SizedBox(height: 86,
     child: ListView(scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -486,9 +534,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
                   color: const Color(0xFF343438),
                 ),
                 child: Column(children: [
-                  Expanded(child: Image.file(File(doc.pages[_index].path),
-                      cacheWidth: 190,
-                      fit: BoxFit.cover, width: double.infinity)),
+                  Expanded(child: _filterThumb(doc.pages[_index], filter)),
                   Text(_filterTitle(filter), maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white, fontSize: 10)),
                 ]),

@@ -17,6 +17,7 @@ on:
       - 'lib/src/services/image_processor.dart'
       - 'lib/src/services/native_scanner_core.dart'
       - 'third_party/doclens/android/**'
+      - 'third_party/doclens/lib/**'
       - 'integration_test/**'
       - 'tool/make_autocrop_fixtures.py'
       - '.github/workflows/autocrop-device-check.yml'
@@ -59,7 +60,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: flutter test integration_test/auto_crop_device_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee autocrop.log; grep -E "AUTOCROP|DocumentEdges|QRCODE" autocrop.log | head -80; adb pull /sdcard/Android/data/com.docscan.docscanner/files/autocrop shots || true; grep -q "All tests passed" autocrop.log
+          script: flutter test integration_test/auto_crop_device_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee autocrop.log; grep -E "AUTOCROP|CARDCROP|DocumentEdges|QRCODE" autocrop.log | head -80; adb pull /sdcard/Android/data/com.docscan.docscanner/files/autocrop shots || true; grep -q "All tests passed" autocrop.log
       - name: Upload imported pages
         if: always()
         uses: actions/upload-artifact@v4

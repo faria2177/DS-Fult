@@ -182,6 +182,7 @@ class DocumentStore extends ChangeNotifier {
     String extension = '.jpg',
     bool replaceOriginal = false,
     bool asWatermark = false,
+    Uint8List? originalBytes,
   }) async {
     final doc = byId(documentId);
     if (doc == null) return;
@@ -190,10 +191,18 @@ class DocumentStore extends ChangeNotifier {
     }
     final imagePath = p.join(_images.path, '${_uuid.v4()}$extension');
     await File(imagePath).writeAsBytes(jpegBytes, flush: true);
+    // A rotation must turn the unfiltered original too, or the next filter
+    // (always rendered from the original) would undo it.
+    String? newOriginal;
+    if (originalBytes != null) {
+      newOriginal = p.join(_images.path, '${_uuid.v4()}.jpg');
+      await File(newOriginal).writeAsBytes(originalBytes, flush: true);
+    }
     final pages = doc.pages.map((page) {
       if (page.id != pageId) return page;
       return page.copyWith(path: imagePath,
-          originalPath: replaceOriginal ? imagePath : null, filter: filter,
+          originalPath: newOriginal ?? (replaceOriginal ? imagePath : null),
+          filter: filter,
           watermarkBackupPath: asWatermark ? page.path : null,
           clearWatermark: !asWatermark);
     }).toList(growable: false);

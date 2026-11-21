@@ -78,6 +78,10 @@ class CropQuad {
 }
 
 class ImageProcessor {
+  /// Small upright JPEG copy (long side ≤ [maxSide]) for filter previews.
+  static Future<Uint8List> thumbnail(Uint8List source, {int maxSide = 220}) =>
+      compute(_thumbnailInIsolate, {'bytes': source, 'maxSide': maxSide});
+
   /// Original files stay untouched; transforms always return a new JPEG.
   static Future<Uint8List> process(
     Uint8List source, {
@@ -155,6 +159,19 @@ Uint8List _processInIsolate(Map<String, dynamic> options) {
       : img.encodeJpg(image, quality: options['quality'] as int? ?? 94));
 }
 
+Uint8List _thumbnailInIsolate(Map<String, Object?> options) {
+  final decoded = img.decodeImage(options['bytes']! as Uint8List);
+  if (decoded == null) throw const FormatException('Unsupported image');
+  final upright = img.bakeOrientation(decoded);
+  final side = options['maxSide']! as int;
+  final scale = side / math.max(upright.width, upright.height);
+  final small = scale >= 1 ? upright : img.copyResize(upright,
+      width: math.max(1, (upright.width * scale).round()),
+      height: math.max(1, (upright.height * scale).round()),
+      interpolation: img.Interpolation.average);
+  return Uint8List.fromList(img.encodeJpg(small, quality: 90));
+}
+
 img.Image _filterImage(img.Image input, ScanFilter filter,
     {bool documentMode = false}) {
   // A cropped black-and-white page (letters, forms, tables): scanner-style
@@ -162,6 +179,19 @@ img.Image _filterImage(img.Image input, ScanFilter filter,
   if (documentMode && filter == ScanFilter.enhance &&
       isNeutralDocument(input)) {
     return scanDocument(input);
+  }
+  switch (filter) {
+    case ScanFilter.shadowFree:
+    case ScanFilter.blackWhite:
+    case ScanFilter.eco:
+    case ScanFilter.grayscale:
+    case ScanFilter.lighten:
+    case ScanFilter.magicColor:
+    case ScanFilter.noWatermark:
+    case ScanFilter.noHandwriting:
+      return _paperFilter(input, filter);
+    default:
+      break;
   }
   final image = img.Image.from(input);
   // A gold/cream plastic card is not neutral white paper. Once its *outer*
@@ -692,90 +722,8 @@ img.Image scanDocument(img.Image input) {
     }
   }
 
-  // 1. Paper map on a coarse grid.
-  final block = math.max(4, math.max(w, h) ~/ 96);
-  final gw = (w + block - 1) ~/ block;
-  final gh = (h + block - 1) ~/ block;
-  var grid = Float32List(gw * gh);
-  for (var gy = 0; gy < gh; gy++) {
-    for (var gx = 0; gx < gw; gx++) {
-      // 95th percentile of the block (robust to specks), via a histogram.
-      final hist = List<int>.filled(64, 0);
-      var n = 0;
-      for (var y = gy * block; y < math.min(h, (gy + 1) * block); y += 2) {
-        for (var x = gx * block; x < math.min(w, (gx + 1) * block); x += 2) {
-          hist[(lum[y * w + x] / 4).floor().clamp(0, 63)]++;
-          n++;
-        }
-      }
-      var acc = 0;
-      var value = 63;
-      for (var i = 63; i >= 0; i--) {
-        acc += hist[i];
-        if (acc >= n * .05) {
-          value = i;
-          break;
-        }
-      }
-      grid[gy * gw + gx] = value * 4 + 2;
-    }
-  }
-  Float32List maxFilter(Float32List g, int radius) {
-    final out = Float32List(gw * gh);
-    for (var y = 0; y < gh; y++) {
-      for (var x = 0; x < gw; x++) {
-        var m = 0.0;
-        for (var dy = -radius; dy <= radius; dy++) {
-          final yy = (y + dy).clamp(0, gh - 1);
-          for (var dx = -radius; dx <= radius; dx++) {
-            final v = g[yy * gw + (x + dx).clamp(0, gw - 1)];
-            if (v > m) m = v;
-          }
-        }
-        out[y * gw + x] = m;
-      }
-    }
-    return out;
-  }
-
-  Float32List boxBlur(Float32List g, int radius) {
-    final out = Float32List(gw * gh);
-    for (var y = 0; y < gh; y++) {
-      for (var x = 0; x < gw; x++) {
-        var sum = 0.0;
-        var count = 0;
-        for (var dy = -radius; dy <= radius; dy++) {
-          final yy = y + dy;
-          if (yy < 0 || yy >= gh) continue;
-          for (var dx = -radius; dx <= radius; dx++) {
-            final xx = x + dx;
-            if (xx < 0 || xx >= gw) continue;
-            sum += g[yy * gw + xx];
-            count++;
-          }
-        }
-        out[y * gw + x] = sum / count;
-      }
-    }
-    return out;
-  }
-
-  // Large dark areas (thick tables, filled boxes) must not darken the map.
-  grid = maxFilter(grid, 2);
-  grid = boxBlur(boxBlur(grid, 2), 2);
-  double paperAt(int x, int y) {
-    final fx = ((x + .5) / block - .5).clamp(0.0, gw - 1.0);
-    final fy = ((y + .5) / block - .5).clamp(0.0, gh - 1.0);
-    final x0 = fx.floor();
-    final y0 = fy.floor();
-    final x1 = math.min(gw - 1, x0 + 1);
-    final y1 = math.min(gh - 1, y0 + 1);
-    final tx = fx - x0;
-    final ty = fy - y0;
-    final top = grid[y0 * gw + x0] * (1 - tx) + grid[y0 * gw + x1] * tx;
-    final bottom = grid[y1 * gw + x0] * (1 - tx) + grid[y1 * gw + x1] * tx;
-    return math.max(60, top * (1 - ty) + bottom * ty);
-  }
+  final paper = _PaperMap.build(lum, w, h);
+  double paperAt(int x, int y) => paper.at(x, y);
 
   // 2 + 3. Normalise and tone-map.
   final out = img.Image(width: w, height: h);
@@ -822,6 +770,214 @@ img.Image scanDocument(img.Image input) {
       } else {
         final c = _byte(v);
         out.setPixelRgb(x, y, c, c, c);
+      }
+    }
+  }
+  return out;
+}
+
+/// Smooth estimate of the paper brightness at every pixel: per-block 95th
+/// percentile, widened (text and table lines vanish), smoothed. Shadows, a
+/// darker corner or a grey phone photo live in this map; dividing by it
+/// makes the paper uniformly 1.0. The floor (55 % of the bright paper)
+/// keeps a large dark photo on an ID card from being blown out.
+class _PaperMap {
+  _PaperMap._(this.grid, this.gw, this.gh, this.block, this.bright)
+      : floor = math.max(60.0, bright * .55);
+
+  final Float32List grid;
+  final int gw, gh, block;
+
+  /// Brightness of the brightest tenth of the page (the paper overall).
+  final double bright;
+  final double floor;
+
+  static _PaperMap build(Float32List lum, int w, int h) {
+    final block = math.max(4, math.max(w, h) ~/ 96);
+    final gw = (w + block - 1) ~/ block;
+    final gh = (h + block - 1) ~/ block;
+    var grid = Float32List(gw * gh);
+    final global = List<int>.filled(64, 0);
+    var globalCount = 0;
+    for (var gy = 0; gy < gh; gy++) {
+      for (var gx = 0; gx < gw; gx++) {
+        final hist = List<int>.filled(64, 0);
+        var n = 0;
+        for (var y = gy * block; y < math.min(h, (gy + 1) * block); y += 2) {
+          for (var x = gx * block; x < math.min(w, (gx + 1) * block); x += 2) {
+            final bin = (lum[y * w + x] / 4).floor().clamp(0, 63);
+            hist[bin]++;
+            global[bin]++;
+            n++;
+          }
+        }
+        globalCount += n;
+        var acc = 0;
+        var value = 63;
+        for (var i = 63; i >= 0; i--) {
+          acc += hist[i];
+          if (acc >= n * .05) {
+            value = i;
+            break;
+          }
+        }
+        grid[gy * gw + gx] = value * 4 + 2;
+      }
+    }
+    var acc = 0;
+    var bright = 63;
+    for (var i = 63; i >= 0; i--) {
+      acc += global[i];
+      if (acc >= globalCount * .10) {
+        bright = i;
+        break;
+      }
+    }
+    Float32List maxFilter(Float32List g, int radius) {
+      final out = Float32List(gw * gh);
+      for (var y = 0; y < gh; y++) {
+        for (var x = 0; x < gw; x++) {
+          var m = 0.0;
+          for (var dy = -radius; dy <= radius; dy++) {
+            final yy = (y + dy).clamp(0, gh - 1);
+            for (var dx = -radius; dx <= radius; dx++) {
+              final v = g[yy * gw + (x + dx).clamp(0, gw - 1)];
+              if (v > m) m = v;
+            }
+          }
+          out[y * gw + x] = m;
+        }
+      }
+      return out;
+    }
+
+    Float32List boxBlur(Float32List g, int radius) {
+      final out = Float32List(gw * gh);
+      for (var y = 0; y < gh; y++) {
+        for (var x = 0; x < gw; x++) {
+          var sum = 0.0;
+          var count = 0;
+          for (var dy = -radius; dy <= radius; dy++) {
+            final yy = y + dy;
+            if (yy < 0 || yy >= gh) continue;
+            for (var dx = -radius; dx <= radius; dx++) {
+              final xx = x + dx;
+              if (xx < 0 || xx >= gw) continue;
+              sum += g[yy * gw + xx];
+              count++;
+            }
+          }
+          out[y * gw + x] = sum / count;
+        }
+      }
+      return out;
+    }
+
+    // Large dark areas (thick tables, filled boxes) must not darken the map.
+    grid = maxFilter(grid, 2);
+    grid = boxBlur(boxBlur(grid, 2), 2);
+    return _PaperMap._(grid, gw, gh, block, bright * 4 + 2.0);
+  }
+
+  double at(int x, int y) {
+    final fx = ((x + .5) / block - .5).clamp(0.0, gw - 1.0);
+    final fy = ((y + .5) / block - .5).clamp(0.0, gh - 1.0);
+    final x0 = fx.floor();
+    final y0 = fy.floor();
+    final x1 = math.min(gw - 1, x0 + 1);
+    final y1 = math.min(gh - 1, y0 + 1);
+    final tx = fx - x0;
+    final ty = fy - y0;
+    final top = grid[y0 * gw + x0] * (1 - tx) + grid[y0 * gw + x1] * tx;
+    final bottom = grid[y1 * gw + x0] * (1 - tx) + grid[y1 * gw + x1] * tx;
+    return math.max(floor, top * (1 - ty) + bottom * ty);
+  }
+}
+
+/// Ink-to-paper tone curve shared by Enhance and Magic Pro.
+double _scannerTone(double n) {
+  if (n >= .90) return 255;
+  if (n <= .45) return 18 + n / .45 * 30;
+  final t = (n - .45) / .45;
+  return 48 + (255 - 48) * (t * t * (3 - 2 * t));
+}
+
+/// Scanner-style presets built on the paper map: every one of them removes
+/// shadows and uneven light first, then renders its own look.
+img.Image _paperFilter(img.Image input, ScanFilter filter) {
+  final w = input.width;
+  final h = input.height;
+  final lum = Float32List(w * h);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final p = input.getPixel(x, y);
+      lum[y * w + x] = _luma(p.r.toDouble(), p.g.toDouble(), p.b.toDouble());
+    }
+  }
+  final paper = _PaperMap.build(lum, w, h);
+  final out = img.Image(width: w, height: h);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      final p = input.getPixel(x, y);
+      final r = p.r.toDouble();
+      final g = p.g.toDouble();
+      final b = p.b.toDouble();
+      final l = lum[y * w + x];
+      final local = paper.at(x, y);
+      final n = (l / local).clamp(0.0, 1.3);
+      final tint = math.max(r, math.max(g, b)) - math.min(r, math.min(g, b));
+      switch (filter) {
+        case ScanFilter.shadowFree:
+          // Even light, colours kept.
+          final k = (245 / local).clamp(.9, 2.6);
+          out.setPixelRgb(x, y, _byte(r * k), _byte(g * k), _byte(b * k));
+        case ScanFilter.blackWhite:
+          final v = n < .74 ? 0 : 255;
+          out.setPixelRgb(x, y, v, v, v);
+        case ScanFilter.eco:
+          // Toner saver: dark grey strokes on white.
+          final v = n < .70 ? 70 : 255;
+          out.setPixelRgb(x, y, v, v, v);
+        case ScanFilter.grayscale:
+          final v = n > .93 ? 255 : _byte(n * 255 * 1.02);
+          out.setPixelRgb(x, y, v, v, v);
+        case ScanFilter.lighten:
+          final k = (250 / local).clamp(.9, 2.2);
+          int lift(double c) =>
+              _byte(255 * math.pow((c * k).clamp(0.0, 255.0) / 255, .8).toDouble());
+          out.setPixelRgb(x, y, lift(r), lift(g), lift(b));
+        case ScanFilter.magicColor:
+          // White paper, crisp dark text, vivid colour.
+          final k = 255 / local;
+          final rr = r * k, gg = g * k, bb = b * k;
+          final ol = math.max(1.0, _luma(rr, gg, bb));
+          final tl = _scannerTone((ol / 255).clamp(0.0, 1.2));
+          final scale = tl / ol;
+          const saturation = 1.3;
+          out.setPixelRgb(x, y,
+            _byte(tl + (rr - ol) * saturation * scale),
+            _byte(tl + (gg - ol) * saturation * scale),
+            _byte(tl + (bb - ol) * saturation * scale));
+        case ScanFilter.noWatermark:
+          // Faint grey marks (watermarks, show-through) become paper white;
+          // real ink and colour stay.
+          if (n >= .80 && tint < 40) {
+            out.setPixelRgb(x, y, 255, 255, 255);
+          } else {
+            final k = (255 / local).clamp(.9, 2.6);
+            out.setPixelRgb(x, y, _byte(r * k), _byte(g * k), _byte(b * k));
+          }
+        case ScanFilter.noHandwriting:
+          // Saturated pen strokes (blue/red ink) on a light page → paper.
+          final pen = tint > 58 && l < 200 && paper.bright > 150;
+          if (pen || n >= .9) {
+            out.setPixelRgb(x, y, 255, 255, 255);
+          } else {
+            final k = (255 / local).clamp(.9, 2.6);
+            out.setPixelRgb(x, y, _byte(r * k), _byte(g * k), _byte(b * k));
+          }
+        default:
+          out.setPixelRgb(x, y, _byte(r), _byte(g), _byte(b));
       }
     }
   }

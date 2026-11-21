@@ -99,10 +99,10 @@ class _CameraScreenState extends State<CameraScreen> {
           (widget.cardTemplate == null || widget.cardTemplate?.sideCount == 2
               ? 2 : null));
 
+  // General, ID Card, Driver License and Bank Card all use the landscape
+  // card frame, so all of them look for the card's own four corners.
   bool get _detectCardBounds => widget.cardMode &&
-      (widget.cardTemplate == null ||
-          (widget.cardTemplate != IdCardTemplate.general &&
-           !widget.cardTemplate!.portraitGuide));
+      (widget.cardTemplate == null || !widget.cardTemplate!.portraitGuide);
 
   String get _cameraIdentity => CameraScreen.captureConfigKey(
         _settings, batchMode: _batchMode,

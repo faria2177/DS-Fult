@@ -29,4 +29,5 @@ export 'src/widgets/scan_frame_overlay.dart';
 export 'src/widgets/reference_scan_chrome.dart';
 export 'src/widgets/scan_chrome_style.dart';
 export 'src/widgets/reference_scan_settings.dart';
+export 'src/widgets/card_scan_animation.dart';
 export 'src/widgets/reference_id_card_chrome.dart';
