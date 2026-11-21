@@ -851,23 +851,7 @@ class DocumentEdges {
     // whether one object clearly stands apart from the surface it lies on.
     // ID Card mode keeps its own dedicated card logic.
     if (!preferIdCardBounds && galleryDetectors) {
-      // A business card held further away is small in the frame, and a tilted
-    // one looks longer than 2:1. The native card mask still found its four
-    // corners; accept them with the relaxed card-camera limits.
-    for (final idCard in const [true, false]) {
-      ImageDetection? native;
-      try {
-        native = await detect(imagePath, preferIdCardBounds: idCard);
-      } catch (error) {
-        _log(imagePath, 'card fallback native pass failed: $error');
-      }
-      if (native != null &&
-          _isCardShaped(native, minArea: .04, maxAspect: 2.35)) {
-        _log(imagePath, 'accepted small or tilted native card');
-        return _refineSafely(imagePath, native, preferIdCardBounds: true);
-      }
-    }
-    final separated = await BackgroundContrastContour.detectFile(imagePath);
+      final separated = await BackgroundContrastContour.detectFile(imagePath);
       if (separated != null) {
         _log(imagePath, 'accepted object separated from its background');
         return separated;
