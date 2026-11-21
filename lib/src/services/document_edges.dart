@@ -188,7 +188,14 @@ class DocumentEdges {
   /// A compact central text box is easy to mistake for a card, so require
   /// substantial coverage, an actual landscape-card ratio and a near-centred
   /// fully visible outline. A weak result keeps the unmodified original.
-  static bool isCredibleStandaloneCard(ImageDetection detection) {
+  static bool isCredibleStandaloneCard(ImageDetection detection) =>
+      _isCardShaped(detection, minArea: .19);
+
+  /// Card-camera fallback gate. A detector that already separated one object
+  /// from its surface (segmentation model / background contrast) may return
+  /// a smaller business card; the aspect, centre and frame rules still apply.
+  static bool _isCardShaped(ImageDetection detection,
+      {required double minArea}) {
     final quad = detection.quad;
     final size = detection.imageSize;
     if (quad == null || size.width <= 0 || size.height <= 0 ||
@@ -200,8 +207,9 @@ class DocumentEdges {
     // only ~20% of the image. The dedicated native card pass independently
     // checks chroma, outside corners and aspect ratio before returning it.
     // Still reject tiny printed name blocks and near-full background pages.
-    if (area < .19 || area > .86) {
-      return _reject('card', 'coverage ${area.toStringAsFixed(3)} outside .19–.86');
+    if (area < minArea || area > .86) {
+      return _reject('card', 'coverage ${area.toStringAsFixed(3)} outside '
+          '${minArea.toStringAsFixed(2)}–.86');
     }
     if (quad.points.any((p) => !p.dx.isFinite || !p.dy.isFinite ||
         p.dx < .004 || p.dx > .996 || p.dy < .004 || p.dy > .996)) {
@@ -583,9 +591,26 @@ class DocumentEdges {
         return salient.detection;
       }
     }
-    final found = await _detectSafeStillOutlineCoarse(imagePath,
+    // Card camera (General / ID / Driver licence / Bank card): the
+    // segmentation model sees one object lying on cloth, a sheet or a desk
+    // far more reliably than the rectangle detectors. Accept it only when its
+    // four edges are confirmed and it is card-shaped.
+    if (preferIdCardBounds) {
+      salient = await SalientDocumentDetector.detectFile(imagePath);
+      if (salient != null && salient.edgesConfirmed &&
+          isCredibleStandaloneCard(salient.detection)) {
+        _log(imagePath, 'accepted segmentation-model card outline');
+        return _refineSafely(imagePath, salient.detection,
+            preferIdCardBounds: true);
+      }
+    }
+    var found = await _detectSafeStillOutlineCoarse(imagePath,
         preferIdCardBounds: preferIdCardBounds,
         galleryDetectors: galleryDetectors);
+    if (preferIdCardBounds && found == null) {
+      found = await _cardCameraFallback(imagePath, salient);
+      if (found != null) return found;
+    }
     // A sheet photographed from close up runs off the frame; its visible
     // outline (corners may sit on the frame edge) is what CamScanner crops.
     final paper = !preferIdCardBounds && galleryDetectors
@@ -616,6 +641,40 @@ class DocumentEdges {
     // the unchanged detection.
     return _refineSafely(imagePath, found,
         preferIdCardBounds: preferIdCardBounds);
+  }
+
+  /// The dedicated card chain declined. Run the general page/object chain
+  /// and keep only a card-shaped answer, so a card on patterned cloth or a
+  /// printed sheet is still cropped at its own four corners.
+  static Future<ImageDetection?> _cardCameraFallback(
+      String imagePath, SalientResult? salient) async {
+    ImageDetection? general;
+    try {
+      general = await _detectSafeStillOutlineCoarse(imagePath,
+          preferIdCardBounds: false, galleryDetectors: false);
+    } catch (error) {
+      _log(imagePath, 'card fallback page chain failed: $error');
+    }
+    if (general != null && isCredibleStandaloneCard(general)) {
+      _log(imagePath, 'accepted card from the page chain');
+      return _refineSafely(imagePath, general, preferIdCardBounds: true);
+    }
+    final separated = await BackgroundContrastContour.detectFile(imagePath);
+    if (separated != null && _isCardShaped(separated, minArea: .04)) {
+      _log(imagePath, 'accepted card separated from its background');
+      return _refineSafely(imagePath, separated, preferIdCardBounds: true);
+    }
+    if (salient != null && _isCardShaped(salient.detection, minArea: .04)) {
+      _log(imagePath, 'accepted segmentation-model card (small)');
+      return _refineSafely(imagePath, salient.detection,
+          preferIdCardBounds: true);
+    }
+    final paper = (await PaperRegionDetector.detectFile(imagePath))?.detection;
+    if (paper != null && isCredibleStandaloneCard(paper)) {
+      _log(imagePath, 'accepted card-shaped paper region');
+      return paper;
+    }
+    return null;
   }
 
   /// True when [paper] is a clearly bigger sheet that contains [found].
