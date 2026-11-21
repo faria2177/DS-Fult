@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -96,7 +97,7 @@ class _CardScanAnimationState extends State<CardScanAnimation>
                 // The still, exactly where the live preview showed it.
                 if (raw != null)
                   Image.memory(raw, fit: BoxFit.cover, gaplessPlayback: true,
-                      errorBuilder: (_, _, _) => const ColoredBox(
+                      errorBuilder: (context, error, stack) => const ColoredBox(
                           color: Colors.black)),
                 if (v < _morphEnd)
                   Opacity(
@@ -119,7 +120,7 @@ class _CardScanAnimationState extends State<CardScanAnimation>
                         if (cropped != null)
                           Image.memory(cropped, fit: BoxFit.fill,
                               gaplessPlayback: true,
-                              errorBuilder: (_, _, _) =>
+                              errorBuilder: (context, error, stack) =>
                                   const ColoredBox(color: Colors.white))
                         else
                           const ColoredBox(color: Colors.white),
