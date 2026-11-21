@@ -195,7 +195,7 @@ class DocumentEdges {
   /// from its surface (segmentation model / background contrast) may return
   /// a smaller business card; the aspect, centre and frame rules still apply.
   static bool _isCardShaped(ImageDetection detection,
-      {required double minArea}) {
+      {required double minArea, double maxAspect = 2.10}) {
     final quad = detection.quad;
     final size = detection.imageSize;
     if (quad == null || size.width <= 0 || size.height <= 0 ||
@@ -228,8 +228,9 @@ class DocumentEdges {
         (points[2] - points[1]).distance) / 2;
     if (width <= 0 || height <= 0) return _reject('card', 'invalid side length');
     final ratio = width > height ? width / height : height / width;
-    if (ratio < 1.48 || ratio > 2.10) {
-      return _reject('card', 'aspect ${ratio.toStringAsFixed(2)} outside 1.48–2.10');
+    if (ratio < 1.48 || ratio > maxAspect) {
+      return _reject('card', 'aspect ${ratio.toStringAsFixed(2)} outside '
+          '1.48–${maxAspect.toStringAsFixed(2)}');
     }
     return true;
   }
@@ -659,12 +660,28 @@ class DocumentEdges {
       _log(imagePath, 'accepted card from the page chain');
       return _refineSafely(imagePath, general, preferIdCardBounds: true);
     }
+    // A business card held further away is small in the frame, and a tilted
+    // one looks longer than 2:1. The native card mask still found its four
+    // corners; accept them with the relaxed card-camera limits.
+    for (final idCard in const [true, false]) {
+      ImageDetection? native;
+      try {
+        native = await detect(imagePath, preferIdCardBounds: idCard);
+      } catch (error) {
+        _log(imagePath, 'card fallback native pass failed: $error');
+      }
+      if (native != null &&
+          _isCardShaped(native, minArea: .04, maxAspect: 2.35)) {
+        _log(imagePath, 'accepted small or tilted native card');
+        return _refineSafely(imagePath, native, preferIdCardBounds: true);
+      }
+    }
     final separated = await BackgroundContrastContour.detectFile(imagePath);
-    if (separated != null && _isCardShaped(separated, minArea: .04)) {
+    if (separated != null && _isCardShaped(separated, minArea: .04, maxAspect: 2.35)) {
       _log(imagePath, 'accepted card separated from its background');
       return _refineSafely(imagePath, separated, preferIdCardBounds: true);
     }
-    if (salient != null && _isCardShaped(salient.detection, minArea: .04)) {
+    if (salient != null && _isCardShaped(salient.detection, minArea: .04, maxAspect: 2.35)) {
       _log(imagePath, 'accepted segmentation-model card (small)');
       return _refineSafely(imagePath, salient.detection,
           preferIdCardBounds: true);
@@ -675,6 +692,13 @@ class DocumentEdges {
       return paper;
     }
     return null;
+  }
+
+  static bool _sameQuad(Quad a, Quad b) {
+    for (var i = 0; i < 4; i++) {
+      if ((a.points[i] - b.points[i]).distance > .02) return false;
+    }
+    return true;
   }
 
   /// True when [paper] is a clearly bigger sheet that contains [found].
@@ -812,12 +836,38 @@ class DocumentEdges {
           'offline=${offlineArea?.toStringAsFixed(3) ?? 'none'})');
     }
     if (normalIsSafe) return normal;
+    // A small business card: the page pass and the dedicated card pass both
+    // landed on the same small card-shaped quad. Two independent detectors
+    // agreeing is strong evidence it is the object, not a printed box.
+    final cardQuad = card?.quad;
+    if (!preferIdCardBounds && normalQuad != null && cardQuad != null &&
+        _sameQuad(normalQuad, cardQuad) &&
+        _isCardShaped(card!, minArea: .04, maxAspect: 2.35)) {
+      _log(imagePath, 'accepted small card found by both native passes');
+      return card;
+    }
     // Every rectangle-based path declined. A small card or photo lying on a
     // table or cloth is exactly what those size gates refuse, so finally ask
     // whether one object clearly stands apart from the surface it lies on.
     // ID Card mode keeps its own dedicated card logic.
     if (!preferIdCardBounds && galleryDetectors) {
-      final separated = await BackgroundContrastContour.detectFile(imagePath);
+      // A business card held further away is small in the frame, and a tilted
+    // one looks longer than 2:1. The native card mask still found its four
+    // corners; accept them with the relaxed card-camera limits.
+    for (final idCard in const [true, false]) {
+      ImageDetection? native;
+      try {
+        native = await detect(imagePath, preferIdCardBounds: idCard);
+      } catch (error) {
+        _log(imagePath, 'card fallback native pass failed: $error');
+      }
+      if (native != null &&
+          _isCardShaped(native, minArea: .04, maxAspect: 2.35)) {
+        _log(imagePath, 'accepted small or tilted native card');
+        return _refineSafely(imagePath, native, preferIdCardBounds: true);
+      }
+    }
+    final separated = await BackgroundContrastContour.detectFile(imagePath);
       if (separated != null) {
         _log(imagePath, 'accepted object separated from its background');
         return separated;
