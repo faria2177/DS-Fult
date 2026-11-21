@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'reference_scan_chrome.dart';
+import 'card_scan_animation.dart';
 import 'reference_id_card_chrome.dart';
 import 'reference_scan_settings.dart';
 
@@ -160,6 +163,7 @@ class DoclensScreen extends StatefulWidget {
     this.referencePickerBuilder,
     this.referenceIdCardChrome = false,
     this.quickCardCapture = false,
+    this.cardScanAnimation = true,
     this.skipCaptureReview = false,
     this.referenceCardLabel = 'ID Card',
     this.referenceCardSide = 'Front',
@@ -417,6 +421,10 @@ class DoclensScreen extends StatefulWidget {
   /// full original JPEGs remain available for four/edge-handle adjustments
   /// on the combined A4 preview. Standard Single/Batch keeps its review UI.
   final bool quickCardCapture;
+
+  /// Card capture plays the scan-band animation (video 386540) over the
+  /// captured still before the next side / the result.
+  final bool cardScanAnimation;
   /// Bypass the intermediate Retake / Adjust corners / Next screen.
   /// The host CameraScreen still uses validated native/still four-corner
   /// crops and opens its manual corner editor when detection is uncertain.
@@ -990,7 +998,28 @@ class _DoclensScreenState extends State<DoclensScreen> {
     widget.onPagesChanged?.call(List.unmodifiable(_pages));
   }
 
+  ScanResult? _animating;
+  Completer<void>? _animationDone;
+
+  Future<void> _playCardAnimation(ScanResult result) {
+    final done = Completer<void>();
+    _animationDone = done;
+    setState(() => _animating = result);
+    return done.future;
+  }
+
+  void _finishCardAnimation() {
+    final done = _animationDone;
+    _animationDone = null;
+    if (mounted) setState(() => _animating = null);
+    if (done != null && !done.isCompleted) done.complete();
+  }
+
   Future<void> _handleCapture(ScanResult result) async {
+    if (widget.referenceIdCardChrome && widget.cardScanAnimation) {
+      await _playCardAnimation(result);
+      if (!mounted) return;
+    }
     // The deleted intermediate review screen is unnecessary in the app's
     // Scan mode: the host receives native cropped and raw original paths,
     // re-detects still edges and provides a manual fallback if needed.
@@ -1269,14 +1298,27 @@ class _DoclensScreenState extends State<DoclensScreen> {
   Widget _referenceIdCardCameraView() => AnimatedBuilder(
         animation: _controller,
         builder: (context, _) => ReferenceIdCardChrome(
-          preview: _plainCameraView(),
+          preview: Stack(fit: StackFit.expand, children: [
+            _plainCameraView(),
+            if (_animating != null)
+              CardScanAnimation(
+                key: ValueKey(_animating!.rawImagePath),
+                rawImagePath: _animating!.rawImagePath,
+                rawImageSize: _animating!.rawImageSize,
+                quad: _animating!.detectedQuad,
+                croppedImagePath: _animating!.croppedImagePath,
+                portraitGuide: widget.referenceCardPortraitGuide,
+                accent: _accent,
+                onDone: _finishCardAnimation,
+              ),
+          ]),
           label: widget.referenceCardLabel,
           side: widget.multiPage && _pages.isNotEmpty &&
                   widget.maxPages == 2 ? 'Back' : widget.referenceCardSide,
           portraitGuide: widget.referenceCardPortraitGuide,
           accent: _accent,
           flashMode: _controller.flashMode,
-          capturing: _controller.isCapturing,
+          capturing: _controller.isCapturing || _animating != null,
           settings: widget.referenceSettings ?? _fallbackReferenceSettings,
           cameraModes: widget.referenceCameraModes,
           onClose: widget.onReferenceCardClose ?? _handleClose,

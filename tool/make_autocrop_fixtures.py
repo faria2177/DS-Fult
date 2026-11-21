@@ -44,6 +44,28 @@ def cloth(w, h, base, accent, accent2, kind):
         bands = ((np.sin(xx / 25) > .6) | (np.sin(yy / 25) > .6))[..., None]
         img = np.where(bands, np.array(accent, np.float32), img)
         img += (np.sin(xx / 2.0) * 6)[..., None]
+    elif kind == 'floral':
+        # Light satin bedsheet with maroon/pink flowers and a maroon
+        # diagonal border (reference screenshot 386535), plus a pale blue
+        # pillow on the left.
+        img += (np.sin(xx / 3.0 + yy / 5.0) * 6)[..., None]
+        for _ in range(int(w * h / 5000)):
+            cx, cy = rng.uniform(0, w), rng.uniform(0, h)
+            r = rng.uniform(10, 34)
+            for k in range(6):
+                ang = k * np.pi / 3 + rng.uniform(0, .5)
+                px, py = cx + np.cos(ang) * r * .6, cy + np.sin(ang) * r * .6
+                cv2.ellipse(img, (int(px), int(py)), (int(r * .55), int(r * .3)),
+                            np.degrees(ang), 0, 360, accent, 2)
+            cv2.circle(img, (int(cx), int(cy)), int(r * .25), accent2, -1)
+        for off in (-.2, .25):
+            band = np.abs((xx - yy * .45) / w - .55 - off) < .025
+            img[band] = accent
+            dots = band & (np.sin(yy / 6) > .6)
+            img[dots] = (210, 200, 230)
+        pillow = xx < w * .28 + (yy - h * .5) * .08
+        img[pillow] = (225, 200, 175)
+        img[pillow] += (np.sin(yy[pillow] / 9) * 5)[..., None]
     elif kind == 'dark':
         img += (np.sin(xx / 6 + np.sin(yy / 11) * 3) * 18)[..., None]
         for _ in range(60):
@@ -100,6 +122,35 @@ def bank_card(w, h):
                   (60, 170, 200), -1)
     cv2.putText(c, '1234 5678 9012 3456', (int(w * .08), int(h * .72)),
                 cv2.FONT_HERSHEY_SIMPLEX, w / 700, (235, 235, 235), 2)
+    return c
+
+
+def business_card(w, h):
+    c = np.full((h, w, 3), 244, np.uint8)
+    cv2.circle(c, (w // 2, int(h * .22)), int(h * .13), (60, 60, 60), 3)
+    cv2.circle(c, (w // 2, int(h * .22)), int(h * .06), (60, 60, 60), -1)
+    lines = ['Md. Name Surname', 'Deputy Junior Officer', 'BANK PLC.',
+             'Mobile : 01325-053260', 'E-mail : name@example.com']
+    for i, t in enumerate(lines):
+        cv2.putText(c, t, (int(w * .08), int(h * (.48 + i * .1))),
+                    cv2.FONT_HERSHEY_SIMPLEX, w / 1100, (35, 35, 35), 2)
+    return c
+
+
+def driver_license(w, h):
+    c = np.zeros((h, w, 3), np.uint8)
+    for y in range(h):
+        t = y / h
+        c[y, :] = (235 - 30 * t, 215 - 10 * t, 205 + 20 * t)
+    c[:int(h * .16)] = (120, 60, 30)
+    cv2.putText(c, 'DRIVING LICENCE', (int(w * .06), int(h * .11)),
+                cv2.FONT_HERSHEY_SIMPLEX, w / 900, (240, 240, 240), 2)
+    cv2.rectangle(c, (int(w * .06), int(h * .24)), (int(w * .3), int(h * .78)),
+                  (150, 160, 175), -1)
+    for i in range(6):
+        cv2.putText(c, f'{i + 1}. FIELD VALUE {i * 37}',
+                    (int(w * .36), int(h * (.3 + i * .09))),
+                    cv2.FONT_HERSHEY_SIMPLEX, w / 1500, (40, 40, 40), 1)
     return c
 
 
@@ -241,6 +292,22 @@ def main():
           page(400, 700), [(.40, .36), (.62, .35), (.63, .70), (.41, .71)],
           shadow=.25)
 
+    # Card templates on a floral bedsheet (screenshot 386535): General
+    # (business card), ID card, driver licence and bank card, held inside
+    # the camera's card frame with some tilt.
+    sheet = lambda: cloth(900, 1200, (200, 205, 212), (70, 40, 140),
+                          (150, 110, 200), 'floral')
+    scene('id_card_on_floral_sheet', sheet(), id_card(856, 540),
+          [(.10, .33), (.90, .31), (.92, .62), (.08, .64)], shadow=.25)
+    scene('driver_license_on_floral_sheet', sheet(), driver_license(856, 540),
+          [(.12, .35), (.88, .36), (.90, .63), (.10, .61)], shadow=.25)
+    scene('bank_card_on_floral_sheet', sheet(), bank_card(856, 540),
+          [(.09, .34), (.90, .33), (.88, .61), (.11, .62)], shadow=.25)
+    scene('business_card_on_floral_sheet', sheet(), business_card(856, 520),
+          [(.11, .33), (.91, .35), (.89, .62), (.09, .60)], shadow=.25)
+    scene('small_business_card_on_floral_sheet', sheet(), business_card(856, 520),
+          [(.30, .52), (.70, .50), (.72, .66), (.31, .68)], shadow=.2)
+
     # 386313: a notice photographed on a blue partition; the page runs off
     # the top and bottom, and a light wall rail crosses the photo behind it,
     # touching both sides of the sheet.
@@ -269,6 +336,13 @@ def main():
         lines.append(f'    [{flat}],')
         lines.append('  ),')
     lines.append('};')
+    card_names = [n for n, _, _ in SCENES if any(
+        k in n for k in ('card', 'license'))]
+    lines.append('/// Card scenes, also checked with the card-camera detector.')
+    lines.append('const cardSceneNames = <String>[')
+    for n in card_names:
+        lines.append(f"  '{n}',")
+    lines.append('];')
     # A page photo with a printed QR code, for the live/still code reader.
     qr = cv2.QRCodeEncoder.create().encode(QR_TEXT)
     qr = cv2.resize(qr, (qr.shape[1] * 8, qr.shape[0] * 8),

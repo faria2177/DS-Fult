@@ -120,6 +120,36 @@ void main() {
     expect(failures, isEmpty, reason: failures.join('\n'));
   });
 
+  testWidgets('card camera finds the four corners of every card type',
+      (tester) async {
+    // General, ID Card, Driver License and Bank Card captures go through
+    // the card detector (preferIdCardBounds, camera detector chain).
+    final dir = await getTemporaryDirectory();
+    final failures = <String>[];
+    for (final name in cardSceneNames) {
+      final (data, flat) = autoCropScenes[name]!;
+      final file = File('${dir.path}/card_$name.jpg');
+      await file.writeAsBytes(base64Decode(data), flush: true);
+      final truth = [
+        for (var i = 0; i < 8; i += 2) Offset(flat[i], flat[i + 1]),
+      ];
+      final detection = await DocumentEdges.detectSafeStillOutline(file.path,
+          preferIdCardBounds: true, galleryDetectors: false);
+      final quad = detection?.quad;
+      final iou = quad == null ? 0.0 : quadIou(quad.points, truth);
+      final batch = await DocumentEdges.autoCropFiles([file.path],
+          preferIdCardBounds: true, galleryDetectors: false);
+      // ignore: avoid_print
+      print('CARDCROP $name iou=${iou.toStringAsFixed(3)} '
+          'cropped=${batch.croppedCount}');
+      if (iou < .90 || batch.croppedCount != 1) {
+        failures.add('$name: iou ${iou.toStringAsFixed(3)}, '
+            'cropped ${batch.croppedCount}');
+      }
+    }
+    expect(failures, isEmpty, reason: failures.join('\n'));
+  });
+
   testWidgets('libds_qr reads a QR code printed on a page photo', (tester) async {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/qr_code_on_page.jpg');

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models.dart';
@@ -83,13 +85,12 @@ class ReferenceIdCardChrome extends StatelessWidget {
                   const SizedBox(width: ScanChromeStyle.topIconGap),
                   IconButton(tooltip: 'HD', onPressed: () =>
                       settings.togglePanel(ScanCameraPanel.hd),
-                    icon: const Text('HD', style: TextStyle(color: Colors.white,
-                      fontSize: ScanChromeStyle.hdFont,
-                      fontWeight: FontWeight.w900))),
+                    icon: const Icon(Icons.hd, color: Colors.white,
+                        size: ScanChromeStyle.topIcon + 4)),
                   const SizedBox(width: ScanChromeStyle.topIconGap),
                   IconButton(tooltip: 'Settings',
                     onPressed: () => settings.togglePanel(ScanCameraPanel.settings),
-                    icon: const Icon(Icons.more_horiz, color: Colors.white,
+                    icon: const Icon(Icons.more_vert, color: Colors.white,
                         size: ScanChromeStyle.topIcon)),
                   const SizedBox(width: 6),
                 ]),
@@ -100,19 +101,13 @@ class ReferenceIdCardChrome extends StatelessWidget {
               if (settings.grid) IgnorePointer(child: CustomPaint(
                 painter: _CardGridPainter(),
               )),
-              Center(child: LayoutBuilder(builder: (context, constraints) {
-                final frameWidth = constraints.maxWidth * .88;
-                final frameHeight = portraitGuide
-                    ? (constraints.maxHeight * .92).clamp(100.0, 650.0).toDouble()
-                    : frameWidth / 1.58;
-                final width = portraitGuide
-                    ? frameHeight * .70 : frameWidth;
-                return Center(child: SizedBox(
-                  width: width.clamp(80.0, frameWidth).toDouble(),
-                  height: frameHeight,
-                  child: const CustomPaint(painter: _CardCornersPainter()),
-                ));
-              })),
+              // Card frame (reference screenshot 386535): the camera stays
+              // clear inside rounded white corner brackets and is dimmed
+              // around them.
+              IgnorePointer(child: CustomPaint(
+                key: const Key('card-frame'),
+                painter: CardFramePainter(portraitGuide: portraitGuide),
+              )),
               Positioned(top: 21, left: 16, right: 16,
                 child: Center(child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -121,7 +116,7 @@ class ReferenceIdCardChrome extends StatelessWidget {
                     borderRadius: BorderRadius.circular(18)),
                   child: Text(portraitGuide
                     ? 'Rotate your device and fit the document into the borders'
-                    : (side == 'General' ? 'Fit it into the borders' : side),
+                    : (side == 'General' ? 'Front' : side),
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white,
                       fontSize: ScanChromeStyle.hintFont)),
@@ -263,36 +258,59 @@ class ReferenceIdCardChrome extends StatelessWidget {
   }
 }
 
-class _CardCornersPainter extends CustomPainter {
-  const _CardCornersPainter();
+/// Where the card frame sits inside the camera area: 88 % of the width at
+/// the ID-1 card ratio (1.58), or a tall passport/certificate frame.
+Rect cardFrameRect(Size area, {bool portraitGuide = false}) {
+  final frameWidth = area.width * .88;
+  final frameHeight = portraitGuide
+      ? (area.height * .92).clamp(100.0, 650.0).toDouble()
+      : frameWidth / 1.58;
+  final width = (portraitGuide ? frameHeight * .70 : frameWidth)
+      .clamp(80.0, frameWidth).toDouble();
+  final height = math.min(frameHeight, area.height * .96);
+  return Rect.fromCenter(center: area.center(Offset.zero),
+      width: width, height: height);
+}
+
+/// Dims the camera around the card frame and draws its rounded corners.
+class CardFramePainter extends CustomPainter {
+  const CardFramePainter({this.portraitGuide = false});
+
+  final bool portraitGuide;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path();
-    const segment = 25.0;
-    const radius = 8.0;
-    path
-      ..moveTo(0, segment)..lineTo(0, radius)
-      ..quadraticBezierTo(0, 0, radius, 0)..lineTo(segment, 0)
-      ..moveTo(size.width - segment, 0)..lineTo(size.width - radius, 0)
-      ..quadraticBezierTo(size.width, 0, size.width, radius)
-      ..lineTo(size.width, segment)
-      ..moveTo(size.width, size.height - segment)
-      ..lineTo(size.width, size.height - radius)
-      ..quadraticBezierTo(size.width, size.height,
-        size.width - radius, size.height)
-      ..lineTo(size.width - segment, size.height)
-      ..moveTo(segment, size.height)..lineTo(radius, size.height)
-      ..quadraticBezierTo(0, size.height, 0, size.height - radius)
-      ..lineTo(0, size.height - segment);
+    final rect = cardFrameRect(size, portraitGuide: portraitGuide);
+    const radius = 12.0;
+    final frame = RRect.fromRectAndRadius(rect, const Radius.circular(radius));
+    canvas.drawPath(
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(Offset.zero & size)
+        ..addRRect(frame),
+      Paint()..color = const Color(0x8C000000),
+    );
+    final segment = math.min(rect.width, rect.height) * .12 + 6;
+    final l = rect.left, t = rect.top, r = rect.right, b = rect.bottom;
+    final path = Path()
+      ..moveTo(l, t + segment)..lineTo(l, t + radius)
+      ..quadraticBezierTo(l, t, l + radius, t)..lineTo(l + segment, t)
+      ..moveTo(r - segment, t)..lineTo(r - radius, t)
+      ..quadraticBezierTo(r, t, r, t + radius)..lineTo(r, t + segment)
+      ..moveTo(r, b - segment)..lineTo(r, b - radius)
+      ..quadraticBezierTo(r, b, r - radius, b)..lineTo(r - segment, b)
+      ..moveTo(l + segment, b)..lineTo(l + radius, b)
+      ..quadraticBezierTo(l, b, l, b - radius)..lineTo(l, b - segment);
     canvas.drawPath(path, Paint()
       ..color = Colors.white
-      ..strokeWidth = 3.5
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CardFramePainter oldDelegate) =>
+      oldDelegate.portraitGuide != portraitGuide;
 }
 
 class _CardGridPainter extends CustomPainter {

@@ -243,6 +243,104 @@ void main() {
     expect(output.getPixel(8, 8).b, lessThan(125));
   });
 
+  group('Paper-map presets on a shadowed page', () {
+    // Grey-blue phone photo of a page, darker towards one corner, with
+    // black text rows, a faint grey watermark band and a blue stamp.
+    img.Image page() {
+      final input = img.Image(width: 300, height: 400);
+      for (var y = 0; y < 400; y++) {
+        for (var x = 0; x < 300; x++) {
+          final v = 200 - 70 * (x / 300 + y / 400) / 2;
+          input.setPixelRgb(x, y, v.round(), (v + 5).round(), (v + 9).round());
+        }
+      }
+      for (var row = 0; row < 10; row++) {
+        final y = 30 + row * 34;
+        for (var x = 30; x < 270; x++) {
+          for (var t = 0; t < 3; t++) {
+            input.setPixelRgb(x, y + t, 50, 50, 54);
+          }
+        }
+      }
+      for (var y = 200; y < 215; y++) {
+        for (var x = 20; x < 280; x++) {
+          final p = input.getPixel(x, y);
+          if (p.r > 100) {
+            input.setPixelRgb(x, y, p.r.toInt() - 18, p.g.toInt() - 18,
+                p.b.toInt() - 18);
+          }
+        }
+      }
+      for (var y = 120; y < 150; y++) {
+        for (var x = 200; x < 240; x++) {
+          input.setPixelRgb(x, y, 50, 70, 175);
+        }
+      }
+      return input;
+    }
+
+    Future<img.Image> run(ScanFilter filter) async => img.decodeImage(
+        await ImageProcessor.process(
+            Uint8List.fromList(img.encodePng(page())), filter: filter,
+            outputPng: true))!;
+
+    test('B&W: white paper in light and shadow, black text', () async {
+      final out = await run(ScanFilter.blackWhite);
+      expect(out.getPixel(10, 10).r, 255);
+      expect(out.getPixel(290, 395).r, 255);
+      expect(out.getPixel(100, 31).r, 0);
+      expect(out.getPixel(250, 337).r, 0);
+    });
+
+    test('Eco: white paper, dark grey text', () async {
+      final out = await run(ScanFilter.eco);
+      expect(out.getPixel(290, 395).r, 255);
+      expect(out.getPixel(250, 337).r, 70);
+    });
+
+    test('Grayscale: even paper, readable text', () async {
+      final out = await run(ScanFilter.grayscale);
+      expect(out.getPixel(10, 10).r, greaterThan(240));
+      expect(out.getPixel(290, 395).r, greaterThan(240));
+      expect(out.getPixel(250, 337).r, lessThan(110));
+    });
+
+    test('Magic Pro: white paper, dark text, the stamp stays blue', () async {
+      final out = await run(ScanFilter.magicColor);
+      expect(out.getPixel(290, 395).r, greaterThan(240));
+      expect(out.getPixel(100, 31).r, lessThan(80));
+      final stamp = out.getPixel(220, 135);
+      expect(stamp.b, greaterThan(stamp.r + 60));
+    });
+
+    test('No Shadow evens the light and keeps colour', () async {
+      final out = await run(ScanFilter.shadowFree);
+      final light = out.getPixel(10, 10).r;
+      final dark = out.getPixel(290, 395).r;
+      expect((light - dark).abs(), lessThan(14));
+      final stamp = out.getPixel(220, 135);
+      expect(stamp.b, greaterThan(stamp.r + 60));
+    });
+
+    test('Lighten brightens the whole page', () async {
+      final before = page().getPixel(150, 300).r;
+      final out = await run(ScanFilter.lighten);
+      expect(out.getPixel(150, 300).r, greaterThan(before + 30));
+    });
+
+    test('No Watermark clears the faint band but keeps text', () async {
+      final out = await run(ScanFilter.noWatermark);
+      expect(out.getPixel(150, 207).r, 255);
+      expect(out.getPixel(100, 31).r, lessThan(120));
+    });
+
+    test('No Handwriting removes blue ink, keeps black text', () async {
+      final out = await run(ScanFilter.noHandwriting);
+      expect(out.getPixel(220, 135).r, 255);
+      expect(out.getPixel(100, 31).r, lessThan(120));
+    });
+  });
+
   test('All scanner effect presets produce decodable images', () async {
     final input = img.Image(width: 48, height: 48);
     for (var y = 0; y < 48; y++) {

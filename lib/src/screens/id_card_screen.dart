@@ -267,7 +267,8 @@ class _IdCardScreenState extends State<IdCardScreen> {
     final result = await Navigator.push<Uint8List>(context, MaterialPageRoute(
       builder: (_) => CropScreen(
         imagePath: _sourcePaths[index],
-        preferIdCardBounds: false,
+        // General shares the card frame: look for the card's corners.
+        preferIdCardBounds: !(widget.template?.portraitGuide ?? false),
       ),
     ));
     if (!mounted || result == null) return;
@@ -403,21 +404,44 @@ class _IdCardScreenState extends State<IdCardScreen> {
     }
   }
 
+  /// Filter chosen for each side, keyed by that side's unfiltered original.
+  final Map<String, ScanFilter> _filterByOriginal = {};
+
   Future<void> _transform({int rotation = 0,
-      ScanFilter filter = ScanFilter.original}) async {
+      ScanFilter? filter}) async {
     if (_selected.isEmpty || _saving || _importing) return;
     final index = _activeIndex;
     setState(() => _importing = true);
     try {
-      final bytes = await ImageProcessor.process(
-        await File(_selected[index]).readAsBytes(),
-        rotateDegrees: rotation, filter: filter,
-      );
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/ds_card_edit_'
+      var original = _originals[index];
+      if (rotation != 0) {
+        // Turn the unfiltered original too, so a later filter keeps the turn.
+        final turned = await ImageProcessor.process(
+            await File(original).readAsBytes(), rotateDegrees: rotation);
+        final file = File('${dir.path}/ds_card_turn_'
+            '${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
+        await file.writeAsBytes(turned, flush: true);
+        final previous = _filterByOriginal.remove(original);
+        original = file.path;
+        if (previous != null) _filterByOriginal[original] = previous;
+      }
+      final chosen = filter ?? _filterByOriginal[original] ?? ScanFilter.original;
+      // Always render from the original: filters never stack.
+      final bytes = chosen == ScanFilter.original
+          ? await File(original).readAsBytes()
+          : await ImageProcessor.process(await File(original).readAsBytes(),
+              filter: chosen, documentMode: true);
+      final out = File('${dir.path}/ds_card_edit_'
           '${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
-      await file.writeAsBytes(bytes, flush: true);
-      if (mounted) setState(() => _selected[index] = file.path);
+      await out.writeAsBytes(bytes, flush: true);
+      if (mounted) {
+        setState(() {
+          _originals[index] = original;
+          _filterByOriginal[original] = chosen;
+          _selected[index] = out.path;
+        });
+      }
     } catch (error) {
       _warn('Could not edit card: $error');
     } finally {
@@ -427,26 +451,33 @@ class _IdCardScreenState extends State<IdCardScreen> {
 
   Future<void> _chooseFilter() async {
     if (_selected.isEmpty) return;
+    final current =
+        _filterByOriginal[_originals[_activeIndex]] ?? ScanFilter.original;
     final filter = await showModalBottomSheet<ScanFilter>(context: context,
       backgroundColor: const Color(0xFF242426),
-      builder: (sheet) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min,
-        children: [
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(padding: EdgeInsets.all(17), child: Text('Filter',
             style: TextStyle(color: Colors.white, fontSize: 18))),
           for (final filter in const [ScanFilter.original,
             ScanFilter.enhance, ScanFilter.magicColor,
+            ScanFilter.shadowFree, ScanFilter.lighten,
             ScanFilter.grayscale, ScanFilter.blackWhite])
-            ListTile(title: Text(filter.label, style: const TextStyle(
-              color: Colors.white)),
+            ListTile(
+              key: Key('card-filter-${filter.name}'),
+              title: Text(switch (filter) {
+                ScanFilter.magicColor => 'Magic Pro',
+                ScanFilter.shadowFree => 'No Shadow',
+                _ => filter.label,
+              }, style: const TextStyle(color: Colors.white)),
+              trailing: filter == current
+                  ? const Icon(Icons.check, color: dsTeal) : null,
               onTap: () => Navigator.pop(sheet, filter)),
         ],
-      )),
+      ))),
     );
-    if (filter != null && filter != ScanFilter.original && mounted) {
-      await _transform(filter: filter);
-    } else if (filter == ScanFilter.original && mounted) {
-      setState(() => _selected[_activeIndex] = _originals[_activeIndex]);
-    }
+    if (filter != null && mounted) await _transform(filter: filter);
   }
 
   Future<void> _compare() async {
