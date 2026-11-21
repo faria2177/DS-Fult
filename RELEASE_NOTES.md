@@ -1,6 +1,6 @@
-## DocScanner v0.5.69
+## DocScanner v0.5.70
 
-- 🔳 **QR code & barcode reading** with the new native library **libds_qr.so** (open-source zxing-cpp engine with DocScanner's own wrapper):
-  - While scanning, a QR code or barcode in front of the camera is read live — a chip shows its content; tap it to **Open** a link, **Copy** or **Share**
-  - Reads QR, Data Matrix, Aztec, PDF417, EAN/UPC, Code 128/39/93, ITF, Codabar and more
-- Everything runs on the phone, offline
+- 🟩 Live camera: the green box now also uses **DocNet** (DocScanner's own document model, libds_docnet.so) instead of only the general U²-Net model — it runs more than twice as often, so the box finds the whole page more reliably
+- 📐 Dewarp: after straightening the page edges, wavy **text lines inside a strongly curled page** are now straightened too
+- 🧵 Smart stitch: parts photographed from a slightly different distance (up to about ±9 %) are now joined too
+- ✂️ Auto crop: a page that fills the photo with tables running off the edge keeps its real corner (it used to be cut diagonally)

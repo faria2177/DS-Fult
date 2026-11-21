@@ -25,7 +25,7 @@ def rand_color(rng, lo=0, hi=255):
 
 def background(rng, w, h):
     kind = rng.choice(['cloth', 'wood', 'plain', 'desk', 'wall', 'blobs',
-                       'tiles'])
+                       'tiles', 'fractal', 'fractal', 'bright'])
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     img = np.zeros((h, w, 3), np.float32)
     base = np.array(rand_color(rng, 20, 230), np.float32)
@@ -62,6 +62,19 @@ def background(rng, w, h):
             cv2.circle(img, (int(rng.uniform(0, w)), int(rng.uniform(0, h))),
                        int(rng.uniform(5, w / 4)), rand_color(rng), -1)
         img = cv2.GaussianBlur(img, (0, 0), rng.uniform(1, 6))
+    elif kind == 'fractal':
+        # Natural-looking texture: noise summed over several scales.
+        tex = np.zeros((h, w), np.float32)
+        for octave in range(5):
+            cell = 2 ** (octave + 2)
+            small = rng.normal(0, 1, (h // cell + 2, w // cell + 2)).astype(np.float32)
+            tex += cv2.resize(small, (w, h), interpolation=cv2.INTER_CUBIC) * (1.6 ** -octave)
+        tint = np.array(rand_color(rng, 10, 60), np.float32) / 60
+        img += tex[..., None] * rng.uniform(8, 30) * tint
+    elif kind == 'bright':
+        # Light table or bedsheet: little contrast with white paper.
+        img[:] = rng.uniform(175, 235)
+        img += (np.sin(xx / rng.uniform(2, 6)) * rng.uniform(0, 6))[..., None]
     elif kind == 'tiles':
         s = rng.uniform(20, 70)
         lines = ((np.mod(xx, s) < 2) | (np.mod(yy, s) < 2))[..., None]
@@ -214,14 +227,47 @@ def random_quad(rng):
     return pts
 
 
-def place(rng, bg, obj, quad):
-    h, w = bg.shape[:2]
+def bend(rng, obj):
+    """Curl or bow the sheet: rows shift by a smooth function of x and y.
+    Returns the bent sheet and its mask (padding is transparent)."""
     oh, ow = obj.shape[:2]
-    src = np.float32([[0, 0], [ow, 0], [ow, oh], [0, oh]])
+    amp = rng.uniform(.01, .05) * oh * rng.choice([-1, 1])
+    pad = int(abs(amp)) + 2
+    yy, xx = np.mgrid[0:oh + 2 * pad, 0:ow].astype(np.float32)
+    u = xx / ow
+    v = (yy - pad) / oh
+    if rng.random() < .5:
+        d = amp * np.sin(np.pi * u) * (0.2 + 0.8 * v ** 2)   # curl at the bottom
+    else:
+        d = amp * (np.abs(2 * u - 1) ** 2 - 1) * (0.5 + 0.5 * v)  # book page
+    src_y = ((yy - pad) - d).astype(np.float32)
+    bent = cv2.remap(obj, xx, src_y, cv2.INTER_LINEAR,
+                     borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    mask = cv2.remap(np.full((oh, ow), 255, np.uint8), xx, src_y, cv2.INTER_NEAREST,
+                     borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    return bent, mask, pad
+
+
+def place(rng, bg, obj, quad, allow_bend=False):
+    h, w = bg.shape[:2]
+    obj_mask = None
+    pad = 0
+    if allow_bend and rng.random() < .3:
+        obj, obj_mask, pad = bend(rng, obj)
+    if rng.random() < .5:  # crumpled / uneven paper shading
+        oh_, ow_ = obj.shape[:2]
+        low = cv2.resize(rng.normal(0, 1, (6, 6)).astype(np.float32), (ow_, oh_),
+                         interpolation=cv2.INTER_CUBIC)
+        obj = np.clip(obj.astype(np.float32) * (1 + rng.uniform(.02, .08) * low[..., None]),
+                      0, 255).astype(np.uint8)
+    oh, ow = obj.shape[:2]
+    src = np.float32([[0, pad], [ow, pad], [ow, oh - pad], [0, oh - pad]])
     dst = np.float32(quad * [w, h])
     m = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(obj, m, (w, h), flags=cv2.INTER_LINEAR)
-    mask = cv2.warpPerspective(np.full((oh, ow), 255, np.uint8), m, (w, h))
+    if obj_mask is None:
+        obj_mask = np.full((oh, ow), 255, np.uint8)
+    mask = cv2.warpPerspective(obj_mask, m, (w, h))
     out = bg.astype(np.float32)
     if rng.random() < .7:
         sh = cv2.GaussianBlur(mask, (0, 0), rng.uniform(3, 15)).astype(np.float32) / 255
@@ -230,6 +276,33 @@ def place(rng, bg, obj, quad):
     a = (cv2.GaussianBlur(mask, (3, 3), 0).astype(np.float32) / 255)[..., None]
     out = out * (1 - a) + warped.astype(np.float32) * a
     return out, mask
+
+
+def clutter(rng, img):
+    """Pens, phones, coins and cables around (and over) the document."""
+    h, w = img.shape[:2]
+    for _ in range(int(rng.integers(0, 4))):
+        kind = rng.choice(['pen', 'phone', 'coin', 'cable'])
+        color = rand_color(rng, 0, 255) if kind != 'phone' else rand_color(rng, 5, 40)
+        if kind == 'pen':
+            p0 = (int(rng.uniform(0, w)), int(rng.uniform(0, h)))
+            ang = rng.uniform(0, np.pi)
+            ln = rng.uniform(.15, .4) * w
+            p1 = (int(p0[0] + ln * np.cos(ang)), int(p0[1] + ln * np.sin(ang)))
+            cv2.line(img, p0, p1, color, int(rng.integers(4, 10)), cv2.LINE_AA)
+        elif kind == 'phone':
+            cx, cy = rng.uniform(0, w), rng.uniform(0, h)
+            box = cv2.boxPoints(((cx, cy), (rng.uniform(.1, .2) * w, rng.uniform(.2, .35) * h),
+                                 rng.uniform(0, 180)))
+            cv2.fillPoly(img, [box.astype(np.int32)], color)
+        elif kind == 'coin':
+            cv2.circle(img, (int(rng.uniform(0, w)), int(rng.uniform(0, h))),
+                       int(rng.uniform(.02, .05) * w), color, -1, cv2.LINE_AA)
+        else:
+            pts = np.cumsum(rng.normal(0, 25, (12, 2)), 0) + [rng.uniform(0, w), rng.uniform(0, h)]
+            cv2.polylines(img, [pts.astype(np.int32)], False, color, int(rng.integers(2, 6)),
+                          cv2.LINE_AA)
+    return img
 
 
 def sample(rng):
@@ -243,7 +316,11 @@ def sample(rng):
         bg, _ = place(rng, bg.astype(np.uint8), other, random_quad(rng) + rng.uniform(-.4, .4, 2))
     doc = document(rng)
     quad = random_quad(rng)
-    img, mask = place(rng, bg.astype(np.uint8), doc, quad)
+    if rng.random() < .3:
+        bg = clutter(rng, bg)
+    img, mask = place(rng, bg.astype(np.uint8), doc, quad, allow_bend=True)
+    if rng.random() < .15:  # something lying on the page edge
+        img = clutter(rng, img)
     # Lighting, colour temperature, shadow band.
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     light = 1 - rng.uniform(0, .45) * ((xx / w - rng.uniform(0, 1)) ** 2 +
@@ -259,7 +336,18 @@ def sample(rng):
         grey = img.mean(2, keepdims=True)
         img = img * .4 + grey * .6
     img = 255 * (np.clip(img, 0, 255) / 255) ** rng.uniform(.7, 1.4)
+    if rng.random() < .4:  # lens vignetting
+        r2 = ((xx / w - .5) ** 2 + (yy / h - .5) ** 2) * 2
+        img *= (1 - rng.uniform(.1, .35) * r2)[..., None]
     img = cv2.GaussianBlur(img, (0, 0), rng.uniform(.3, 1.8))
+    if rng.random() < .15:  # hand shake
+        k = int(rng.integers(3, 9))
+        kernel = np.zeros((k, k), np.float32)
+        kernel[k // 2] = 1.0 / k
+        rot = cv2.getRotationMatrix2D((k / 2 - .5, k / 2 - .5), rng.uniform(0, 180), 1)
+        kernel = cv2.warpAffine(kernel, rot, (k, k))
+        kernel /= max(kernel.sum(), 1e-6)
+        img = cv2.filter2D(img, -1, kernel)
     img += rng.normal(0, rng.uniform(1, 6), img.shape)
     img = np.clip(img, 0, 255).astype(np.uint8)
     ok, enc = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, int(rng.uniform(55, 95))])

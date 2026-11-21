@@ -100,8 +100,9 @@ double Zncc(const float* a, int a_stride, const float* b, int b_stride,
 
 }  // namespace
 
-bool FindOverlap(const uint8_t* gray_a, int height_a, const uint8_t* gray_b,
-                 int height_b, int width, Overlap* out) {
+// One scale: the core search (B already scaled).
+static bool Match(const uint8_t* gray_a, int height_a, const uint8_t* gray_b,
+           int height_b, int width, Overlap* out) {
     if (!gray_a || !gray_b || !out || width < 64 || height_a < 64 ||
         height_b < 64 || width > 8000) {
         return false;
@@ -180,6 +181,65 @@ bool FindOverlap(const uint8_t* gray_a, int height_a, const uint8_t* gray_b,
     }
     out->score = static_cast<float>(fine_best);
     return true;
+}
+
+// B scaled by s about its top centre, same width as A.
+static std::vector<uint8_t> ScaleAboutTopCentre(const uint8_t* src, int width,
+                                                int height, double s,
+                                                int* out_height) {
+    const int h = std::max(1, static_cast<int>(std::lround(height * s)));
+    std::vector<uint8_t> out(static_cast<size_t>(width) * h, 246);
+    const double cx = width / 2.0;
+    for (int y = 0; y < h; ++y) {
+        const double sy = std::min(height - 1.0, y / s);
+        const int y0 = static_cast<int>(sy);
+        const int y1 = std::min(height - 1, y0 + 1);
+        const double ty = sy - y0;
+        for (int x = 0; x < width; ++x) {
+            const double sx = (x - cx) / s + cx;
+            if (sx < 0 || sx > width - 1) continue;
+            const int x0 = static_cast<int>(sx);
+            const int x1 = std::min(width - 1, x0 + 1);
+            const double tx = sx - x0;
+            const double v =
+                (src[static_cast<size_t>(y0) * width + x0] * (1 - tx) +
+                 src[static_cast<size_t>(y0) * width + x1] * tx) * (1 - ty) +
+                (src[static_cast<size_t>(y1) * width + x0] * (1 - tx) +
+                 src[static_cast<size_t>(y1) * width + x1] * tx) * ty;
+            out[static_cast<size_t>(y) * width + x] =
+                static_cast<uint8_t>(std::clamp(std::lround(v), 0L, 255L));
+        }
+    }
+    *out_height = h;
+    return out;
+}
+
+bool FindOverlap(const uint8_t* gray_a, int height_a, const uint8_t* gray_b,
+                 int height_b, int width, Overlap* out) {
+    if (!out) return false;
+    if (Match(gray_a, height_a, gray_b, height_b, width, out)) return true;
+    if (!gray_a || !gray_b || width < 64 || height_a < 64 || height_b < 64 ||
+        width > 8000) {
+        return false;
+    }
+    // The parts may have been photographed from slightly different
+    // distances: try B a little smaller or larger and keep the best match.
+    Overlap best;
+    bool found = false;
+    for (double s : {0.97, 1.03, 0.94, 1.06, 0.91, 1.09}) {
+        int h = 0;
+        const std::vector<uint8_t> scaled =
+            ScaleAboutTopCentre(gray_b, width, height_b, s, &h);
+        Overlap o;
+        if (h >= 64 && Match(gray_a, height_a, scaled.data(), h, width, &o) &&
+            o.score > best.score) {
+            best = o;
+            best.scale = static_cast<float>(s);
+            found = true;
+        }
+    }
+    *out = found ? best : Overlap{};
+    return found;
 }
 
 }  // namespace ds

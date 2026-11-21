@@ -436,6 +436,11 @@ bool FindPaperRegion(const uint32_t* argb, int width, int height,
     }
     // Text and table lines are holes; a light rail or cable touching the
     // sheet is cut off by an opening before choosing the largest part.
+    // Close thin dark lines first: table rules that run off the frame are
+    // not enclosed holes, and the opening would eat the strips between them.
+    const std::vector<uint8_t> closed =
+        SquareFilter(SquareFilter(paper, w, h, 2, false), w, h, 2, true);
+    for (size_t i = 0; i < n; ++i) paper[i] = static_cast<uint8_t>(paper[i] | closed[i]);
     FillHoles(paper, w, h);
     const int radius = std::max(3, static_cast<int>(std::lround(std::max(w, h) * 0.016)));
     const std::vector<uint8_t> eroded = SquareFilter(paper, w, h, radius, true);

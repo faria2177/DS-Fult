@@ -493,6 +493,14 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Still: channel `readCodesInFile`; ScanCodeScreen uses it first, then ML Kit. Not added back to Tools: "Scan Code" was one of the nine Tools entries the user had removed (test/me_scan_settings_test.dart); the live chip in Scan is the entry point.
 - Emulator check: fixture `qrCodeScene` (QR printed on a page on cloth, OpenCV QRCodeEncoder) must be read via `readCodesInFile`.
 
+## v0.5.70 — Remaining list: live DocNet, text-line dewarp, stitch scale, dim-page crop, DocNet data
+
+- Live DocNet: LiveSalientAssist gets `assets` (set by the plugin); when DocNet loads, frames go to DocNet (RGBA → 160×160 RGB → 80×80 → 320 map → existing quadFromMask), every 200 ms instead of 450 ms; U²-Net stays the fallback. Not verified on a phone (emulator check covers stills only).
+- Text-line dewarp: StraightenTextLines after the Coons resample — 14 vertical strips' ink profiles aligned neighbour to neighbour in 9 windows (NCC ≥ 0.6, sub-pixel), accumulated from the centre strip, fitted by a 12-term surface (x³·y²), RMS ≤ 1.2 px; vertical resample. Host test: curled page (quadratic interior) middle line level within 3 px (458/457/458). Synthetic curls: per-strip residual shifts 5–17 px → 0–1 px.
+- Stitch: if no match at scale 1, B is tried at 0.97/1.03/0.94/1.06/0.91/1.09 about its top centre (best score wins); Kotlin draws B at that scale. Zoom 2–7 % now joined (was refused); unrelated / repeating tables still refused; ~0.9 s for a non-matching pair.
+- Dim page (emulator IoU 0.925 → 0.998): closing (5×5) of the paper mask before hole filling, in Dart and C++ — table rules that run off the frame were not enclosed holes, so the opening ate the strips between them and cut the bottom-right corner (BR 1.0,0.893 → 1.0,1.0). New Dart test.
+- DocNet data: make_data.py adds fractal / bright backgrounds, bent (curl/book) sheets with matching masks, paper shading, clutter (pens, phones, coins, cables), vignetting, hand shake; train.py --init/--lr. Results: from scratch 16 ep (SWA): emulator scenes 0.94 → 0.96, harder synthetic val 0.915 → 0.932, but the user's real raws 0.967/0.968/0.992 → 0.967/0.907/0.947; fine-tuning the shipped model 6 ep: 0.949 / 0.967/0.941/0.985. Real photos got worse, so the shipped model was NOT replaced; real (shareable) photos are needed to improve it further.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

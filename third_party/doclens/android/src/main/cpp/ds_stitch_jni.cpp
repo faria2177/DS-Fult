@@ -5,7 +5,8 @@
 #include "ds_stitch.h"
 
 // Kotlin: dev.doclens.doclens.LongImageStitcher.findOverlapNative(...)
-// Returns {rows, shift, score × 1000} or null when the pages do not overlap.
+// Returns {rows, shift, score × 1000, scale × 1000} or null when the pages
+// do not overlap.
 extern "C" JNIEXPORT jintArray JNICALL
 Java_dev_doclens_doclens_LongImageStitcher_findOverlapNative(
     JNIEnv* env, jobject /* thiz */, jbyteArray gray_a, jint height_a,
@@ -30,10 +31,11 @@ Java_dev_doclens_doclens_LongImageStitcher_findOverlapNative(
     if (a) env->ReleaseByteArrayElements(gray_a, a, JNI_ABORT);
     if (b) env->ReleaseByteArrayElements(gray_b, b, JNI_ABORT);
     if (!ok) return nullptr;
-    jint result[3] = {overlap.rows, overlap.shift,
-                      static_cast<jint>(overlap.score * 1000.0f)};
-    jintArray answer = env->NewIntArray(3);
+    jint result[4] = {overlap.rows, overlap.shift,
+                      static_cast<jint>(overlap.score * 1000.0f),
+                      static_cast<jint>(overlap.scale * 1000.0f + 0.5f)};
+    jintArray answer = env->NewIntArray(4);
     if (!answer) return nullptr;
-    env->SetIntArrayRegion(answer, 0, 3, result);
+    env->SetIntArrayRegion(answer, 0, 4, result);
     return answer;
 }

@@ -743,6 +743,7 @@ class DoclensPlugin :
         )
         session = s
         s.salientAssist.modelPath = liveSalientModelPath
+        s.salientAssist.assets = context.assets
         s.start { startResult ->
             startResult.fold(
                 onSuccess = { result.success(it) },

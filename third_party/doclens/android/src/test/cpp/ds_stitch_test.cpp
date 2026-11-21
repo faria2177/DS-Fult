@@ -62,6 +62,27 @@ int main() {
         Check(o.shift >= -2 && o.shift <= 2, "no shift");
     }
     {
+        // Second part photographed 4 % closer: found at a compensating scale.
+        const auto a = Rows(receipt, 0, 1000);
+        const int h = 1040;
+        std::vector<uint8_t> b(static_cast<size_t>(kW) * h, 246);
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < kW; ++x) {
+                const double sx = (x - kW / 2.0) / 1.04 + kW / 2.0;
+                const int sy = 700 + static_cast<int>(y / 1.04);
+                if (sx >= 0 && sx < kW && sy < 2400) {
+                    b[static_cast<size_t>(y) * kW + x] =
+                        receipt[static_cast<size_t>(sy) * kW + static_cast<int>(sx)];
+                }
+            }
+        }
+        ds::Overlap o;
+        Check(ds::FindOverlap(a.data(), 1000, b.data(), h, kW, &o), "zoomed overlap found");
+        std::printf("zoomed: rows %d scale %.2f score %.3f\n", o.rows, o.scale, o.score);
+        Check(o.scale > .93f && o.scale < .99f, "compensating scale");
+        Check(o.rows >= 285 && o.rows <= 315, "zoomed overlap rows");
+    }
+    {
         const auto a = Rows(receipt, 0, 1000);
         const auto other = Receipt(1000, 99, false);
         ds::Overlap o;
