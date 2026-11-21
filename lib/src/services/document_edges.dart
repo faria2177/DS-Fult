@@ -660,6 +660,16 @@ class DocumentEdges {
       _log(imagePath, 'accepted card from the page chain');
       return _refineSafely(imagePath, general, preferIdCardBounds: true);
     }
+    final separated = await BackgroundContrastContour.detectFile(imagePath);
+    if (separated != null && _isCardShaped(separated, minArea: .04, maxAspect: 2.35)) {
+      _log(imagePath, 'accepted card separated from its background');
+      return _refineSafely(imagePath, separated, preferIdCardBounds: true);
+    }
+    if (salient != null && _isCardShaped(salient.detection, minArea: .04, maxAspect: 2.35)) {
+      _log(imagePath, 'accepted segmentation-model card (small)');
+      return _refineSafely(imagePath, salient.detection,
+          preferIdCardBounds: true);
+    }
     // A business card held further away is small in the frame, and a tilted
     // one looks longer than 2:1. The native card mask still found its four
     // corners; accept them with the relaxed card-camera limits.
@@ -675,16 +685,6 @@ class DocumentEdges {
         _log(imagePath, 'accepted small or tilted native card');
         return _refineSafely(imagePath, native, preferIdCardBounds: true);
       }
-    }
-    final separated = await BackgroundContrastContour.detectFile(imagePath);
-    if (separated != null && _isCardShaped(separated, minArea: .04, maxAspect: 2.35)) {
-      _log(imagePath, 'accepted card separated from its background');
-      return _refineSafely(imagePath, separated, preferIdCardBounds: true);
-    }
-    if (salient != null && _isCardShaped(salient.detection, minArea: .04, maxAspect: 2.35)) {
-      _log(imagePath, 'accepted segmentation-model card (small)');
-      return _refineSafely(imagePath, salient.detection,
-          preferIdCardBounds: true);
     }
     final paper = (await PaperRegionDetector.detectFile(imagePath))?.detection;
     if (paper != null && isCredibleStandaloneCard(paper)) {

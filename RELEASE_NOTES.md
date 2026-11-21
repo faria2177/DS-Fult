@@ -1,3 +1,10 @@
+## DocScanner v0.5.71
+
+- 🎨 Filters: every option (B&W, Eco, Grayscale, Magic Pro, No Shadow, Lighten, No Watermark, No Handwriting) is now built from the original photo with a local paper-brightness map, so shadowed pages come out clean; each filter tile shows a real preview, and rotating no longer loses the chosen filter
+- 🪪 ID Cards (General, ID Card, Driver License, Bank Card): new camera screen with a rounded white corner frame, dimmed outside, Front/Back pill, HD and menu icons
+- ✨ Front/Back capture shows the teal scan animation (outline + sweep, then morph to the cropped card)
+- ✂️ Card camera now finds all four corners on patterned cloth, printed sheets and for small or tilted business cards
+
 ## DocScanner v0.5.70
 
 - 🟩 Live camera: the green box now also uses **DocNet** (DocScanner's own document model, libds_docnet.so) instead of only the general U²-Net model — it runs more than twice as often, so the box finds the whole page more reliably
