@@ -17,6 +17,7 @@ on:
       - 'lib/src/services/image_processor.dart'
       - 'lib/src/services/native_scanner_core.dart'
       - 'third_party/doclens/android/**'
+      - 'third_party/doclens/lib/**'
       - 'integration_test/**'
       - 'tool/make_autocrop_fixtures.py'
       - '.github/workflows/autocrop-device-check.yml'
