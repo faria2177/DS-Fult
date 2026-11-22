@@ -1,5 +1,8 @@
 package dev.doclens.doclens
 
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * Live green box for a page photographed from close up (386769.mp4).
  *
@@ -25,6 +28,9 @@ internal object LivePaperRegion {
         val area = StillCaptureCropSafety.area(paper)
         if (area !in .30..0.96) return false
         if (!LiveBoundarySelector.hasFourPageLikeSides(paper, width, height)) return false
+        // A strip of paper along one edge is not a page.
+        val (w, h) = StillCaptureCropSafety.sideLengths(paper, width, height)
+        if (max(w, h) / min(w, h).coerceAtLeast(1.0) > 2.2) return false
         return cornersOnFrame(paper) >= 2
     }
 
