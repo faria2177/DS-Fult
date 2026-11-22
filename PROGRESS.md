@@ -509,6 +509,11 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 ## v0.5.72 — live paper region (386769.mp4)
 - LivePaperRegion: libds_scannercore paper region on the live RGBA frame replaces an inner table/text-block or skewed edge quad when the sheet runs off the frame; 600 ms hold against flicker. JVM tests from the video's measured coordinates.
 
+## v0.5.73 — writing-aware border check (386798 vs 386799)
+- ContentCrossing: black-hat writing mask (on neutral paper, long lines removed); candidates rejected when a side crosses writing, three sides hug it, or opposite sides diverge > 16°; Hough quads need 4 supported sides on pages; extra contour pass on writing-erased edges; top sheet preferred over a stack outline.
+- Still detection runs at 384 px first (live scale) and keeps 1280 px corners only when both agree.
+- Verified with a local JVM harness running the real Kotlin detector (OpenCV 4.10 Java built from source) on frames of both videos and the synthetic fixtures.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

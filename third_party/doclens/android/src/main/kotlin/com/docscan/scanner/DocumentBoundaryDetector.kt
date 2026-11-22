@@ -64,6 +64,16 @@ class DocumentBoundaryDetector(
     // CLAHE is expensive to construct; keep one instance for the lifetime of the detector.
     private val claheOperator = Imgproc.createCLAHE(2.2, Size(8.0, 8.0))
 
+    // Printed content (text, table rules, logos) of the current frame, as a
+    // dilated black-hat mask. A page's own border runs through its blank
+    // margin; a quad whose side runs through the writing is a text block,
+    // a table, or Hough lines that mixed several sheets (386769/386799.mp4).
+    private val contentMat = Mat()
+    private val eraseMat = Mat()
+    private var contentBytes: ByteArray? = null
+    private var contentWidth = 0
+    private var contentHeight = 0
+
     fun release() {
         grayMat.release()
         claheMat.release()
@@ -77,6 +87,8 @@ class DocumentBoundaryDetector(
         fusedEdgeMat.release()
         morphMat.release()
         morphKernel.release()
+        contentMat.release()
+        eraseMat.release()
     }
 
     data class CandidateScore(
@@ -117,6 +129,9 @@ class DocumentBoundaryDetector(
         val highThresh = (meanLum * 1.18).coerceIn(58.0, 175.0)
         Imgproc.Canny(claheMat, cannyMat, lowThresh, highThresh, 3, true)
         Imgproc.morphologyEx(cannyMat, morphMat, Imgproc.MORPH_CLOSE, morphKernel)
+
+        contentBytes = if (preferIdCardBounds) null else
+            buildContentMask(grayMat, rgbaMat, width, height)
 
         val candidates = mutableListOf<CandidateScore>()
         fun collectFromCurrentEdges(stage: DetectionStage, maxCandidates: Int = 8) {
@@ -168,6 +183,28 @@ class DocumentBoundaryDetector(
             Imgproc.morphologyEx(fusedEdgeMat, morphMat, Imgproc.MORPH_CLOSE, morphKernel)
             collectFromCurrentEdges(DetectionStage.CONTOUR_QUAD, 8)
             topScore = candidates.maxOfOrNull { it.totalConfidence } ?: 0.0
+        }
+
+        // Writing glued to the page border by edge closing hides the border's
+        // own contour (white sheet on a paper stack, 386799.mp4). Search the
+        // edges again with the printed content erased.
+        if (contentBytes != null && !preferIdCardBounds) {
+            val source = if (fusedEdgeMat.empty()) cannyMat else fusedEdgeMat
+            val blank = Mat()
+            val notContent = Mat()
+            val kept = morphMat.clone()
+            try {
+                Core.bitwise_not(eraseMat, notContent)
+                Core.bitwise_and(source, notContent, blank)
+                Imgproc.morphologyEx(blank, morphMat, Imgproc.MORPH_CLOSE, morphKernel)
+                collectFromCurrentEdges(DetectionStage.CONTOUR_QUAD, 8)
+            } finally {
+                // Later stages (Hough lines, edge support) use the full edges.
+                kept.copyTo(morphMat)
+                kept.release()
+                blank.release()
+                notContent.release()
+            }
         }
 
         // STAGE 2: A dense inner table can be a strong, supported, page-shaped
@@ -293,8 +330,9 @@ class DocumentBoundaryDetector(
             CardBoundaryPreference.select(candidates, width, height)
                 ?: return DocumentDetectionResult.EMPTY
         } else if (preferOuterPageInStill) {
-            StillCapturePagePreference.select(candidates, scoredBest, totalImageArea)
-        } else scoredBest
+            topSheet(StillCapturePagePreference.select(candidates, scoredBest, totalImageArea),
+                candidates, width, height)
+        } else topSheet(scoredBest, candidates, width, height)
 
         // STAGE 4: Corner Refinement to Subpixel Accuracy
         val proposedCorners = CornerRefiner.refineCorners(
@@ -401,8 +439,25 @@ class DocumentBoundaryDetector(
         // Hough's four fitted lines can accidentally mix an outer border with
         // internal table rows. Three independently supported sides are the
         // minimum evidence needed to trust this fallback as a quadrilateral.
+        // On a page (writing mask available) a fitted line that crosses
+        // blank paper, e.g. a diagonal from one sheet's corner to another's,
+        // has no edge under it: all four sides must be real edges.
         if (stage == DetectionStage.LINE_INTERSECTION &&
-            edgeEvidence.supportedSides < 3) return null
+            edgeEvidence.supportedSides < (if (contentBytes != null) 4 else 3)) return null
+
+        // A document border never runs through its own printing.
+        // Opposite page borders stay nearly parallel under any hand-held
+        // perspective; a fitted "side" cutting diagonally across the paper
+        // to another sheet's corner does not (386799.mp4).
+        if (contentBytes != null &&
+            ContentCrossing.maxOppositeAngle(corners) > ContentCrossing.MAX_OPPOSITE_ANGLE) {
+            return null
+        }
+        val crossing = ContentCrossing.maxSideFraction(corners, contentBytes,
+            contentWidth, contentHeight)
+        val margins = ContentCrossing.insideFractions(corners, contentBytes,
+            contentWidth, contentHeight)
+        if (ContentCrossing.isInnerContentBox(crossing, margins)) return null
 
         // Corner Sharpness Score
         val cornerScore = evaluateCornerSharpness(corners, gray, imgWidth, imgHeight)
@@ -450,6 +505,146 @@ class DocumentBoundaryDetector(
             boundaryContrast = boundaryContrast,
             stage = stage
         )
+    }
+
+    /**
+     * Pages lying on a stack: the outline of the whole stack and the top
+     * sheet both have blank margins. The top sheet is the page when it
+     * holds the stack's writing (CamScanner frames the top sheet).
+     */
+    private fun topSheet(best: CandidateScore, candidates: List<CandidateScore>,
+                         width: Int, height: Int): CandidateScore {
+        val mask = contentBytes ?: return best
+        val bestArea = ContourDetector.calculatePolygonArea(best.corners)
+        val nested = candidates.filter { other ->
+            other !== best &&
+                other.totalConfidence >= best.totalConfidence * .80 &&
+                ContourDetector.calculatePolygonArea(other.corners) in
+                    bestArea * .50..bestArea * .95 &&
+                other.corners.all { ContentCrossing.inside(it, best.corners, 3.0) }
+        }.sortedByDescending { it.totalConfidence }
+        if (nested.isEmpty()) return best
+        val outer = ContentCrossing.countInside(best.corners, mask, width, height)
+        if (outer < 40) return best
+        for (inner in nested) {
+            val held = ContentCrossing.countInside(inner.corners, mask, width, height)
+            if (held >= outer * .97) return inner
+        }
+        return best
+    }
+
+    /**
+     * Writing is measured at the live preview's scale (~384 px) for every
+     * input, so a still and the live frame agree on what is writing; at
+     * 1280 px a page's faint shadow breaks into dashes that read as print.
+     */
+    private fun buildContentMask(gray: Mat, rgba: Mat, width: Int, height: Int): ByteArray? {
+        val longest = max(width, height)
+        if (longest <= 480) return buildContentMaskAt(gray, rgba, width, height)
+        val f = 384.0 / longest
+        val w = max(32, (width * f).toInt())
+        val h = max(32, (height * f).toInt())
+        val smallGray = Mat()
+        val smallRgba = Mat()
+        return try {
+            Imgproc.resize(gray, smallGray, Size(w.toDouble(), h.toDouble()), 0.0, 0.0,
+                Imgproc.INTER_AREA)
+            Imgproc.resize(rgba, smallRgba, Size(w.toDouble(), h.toDouble()), 0.0, 0.0,
+                Imgproc.INTER_AREA)
+            if (buildContentMaskAt(smallGray, smallRgba, w, h) == null) return null
+            Imgproc.resize(contentMat, contentMat, Size(width.toDouble(), height.toDouble()),
+                0.0, 0.0, Imgproc.INTER_NEAREST)
+            Imgproc.resize(eraseMat, eraseMat, Size(width.toDouble(), height.toDouble()),
+                0.0, 0.0, Imgproc.INTER_NEAREST)
+            contentWidth = width
+            contentHeight = height
+            ByteArray(width * height).also { contentMat.get(0, 0, it) }
+        } catch (_: Exception) {
+            null
+        } finally {
+            smallGray.release()
+            smallRgba.release()
+        }
+    }
+
+    private fun buildContentMaskAt(gray: Mat, rgba: Mat, width: Int, height: Int): ByteArray? = try {
+        val side = (max(width, height) / 26).coerceAtLeast(9) or 1
+        val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
+            Size(side.toDouble(), side.toDouble()))
+        Imgproc.morphologyEx(gray, contentMat, Imgproc.MORPH_BLACKHAT, kernel)
+        Imgproc.threshold(contentMat, contentMat, ContentCrossing.INK_CONTRAST, 255.0,
+            Imgproc.THRESH_BINARY)
+        // A sheet's own edge often reads as one thin dark line (its shadow
+        // on the sheet below) and a table rule is one too. Keep writing only:
+        // drop long, thin components.
+        val labels = Mat()
+        val stats = Mat()
+        val centroids = Mat()
+        val count = Imgproc.connectedComponentsWithStats(contentMat, labels, stats,
+            centroids, 8, CvType.CV_32S)
+        val longSide = max(width, height) * .10
+        val thickness = 3.0 * ContentCrossing.scale(width, height)
+        val drop = BooleanArray(count)
+        val row = IntArray(5)
+        for (label in 1 until count) {
+            stats.get(label, 0, row)
+            val bw = row[Imgproc.CC_STAT_WIDTH]
+            val bh = row[Imgproc.CC_STAT_HEIGHT]
+            // One line, or a sheet's whole shadow outline: its area is about
+            // its length times a few pixels.
+            if (max(bw, bh) >= longSide &&
+                row[Imgproc.CC_STAT_AREA] <= 2.0 * (bw + bh) * thickness) drop[label] = true
+        }
+        if (drop.any { it }) {
+            val ids = IntArray(width * height)
+            labels.get(0, 0, ids)
+            val bytes = ByteArray(width * height)
+            contentMat.get(0, 0, bytes)
+            for (i in ids.indices) if (drop[ids[i]]) bytes[i] = 0
+            contentMat.put(0, 0, bytes)
+        }
+        labels.release(); stats.release(); centroids.release()
+        val growSide = (3 * ContentCrossing.scale(width, height)).toInt() or 1
+        val grow = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
+            Size(growSide.toDouble(), growSide.toDouble()))
+        Imgproc.dilate(contentMat, contentMat, grow)
+        grow.release()
+        // Writing is dark marks on light, neutral paper. Patterned cloth, a
+        // wooden desk or a carpet also has dark marks; their surroundings are
+        // coloured or dim, so they are not "writing".
+        val paper = Mat()
+        val tmp = Mat()
+        try {
+            Imgproc.dilate(gray, paper, kernel)
+            Imgproc.threshold(paper, paper, ContentCrossing.PAPER_LUMA, 255.0,
+                Imgproc.THRESH_BINARY)
+            Imgproc.cvtColor(rgba, tmp, Imgproc.COLOR_RGBA2RGB)
+            Imgproc.cvtColor(tmp, tmp, Imgproc.COLOR_RGB2HSV)
+            Core.extractChannel(tmp, tmp, 1)
+            Imgproc.erode(tmp, tmp, kernel)
+            Imgproc.threshold(tmp, tmp, ContentCrossing.PAPER_SATURATION, 255.0,
+                Imgproc.THRESH_BINARY_INV)
+            Core.bitwise_and(paper, tmp, paper)
+            // Marks on paper (also near its border) are erased before the
+            // blank-border contour pass; cloth and wood keep their edges.
+            Core.bitwise_and(contentMat, paper, eraseMat)
+            // Only writing well inside the paper: the dark strip just outside
+            // a bright page, and the page's own shadow, are not writing.
+            val inner = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
+                Size(side * 2.0 + 1, side * 2.0 + 1))
+            Imgproc.erode(paper, paper, inner)
+            inner.release()
+            Core.bitwise_and(contentMat, paper, contentMat)
+        } finally {
+            paper.release()
+            tmp.release()
+            kernel.release()
+        }
+        contentWidth = width
+        contentHeight = height
+        ByteArray(width * height).also { contentMat.get(0, 0, it) }
+    } catch (_: Exception) {
+        null
     }
 
     /**
