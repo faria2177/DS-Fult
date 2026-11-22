@@ -506,6 +506,9 @@ The next release should close **at least one P0 task** in [TODO.md](TODO.md) wit
 - Reference ID-card chrome (CardFramePainter, cardFrameRect) and CardScanAnimation.
 - Card camera: segmentation-model + page-chain fallback with card-shape gates; device check CARDCROP ≥ .90 for every card scene.
 
+## v0.5.72 — live paper region (386769.mp4)
+- LivePaperRegion: libds_scannercore paper region on the live RGBA frame replaces an inner table/text-block or skewed edge quad when the sheet runs off the frame; 600 ms hold against flicker. JVM tests from the video's measured coordinates.
+
 ## Recent CI note
 
 During `0.5.10` publishing, an oversized `doclens_screen.dart` upload was initially incomplete; the first CI run failed to find the source. The file was re-uploaded with SHA verification in follow-up commit `1c69de9`, the analyzer import was cleaned, and the subsequent run succeeded. This is a **resolved publishing incident**, not an outstanding scanner bug.

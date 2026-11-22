@@ -1,3 +1,7 @@
+## DocScanner v0.5.72
+
+- 🟩 Live camera: when a page fills the screen and runs off the edge, the green box now follows the visible paper (its corners may sit on the screen edge) instead of jumping onto the printed table or a slanted box through the text; the shutter crops that visible page
+
 ## DocScanner v0.5.71
 
 - 🎨 Filters: every option (B&W, Eco, Grayscale, Magic Pro, No Shadow, Lighten, No Watermark, No Handwriting) is now built from the original photo with a local paper-brightness map, so shadowed pages come out clean; each filter tile shows a real preview, and rotating no longer loses the chosen filter

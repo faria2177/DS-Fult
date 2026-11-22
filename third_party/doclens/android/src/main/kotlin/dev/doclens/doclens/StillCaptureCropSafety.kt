@@ -25,7 +25,7 @@ internal object StillCaptureCropSafety {
     private fun edgeLength(a: PointF, b: PointF, width: Int, height: Int): Double =
         hypot((a.x - b.x) * width.toDouble(), (a.y - b.y) * height.toDouble())
 
-    private fun sideLengths(quad: Quad, width: Int, height: Int): Pair<Double, Double> {
+    internal fun sideLengths(quad: Quad, width: Int, height: Int): Pair<Double, Double> {
         val horizontal = (edgeLength(quad.topLeft, quad.topRight, width, height) +
             edgeLength(quad.bottomLeft, quad.bottomRight, width, height)) * .5
         val vertical = (edgeLength(quad.topLeft, quad.bottomLeft, width, height) +

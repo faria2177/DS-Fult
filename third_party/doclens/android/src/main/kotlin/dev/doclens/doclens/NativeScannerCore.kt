@@ -128,4 +128,31 @@ internal object NativeScannerCore {
             null
         }
     }
+
+    /**
+     * Paper region of a live RGBA analysis frame (long side about 384–420
+     * px). Returns the normalised outline, or null when no sheet was found
+     * or the native core is unavailable.
+     */
+    fun paperRegionRgba(rgba: ByteArray, width: Int, height: Int): Quad? {
+        if (!available || width < 32 || height < 32 ||
+            rgba.size != width * height * 4) return null
+        return try {
+            val pixels = IntArray(width * height) { i ->
+                val o = i * 4
+                (0xFF shl 24) or
+                    ((rgba[o].toInt() and 0xFF) shl 16) or
+                    ((rgba[o + 1].toInt() and 0xFF) shl 8) or
+                    (rgba[o + 2].toInt() and 0xFF)
+            }
+            val raw = paperRegionNative(pixels, width, height) ?: return null
+            if (raw.size < 10 || raw[0] <= .5f) return null
+            Quad(
+                PointF(raw[2], raw[3]), PointF(raw[4], raw[5]),
+                PointF(raw[6], raw[7]), PointF(raw[8], raw[9]),
+            )
+        } catch (_: Throwable) {
+            null
+        }
+    }
 }
