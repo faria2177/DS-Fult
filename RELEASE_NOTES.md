@@ -1,3 +1,8 @@
+## DocScanner v0.5.73
+
+- 📄 Border detection (live camera, shutter and gallery): a green box can no longer run through the writing, hug a printed table or text block, or cut diagonally across the paper. A page lying on a stack of papers is now framed at its own top sheet, as in CamScanner
+- 📸 Shutter crop: when no green box was shown, the photo is searched at the preview's scale first, so the faint edge of a white sheet on other papers is found instead of the printed table
+
 ## DocScanner v0.5.72
 
 - 🟩 Live camera: when a page fills the screen and runs off the edge, the green box now follows the visible paper (its corners may sit on the screen edge) instead of jumping onto the printed table or a slanted box through the text; the shutter crops that visible page

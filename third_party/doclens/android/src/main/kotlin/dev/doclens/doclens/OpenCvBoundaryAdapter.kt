@@ -96,13 +96,24 @@ internal class OpenCvBoundaryAdapter {
 
     /** Captured still bitmap; preserves colour-dependent edge detection. */
     fun detectBitmap(bitmap: Bitmap, preferIdCardBounds: Boolean = false): Quad? {
+        // Captured stills can be many megapixels; 1280px preserves more
+        // detail at faint paper corners than the old 900px working image.
+        val fine = detectAt(bitmap, 1280.0, preferIdCardBounds)
+        if (preferIdCardBounds) return fine
+        // A white sheet on a paper stack: at 1280 px the faint sheet border
+        // breaks into dashes and the printed table wins (386799.mp4). At the
+        // live preview's scale the border is one contour, the same outline
+        // the user saw in green. Keep the sharper 1280 px corners only when
+        // both scales agree on the page.
+        val coarse = detectAt(bitmap, LIVE_SIDE, false) ?: return fine
+        return if (fine != null && sameOutline(coarse, fine)) fine else coarse
+    }
+
+    private fun detectAt(bitmap: Bitmap, side: Double, preferIdCardBounds: Boolean): Quad? {
         val boundaryDetector = try { engine() } catch (_: Throwable) { null } ?: return null
         val longest = max(bitmap.width, bitmap.height)
         if (longest < 32) return null
-        // Captured stills can be many megapixels; 1280px preserves more
-        // detail at faint paper corners than the old 900px working image.
-        // The live preview path stays unchanged for frame-rate stability.
-        val scale = min(1.0, 1280.0 / longest)
+        val scale = min(1.0, side / longest)
         val w = max(32, (bitmap.width * scale).toInt())
         val h = max(32, (bitmap.height * scale).toInt())
         val small = if (scale == 1.0) bitmap
@@ -127,6 +138,18 @@ internal class OpenCvBoundaryAdapter {
     }
 
     companion object {
+        private const val LIVE_SIDE = 384.0
+
+        /** Every corner within 3 % of the frame of its counterpart. */
+        internal fun sameOutline(a: Quad, b: Quad): Boolean {
+            val pa = listOf(a.topLeft, a.topRight, a.bottomRight, a.bottomLeft)
+            val pb = listOf(b.topLeft, b.topRight, b.bottomRight, b.bottomLeft)
+            return pa.indices.all { i ->
+                kotlin.math.hypot((pa[i].x - pb[i].x).toDouble(),
+                    (pa[i].y - pb[i].y).toDouble()) <= .03
+            }
+        }
+
         /** Stateless wrapper for gallery and capture paths on arbitrary threads. */
         fun detectStill(bitmap: Bitmap, preferIdCardBounds: Boolean = false): Quad? {
             val adapter = OpenCvBoundaryAdapter()
