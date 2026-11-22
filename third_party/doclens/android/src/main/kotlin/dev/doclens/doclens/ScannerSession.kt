@@ -308,8 +308,13 @@ class ScannerSession(
             // The last-resort luma detector can also follow a sharp printed
             // line or a coloured half of a notebook. Validate its four outer
             // sides with the SAME safety gate as the OpenCV live detector.
-            val edgeQuad = if (config.preferIdCardBounds) detected else
+            val boundary = if (config.preferIdCardBounds) detected else
                 LiveBoundarySelector.choose(detected, null, width, height)
+            // A page photographed from close up runs off the frame; its
+            // visible paper is the page, not the table or text block the
+            // rectangle detectors found inside it (386769.mp4).
+            val edgeQuad = if (config.preferIdCardBounds || rgba == null) boundary
+                else livePaper(rgba, width, height, now, boundary)
             // Whole-object outline from the salient model (throttled, own
             // thread). Recovers cards whose dark half the edge detector
             // leaves out; see LiveSalientAssist.
@@ -355,6 +360,20 @@ class ScannerSession(
         } finally {
             proxy.close()
         }
+    }
+
+    @Volatile private var lastLivePaper: Pair<Quad, Long>? = null
+
+    private fun livePaper(rgba: ByteArray, width: Int, height: Int, now: Long,
+                          boundary: Quad?): Quad? {
+        val found = NativeScannerCore.paperRegionRgba(rgba, width, height)
+            ?.takeIf { LivePaperRegion.isLivePaper(it, width, height) }
+        if (found != null) lastLivePaper = found to now
+        // Bridge a single frame where the paper was not separated (a hand,
+        // a reflection) instead of flashing back to an inner table.
+        val paper = found ?: lastLivePaper
+            ?.takeIf { now - it.second <= LivePaperRegion.HOLD_MS }?.first
+        return LivePaperRegion.choose(boundary, paper, width, height)
     }
 
     private fun rotateNormalizedQuad(q: Quad, deg: Int): Quad {
